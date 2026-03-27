@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { Modal } from "../common/Modal";
 
 type ReportStatus = "open" | "resolved" | "dismissed";
 type ReportTargetType = "listing" | "user";
@@ -75,6 +76,7 @@ export function ReportsPage() {
   const [page, setPage] = useState(1);
 
   const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [resolveAction, setResolveAction] = useState<ResolveAction>("resolve");
   const [moderationAction, setModerationAction] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
@@ -332,7 +334,17 @@ export function ReportsPage() {
                     <td>{formatDate(report.created_at)}</td>
                     <td>{formatDate(report.reviewed_at)}</td>
                     <td>
-                      <button type="button" className="btn btn-ghost" onClick={() => setSelectedReportId(report.id)}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setResolveAction("resolve");
+                          setModerationAction("");
+                          setResolutionNote(report.resolution_note ?? "");
+                          setSelectedReportId(report.id);
+                          setIsReviewModalOpen(true);
+                        }}
+                      >
                         Review
                       </button>
                     </td>
@@ -366,12 +378,12 @@ export function ReportsPage() {
         </div>
       </section>
 
-      <section className="table-card" aria-label="Report moderation panel">
-        <div className="table-head">
-          <strong>Moderation action</strong>
-          <span>{selectedReport ? `Report #${selectedReport.id}` : "No report selected"}</span>
-        </div>
-
+      <Modal
+        open={isReviewModalOpen}
+        onClose={() => setIsReviewModalOpen(false)}
+        title="Moderation action"
+        subtitle={selectedReport ? `Report #${selectedReport.id}` : "No report selected"}
+      >
         <div className="users-detail-body">
           {!selectedReport ? <p>Select a report and click Review.</p> : null}
 
@@ -437,7 +449,7 @@ export function ReportsPage() {
             </form>
           ) : null}
         </div>
-      </section>
+      </Modal>
     </section>
   );
 }

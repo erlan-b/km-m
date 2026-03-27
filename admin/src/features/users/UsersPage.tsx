@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { Modal } from "../common/Modal";
 
 type AccountStatus = "active" | "blocked" | "pending_verification" | "deactivated";
 
@@ -93,6 +94,7 @@ export function UsersPage() {
   const [selectedDetail, setSelectedDetail] = useState<AdminUserDetailResponse | null>(null);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [actionBusyUserId, setActionBusyUserId] = useState<number | null>(null);
 
   const loadUsers = useCallback(async () => {
@@ -144,8 +146,10 @@ export function UsersPage() {
   };
 
   const openDetail = async (userId: number) => {
+    setIsDetailModalOpen(true);
     setIsDetailLoading(true);
     setDetailError(null);
+    setSelectedDetail(null);
 
     try {
       const response = await authFetch(`/admin/users/${userId}`);
@@ -160,6 +164,10 @@ export function UsersPage() {
     } finally {
       setIsDetailLoading(false);
     }
+  };
+
+  const closeDetailModal = () => {
+    setIsDetailModalOpen(false);
   };
 
   const applyStatusAction = async (user: AdminUserListItem) => {
@@ -384,15 +392,18 @@ export function UsersPage() {
         </div>
       </section>
 
-      <section className="table-card" aria-label="User details panel">
-        <div className="table-head">
-          <strong>User detail</strong>
-          <span>{isDetailLoading ? "Loading..." : selectedDetail ? selectedDetail.email : "No user selected"}</span>
-        </div>
+      <Modal
+        open={isDetailModalOpen}
+        onClose={closeDetailModal}
+        title="User detail"
+        subtitle={isDetailLoading ? "Loading..." : selectedDetail ? selectedDetail.email : "No user selected"}
+      >
         <div className="users-detail-body">
           {detailError ? <div className="dashboard-error">{detailError}</div> : null}
 
-          {!detailError && !selectedDetail ? <p>Select a user row and click Details.</p> : null}
+          {!detailError && isDetailLoading ? <p>Loading user detail...</p> : null}
+
+          {!detailError && !isDetailLoading && !selectedDetail ? <p>Select a user row and click Details.</p> : null}
 
           {selectedDetail ? (
             <div className="dashboard-stats-grid">
@@ -423,7 +434,7 @@ export function UsersPage() {
             </div>
           ) : null}
         </div>
-      </section>
+      </Modal>
     </section>
   );
 }

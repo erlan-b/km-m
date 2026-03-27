@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { Modal } from "../common/Modal";
 
 type ListingStatus = "draft" | "pending_review" | "published" | "rejected" | "archived" | "inactive" | "sold";
 type TransactionType = "sale" | "rent_long" | "rent_daily";
@@ -159,6 +160,7 @@ export function ListingsModerationPage() {
   const [page, setPage] = useState(1);
 
   const [selectedListingId, setSelectedListingId] = useState<number | null>(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [action, setAction] = useState("");
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -447,7 +449,17 @@ export function ListingsModerationPage() {
                     </td>
                     <td>{formatDate(listing.created_at)}</td>
                     <td>
-                      <button type="button" className="btn btn-ghost" onClick={() => setSelectedListingId(listing.id)}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          const defaults = ACTIONS_BY_STATUS[listing.status] ?? [];
+                          setAction(defaults.length > 0 ? defaults[0].value : "");
+                          setNote("");
+                          setSelectedListingId(listing.id);
+                          setIsReviewModalOpen(true);
+                        }}
+                      >
                         Review
                       </button>
                     </td>
@@ -481,12 +493,12 @@ export function ListingsModerationPage() {
         </div>
       </section>
 
-      <section className="table-card" aria-label="Listing moderation panel">
-        <div className="table-head">
-          <strong>Moderation action</strong>
-          <span>{selectedListing ? `Listing #${selectedListing.id}` : "No listing selected"}</span>
-        </div>
-
+      <Modal
+        open={isReviewModalOpen}
+        onClose={() => setIsReviewModalOpen(false)}
+        title="Moderation action"
+        subtitle={selectedListing ? `Listing #${selectedListing.id}` : "No listing selected"}
+      >
         <div className="users-detail-body">
           {!selectedListing ? <p>Select a listing row and click Review.</p> : null}
 
@@ -582,7 +594,7 @@ export function ListingsModerationPage() {
             </div>
           ) : null}
         </div>
-      </section>
+      </Modal>
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { Modal } from "../common/Modal";
 
 type CategoryAttributeDefinition = {
   key: string;
@@ -9,6 +10,7 @@ type CategoryAttributeDefinition = {
   required: boolean;
   min_value?: number | null;
   max_value?: number | null;
+  min_length?: number | null;
   max_length?: number | null;
   options?: string[] | null;
 };
@@ -155,7 +157,8 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
       normalized.max_value = maxValue;
     }
     if (type === "string") {
-      normalized.max_length = 300;
+      normalized.min_length = 1;
+      normalized.max_length = 35;
       normalized.options = options.length > 0 ? options : null;
     }
 
@@ -187,6 +190,7 @@ export function CategoriesPage() {
   const [formState, setFormState] = useState<CategoryFormState>(buildInitialFormState());
   const [nextFieldId, setNextFieldId] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isActionBusyCategoryId, setIsActionBusyCategoryId] = useState<number | null>(null);
 
   const selectedCategory = useMemo(
@@ -262,6 +266,7 @@ export function CategoriesPage() {
     setSelectedCategoryId(null);
     setFormState(buildInitialFormState());
     setNextFieldId(1);
+    setIsFormModalOpen(true);
   };
 
   const applyActivationToggle = async (category: CategoryItem) => {
@@ -369,6 +374,7 @@ export function CategoriesPage() {
         return [...prev, saved];
       });
       setSelectedCategoryId(saved.id);
+      setIsFormModalOpen(false);
     } catch (submitError) {
       setError(extractErrorMessage(submitError));
     } finally {
@@ -546,7 +552,21 @@ export function CategoriesPage() {
                     <td>{formatDate(category.created_at)}</td>
                     <td>
                       <div className="users-actions-cell">
-                        <button type="button" className="btn btn-ghost" onClick={() => setSelectedCategoryId(category.id)}>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => {
+                            const draftAttributes = toDraftAttributes(category.attributes_schema);
+                            setFormState({
+                              name: category.name,
+                              isActive: category.is_active,
+                              attributesSchema: draftAttributes,
+                            });
+                            setNextFieldId(getNextFieldId(draftAttributes));
+                            setSelectedCategoryId(category.id);
+                            setIsFormModalOpen(true);
+                          }}
+                        >
                           Edit
                         </button>
                         <button
@@ -571,12 +591,12 @@ export function CategoriesPage() {
         </div>
       </section>
 
-      <section className="table-card" aria-label="Category form">
-        <div className="table-head">
-          <strong>{selectedCategory ? "Edit category" : "Create category"}</strong>
-          <span>{selectedCategory ? `Category #${selectedCategory.id}` : "New"}</span>
-        </div>
-
+      <Modal
+        open={isFormModalOpen}
+        onClose={() => setIsFormModalOpen(false)}
+        title={selectedCategory ? "Edit category" : "Create category"}
+        subtitle={selectedCategory ? `Category #${selectedCategory.id}` : "New"}
+      >
         <div className="users-detail-body">
           <form className="reports-form" onSubmit={onSubmit}>
             <div className="reports-form-grid">
@@ -762,7 +782,7 @@ export function CategoriesPage() {
             </div>
           </form>
         </div>
-      </section>
+      </Modal>
     </section>
   );
 }
