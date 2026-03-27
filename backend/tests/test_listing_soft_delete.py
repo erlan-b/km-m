@@ -38,7 +38,7 @@ def create_user(db_session, email: str, roles: list[Role]) -> User:
 
 
 def create_category(db_session) -> Category:
-    category = Category(name="Apartments", slug="apartments", is_active=True, display_order=1)
+    category = Category(name="Apartments", slug="apartments", is_active=True)
     db_session.add(category)
     db_session.commit()
     db_session.refresh(category)

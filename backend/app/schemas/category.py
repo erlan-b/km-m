@@ -28,7 +28,6 @@ class CategoryCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     slug: str = Field(min_length=2, max_length=120)
     is_active: bool = True
-    display_order: int = Field(default=0, ge=0, le=100000)
     attributes_schema: list[CategoryAttributeDefinition] | None = None
 
 
@@ -36,7 +35,6 @@ class CategoryUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     slug: str | None = Field(default=None, min_length=2, max_length=120)
     is_active: bool | None = None
-    display_order: int | None = Field(default=None, ge=0, le=100000)
     attributes_schema: list[CategoryAttributeDefinition] | None = None
 
     @model_validator(mode="after")
@@ -53,7 +51,6 @@ class CategoryResponse(BaseModel):
     name: str
     slug: str
     is_active: bool
-    display_order: int
     attributes_schema: list[CategoryAttributeDefinition] | None
     created_at: datetime
 

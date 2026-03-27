@@ -4,11 +4,11 @@ from app.db.session import SessionLocal
 from app.models.category import Category
 
 DEFAULT_CATEGORIES = [
-    {"name": "Apartments", "slug": "apartments", "display_order": 10},
-    {"name": "Houses", "slug": "houses", "display_order": 20},
-    {"name": "Commercial", "slug": "commercial", "display_order": 30},
-    {"name": "Land", "slug": "land", "display_order": 40},
-    {"name": "Rooms", "slug": "rooms", "display_order": 50},
+    {"name": "Apartments", "slug": "apartments"},
+    {"name": "Houses", "slug": "houses"},
+    {"name": "Commercial", "slug": "commercial"},
+    {"name": "Land", "slug": "land"},
+    {"name": "Rooms", "slug": "rooms"},
 ]
 
 

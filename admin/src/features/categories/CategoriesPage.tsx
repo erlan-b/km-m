@@ -17,9 +17,7 @@ type CategoryAttributeDefinition = {
 type CategoryItem = {
   id: number;
   name: string;
-  slug: string;
   is_active: boolean;
-  display_order: number;
   attributes_schema: CategoryAttributeDefinition[] | null;
   created_at: string;
 };
@@ -28,15 +26,37 @@ type CategoryListResponse = {
   items: CategoryItem[];
 };
 
-type CategoryFormState = {
-  name: string;
-  slug: string;
-  displayOrder: string;
-  isActive: boolean;
-  attributesSchemaText: string;
+type CategoryAttributeDraft = {
+  id: number;
+  key: string;
+  label: string;
+  value_type: "string" | "integer" | "number" | "boolean";
+  required: boolean;
+  min_value: string;
+  max_value: string;
+  min_length: string;
+  optionsValues: string[];
 };
 
-const DEFAULT_SCHEMA_TEXT = "[]";
+type CategoryFormState = {
+  name: string;
+  isActive: boolean;
+  attributesSchema: CategoryAttributeDraft[];
+};
+
+function buildEmptyAttributeDraft(id: number, existingKey?: string): CategoryAttributeDraft {
+  return {
+    id,
+    key: existingKey ?? `field_${id}`,
+    label: "",
+    value_type: "string",
+    required: false,
+    min_value: "",
+    max_value: "",
+    min_length: "",
+    optionsValues: [""],
+  };
+}
 
 function formatDate(value: string): string {
   const parsed = new Date(value);
@@ -56,10 +76,8 @@ function extractErrorMessage(error: unknown): string {
 function buildInitialFormState(): CategoryFormState {
   return {
     name: "",
-    slug: "",
-    displayOrder: "0",
     isActive: true,
-    attributesSchemaText: DEFAULT_SCHEMA_TEXT,
+    attributesSchema: [],
   };
 }
 
@@ -72,17 +90,108 @@ function normalizeSlug(value: string): string {
     .replace(/-+/g, "-");
 }
 
-function parseAttributesSchema(source: string): CategoryAttributeDefinition[] | null {
-  const trimmed = source.trim();
-  if (!trimmed || trimmed === "null") {
+function toDraftAttributes(source: CategoryAttributeDefinition[] | null): CategoryAttributeDraft[] {
+  return (source ?? []).map((item, index) => ({
+    id: index + 1,
+    key: item.key ?? `field_${index + 1}`,
+    label: item.label ?? "",
+    value_type: item.value_type ?? "string",
+    required: Boolean(item.required),
+    min_value: item.min_value != null ? String(item.min_value) : "",
+    max_value: item.max_value != null ? String(item.max_value) : "",
+    min_length: item.min_length != null ? String(item.min_length) : "",
+    optionsValues: (() => {
+      const base = Array.isArray(item.options) ? item.options.slice(0, 10) : [];
+      return base.length < 10 ? [...base, ""] : base;
+    })(),
+  }));
+}
+
+function getNextFieldId(drafts: CategoryAttributeDraft[]): number {
+  return drafts.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+}
+
+function parseOptionalNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
     return null;
   }
-
-  const parsed = JSON.parse(trimmed) as unknown;
-  if (!Array.isArray(parsed)) {
-    throw new Error("attributes_schema must be a JSON array");
+  const numeric = Number(trimmed);
+  if (!Number.isFinite(numeric)) {
+    throw new Error("Numeric boundaries must be valid numbers");
   }
-  return parsed as CategoryAttributeDefinition[];
+  return numeric;
+}
+
+function parseOptionalInteger(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const numeric = Number(trimmed);
+  if (!Number.isInteger(numeric) || numeric < 0) {
+    throw new Error("Length boundaries must be non-negative integers");
+  }
+  return numeric;
+}
+
+function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAttributeDefinition[] | null {
+  const cleaned: CategoryAttributeDefinition[] = [];
+
+  for (const draft of drafts) {
+    const key = draft.key.trim() || `field_${draft.id}`;
+    const label = draft.label.trim();
+    const type = draft.value_type;
+
+    if (!label) {
+      continue;
+    }
+
+    const minValue = parseOptionalNumber(draft.min_value);
+    const maxValue = parseOptionalNumber(draft.max_value);
+    const minLength = parseOptionalInteger(draft.min_length);
+    const options = type === "string"
+      ? draft.optionsValues
+          .map((part) => part.trim())
+          .filter((part) => part.length > 0)
+      : [];
+
+    if (minValue !== null && maxValue !== null && minValue > maxValue) {
+      throw new Error(`Field '${label}': min value cannot be greater than max value`);
+    }
+    if (type === "string" && minLength !== null && minLength > 300) {
+      throw new Error(`Field '${label}': min length cannot be greater than 300`);
+    }
+
+    const normalized: CategoryAttributeDefinition = {
+      key,
+      label,
+      value_type: type,
+      required: Boolean(draft.required),
+    };
+
+    if (type === "number" || type === "integer") {
+      normalized.min_value = minValue;
+      normalized.max_value = maxValue;
+    }
+    if (type === "string") {
+      normalized.min_length = minLength;
+      normalized.max_length = 300;
+      normalized.options = options.length > 0 ? options : null;
+    }
+
+    cleaned.push(normalized);
+  }
+
+  const seen = new Set<string>();
+  for (const item of cleaned) {
+    if (seen.has(item.key)) {
+      throw new Error(`Duplicate field key '${item.key}'`);
+    }
+    seen.add(item.key);
+  }
+
+  return cleaned.length > 0 ? cleaned : null;
 }
 
 export function CategoriesPage() {
@@ -97,6 +206,7 @@ export function CategoriesPage() {
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [formState, setFormState] = useState<CategoryFormState>(buildInitialFormState());
+  const [nextFieldId, setNextFieldId] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isActionBusyCategoryId, setIsActionBusyCategoryId] = useState<number | null>(null);
 
@@ -121,20 +231,20 @@ export function CategoriesPage() {
       const payload = (await response.json()) as CategoryListResponse;
       setCategories(payload.items);
 
-      if (payload.items.length > 0) {
-        const selectedVisible = selectedCategoryId !== null && payload.items.some((item) => item.id === selectedCategoryId);
-        if (!selectedVisible) {
-          setSelectedCategoryId(payload.items[0].id);
+      setSelectedCategoryId((previous) => {
+        if (payload.items.length === 0) {
+          return null;
         }
-      } else {
-        setSelectedCategoryId(null);
-      }
+
+        const previousVisible = previous !== null && payload.items.some((item) => item.id === previous);
+        return previousVisible ? previous : payload.items[0].id;
+      });
     } catch (loadError) {
       setError(extractErrorMessage(loadError));
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch, selectedCategoryId, showInactive]);
+  }, [authFetch, showInactive]);
 
   useEffect(() => {
     void loadCategories();
@@ -143,16 +253,18 @@ export function CategoriesPage() {
   useEffect(() => {
     if (!selectedCategory) {
       setFormState(buildInitialFormState());
+      setNextFieldId(1);
       return;
     }
 
+    const draftAttributes = toDraftAttributes(selectedCategory.attributes_schema);
+
     setFormState({
       name: selectedCategory.name,
-      slug: selectedCategory.slug,
-      displayOrder: String(selectedCategory.display_order),
       isActive: selectedCategory.is_active,
-      attributesSchemaText: JSON.stringify(selectedCategory.attributes_schema ?? [], null, 2),
+      attributesSchema: draftAttributes,
     });
+    setNextFieldId(getNextFieldId(draftAttributes));
   }, [selectedCategory]);
 
   const filteredRows = useMemo(() => {
@@ -162,7 +274,7 @@ export function CategoriesPage() {
     }
 
     return categories.filter((item) => {
-      const source = `${item.name} ${item.slug}`.toLowerCase();
+      const source = item.name.toLowerCase();
       return source.includes(term);
     });
   }, [categories, query]);
@@ -170,6 +282,7 @@ export function CategoriesPage() {
   const resetCreateForm = () => {
     setSelectedCategoryId(null);
     setFormState(buildInitialFormState());
+    setNextFieldId(1);
   };
 
   const applyActivationToggle = async (category: CategoryItem) => {
@@ -224,29 +337,26 @@ export function CategoriesPage() {
     setError(null);
 
     try {
-      const parsedDisplayOrder = Number(formState.displayOrder);
-      if (!Number.isInteger(parsedDisplayOrder) || parsedDisplayOrder < 0) {
-        throw new Error("Display order must be an integer >= 0");
-      }
+      const attributesSchema = normalizeAttributesSchema(formState.attributesSchema);
 
-      const attributesSchema = parseAttributesSchema(formState.attributesSchemaText);
+      const isEditMode = selectedCategory !== null;
+      const slug = normalizeSlug(formState.name);
 
-      const payload = {
+      const basePayload = {
         name: formState.name.trim(),
-        slug: normalizeSlug(formState.slug),
+        slug,
         is_active: formState.isActive,
-        display_order: parsedDisplayOrder,
         attributes_schema: attributesSchema,
       };
+      const payload = basePayload;
 
       if (!payload.name || payload.name.length < 2) {
         throw new Error("Name must be at least 2 characters");
       }
       if (!payload.slug || payload.slug.length < 2) {
-        throw new Error("Slug must be at least 2 characters");
+        throw new Error("Name should contain at least 2 latin letters or digits");
       }
 
-      const isEditMode = selectedCategory !== null;
       const path = isEditMode ? `/categories/${selectedCategory.id}` : "/categories";
       const method = isEditMode ? "PATCH" : "POST";
 
@@ -277,7 +387,7 @@ export function CategoriesPage() {
         if (isEditMode) {
           return prev.map((item) => (item.id === saved.id ? saved : item));
         }
-        return [...prev, saved].sort((a, b) => a.display_order - b.display_order || a.id - b.id);
+        return [...prev, saved];
       });
       setSelectedCategoryId(saved.id);
     } catch (submitError) {
@@ -287,12 +397,111 @@ export function CategoriesPage() {
     }
   };
 
+  const addField = () => {
+    setFormState((prev) => ({
+      ...prev,
+      attributesSchema: [...prev.attributesSchema, buildEmptyAttributeDraft(nextFieldId)],
+    }));
+    setNextFieldId((prev) => prev + 1);
+  };
+
+  const updateField = (index: number, patch: Partial<CategoryAttributeDraft>) => {
+    setFormState((prev) => ({
+      ...prev,
+      attributesSchema: prev.attributesSchema.map((item, currentIndex) =>
+        currentIndex === index ? { ...item, ...patch } : item,
+      ),
+    }));
+  };
+
+  const updateOptionValue = (fieldIndex: number, optionIndex: number, value: string) => {
+    setFormState((prev) => {
+      const attributesSchema = prev.attributesSchema.map((item, currentIndex) => {
+        if (currentIndex !== fieldIndex) {
+          return item;
+        }
+
+        const optionsValues = [...item.optionsValues];
+        optionsValues[optionIndex] = value;
+
+        if (
+          optionIndex === optionsValues.length - 1
+          && value.trim().length > 0
+          && optionsValues.length < 10
+        ) {
+          optionsValues.push("");
+        }
+
+        return {
+          ...item,
+          optionsValues,
+        };
+      });
+
+      return {
+        ...prev,
+        attributesSchema,
+      };
+    });
+  };
+
+  const removeOptionValue = (fieldIndex: number, optionIndex: number) => {
+    setFormState((prev) => {
+      const attributesSchema = prev.attributesSchema.map((item, currentIndex) => {
+        if (currentIndex !== fieldIndex) {
+          return item;
+        }
+
+        const filtered = item.optionsValues.filter((_, index) => index !== optionIndex);
+        if (filtered.length === 0) {
+          filtered.push("");
+        }
+
+        return {
+          ...item,
+          optionsValues: filtered,
+        };
+      });
+
+      return {
+        ...prev,
+        attributesSchema,
+      };
+    });
+  };
+
+  const removeField = (index: number) => {
+    setFormState((prev) => ({
+      ...prev,
+      attributesSchema: prev.attributesSchema.filter((_, currentIndex) => currentIndex !== index),
+    }));
+  };
+
+  const moveField = (index: number, direction: -1 | 1) => {
+    setFormState((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.attributesSchema.length) {
+        return prev;
+      }
+
+      const clone = [...prev.attributesSchema];
+      const temp = clone[index];
+      clone[index] = clone[target];
+      clone[target] = temp;
+
+      return {
+        ...prev,
+        attributesSchema: clone,
+      };
+    });
+  };
+
   return (
     <section className="module-page">
       <header className="module-header">
         <div>
           <h1>Categories</h1>
-          <p>Manage category metadata, ordering, active state, and dynamic attributes schema.</p>
+          <p>Manage category metadata, active state, and dynamic listing fields with a visual builder.</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => void loadCategories()} disabled={isLoading}>
           {isLoading ? "Refreshing..." : "Refresh"}
@@ -303,7 +512,7 @@ export function CategoriesPage() {
 
       <div className="search-strip categories-search-strip">
         <input
-          placeholder="Search by name or slug"
+          placeholder="Search by category name"
           aria-label="Search categories"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -332,8 +541,6 @@ export function CategoriesPage() {
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Slug</th>
-                <th>Order</th>
                 <th>Attributes</th>
                 <th>Status</th>
                 <th>Created</th>
@@ -343,7 +550,7 @@ export function CategoriesPage() {
             <tbody>
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="users-empty-cell">
+                  <td colSpan={5} className="users-empty-cell">
                     {isLoading ? "Loading categories..." : "No categories found"}
                   </td>
                 </tr>
@@ -351,8 +558,6 @@ export function CategoriesPage() {
                 filteredRows.map((category) => (
                   <tr key={category.id}>
                     <td>{category.name}</td>
-                    <td>{category.slug}</td>
-                    <td>{category.display_order}</td>
                     <td>{category.attributes_schema?.length ?? 0}</td>
                     <td>
                       <span className={`users-status-badge ${category.is_active ? "users-status-active" : "users-status-deactivated"}`}>
@@ -400,24 +605,7 @@ export function CategoriesPage() {
                 Name
                 <input
                   value={formState.name}
-                  onChange={(event) => {
-                    const name = event.target.value;
-                    setFormState((prev) => ({
-                      ...prev,
-                      name,
-                      slug: selectedCategory ? prev.slug : normalizeSlug(name),
-                    }));
-                  }}
-                  required
-                  minLength={2}
-                />
-              </label>
-
-              <label>
-                Slug
-                <input
-                  value={formState.slug}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, slug: normalizeSlug(event.target.value) }))}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
                   required
                   minLength={2}
                 />
@@ -425,17 +613,6 @@ export function CategoriesPage() {
             </div>
 
             <div className="reports-form-grid">
-              <label>
-                Display order
-                <input
-                  type="number"
-                  min={0}
-                  step={1}
-                  value={formState.displayOrder}
-                  onChange={(event) => setFormState((prev) => ({ ...prev, displayOrder: event.target.value }))}
-                />
-              </label>
-
               <label className="categories-checkbox-label categories-form-checkbox">
                 <input
                   type="checkbox"
@@ -446,15 +623,149 @@ export function CategoriesPage() {
               </label>
             </div>
 
-            <label className="reports-note-label">
-              attributes_schema (JSON array)
-              <textarea
-                className="reports-note-input categories-schema-input"
-                value={formState.attributesSchemaText}
-                onChange={(event) => setFormState((prev) => ({ ...prev, attributesSchemaText: event.target.value }))}
-                spellCheck={false}
-              />
-            </label>
+            <section className="categories-builder" aria-label="Dynamic fields builder">
+              <div className="table-head categories-builder-head">
+                <strong>Dynamic fields builder</strong>
+                <button type="button" className="btn btn-ghost" onClick={addField}>Add field</button>
+              </div>
+
+              <div className="categories-builder-list">
+                {formState.attributesSchema.length === 0 ? (
+                  <p className="categories-empty-builder">
+                    No dynamic fields yet. Click Add field to configure attributes for listings in this category.
+                  </p>
+                ) : (
+                  formState.attributesSchema.map((attribute, index) => (
+                    <article key={attribute.id} className="categories-attr-row">
+                      <div className="categories-attr-row-head">
+                        <strong>Field {index + 1}</strong>
+                        <div className="users-actions-cell">
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={index === 0}
+                            onClick={() => moveField(index, -1)}
+                          >
+                            Up
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={index === formState.attributesSchema.length - 1}
+                            onClick={() => moveField(index, 1)}
+                          >
+                            Down
+                          </button>
+                          <button type="button" className="btn btn-primary" onClick={() => removeField(index)}>
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="categories-attr-grid">
+                        <label>
+                          Label
+                          <input
+                            value={attribute.label}
+                            placeholder="Rooms count"
+                            onChange={(event) => updateField(index, { label: event.target.value })}
+                          />
+                        </label>
+
+                        <label>
+                          Type
+                          <select
+                            className="users-filter-select"
+                            value={attribute.value_type}
+                            onChange={(event) => updateField(index, { value_type: event.target.value as CategoryAttributeDraft["value_type"] })}
+                          >
+                            <option value="string">Text</option>
+                            <option value="integer">Integer</option>
+                            <option value="number">Decimal</option>
+                            <option value="boolean">Yes / No</option>
+                          </select>
+                        </label>
+
+                        <label className="categories-checkbox-label categories-field-required">
+                          <input
+                            type="checkbox"
+                            checked={attribute.required}
+                            onChange={(event) => updateField(index, { required: event.target.checked })}
+                          />
+                          Required
+                        </label>
+
+                        {attribute.value_type === "string" ? (
+                          <>
+                            <label>
+                              Min length
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={attribute.min_length}
+                                onChange={(event) => updateField(index, { min_length: event.target.value })}
+                              />
+                            </label>
+
+                            <label className="categories-options-field">
+                              Options (optional, type one option per field, max 10)
+                              <div className="categories-options-list">
+                                {attribute.optionsValues.map((optionValue, optionIndex) => {
+                                  const isLast = optionIndex === attribute.optionsValues.length - 1;
+                                  const canRemove = attribute.optionsValues.length > 1 || optionValue.trim().length > 0;
+
+                                  return (
+                                    <div key={`${attribute.id}-option-${optionIndex}`} className="categories-option-row">
+                                      <input
+                                        className="categories-options-input"
+                                        value={optionValue}
+                                        placeholder={`Option ${optionIndex + 1}`}
+                                        onChange={(event) => updateOptionValue(index, optionIndex, event.target.value)}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="btn btn-ghost categories-option-remove"
+                                        onClick={() => removeOptionValue(index, optionIndex)}
+                                        disabled={!canRemove || (isLast && optionValue.trim().length === 0 && attribute.optionsValues.length === 1)}
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </label>
+                          </>
+                        ) : null}
+
+                        {attribute.value_type === "integer" || attribute.value_type === "number" ? (
+                          <>
+                            <label>
+                              Min value
+                              <input
+                                type="number"
+                                value={attribute.min_value}
+                                onChange={(event) => updateField(index, { min_value: event.target.value })}
+                              />
+                            </label>
+
+                            <label>
+                              Max value
+                              <input
+                                type="number"
+                                value={attribute.max_value}
+                                onChange={(event) => updateField(index, { max_value: event.target.value })}
+                              />
+                            </label>
+                          </>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            </section>
 
             <div className="users-actions-cell">
               <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
@@ -465,16 +776,17 @@ export function CategoriesPage() {
                 className="btn btn-ghost"
                 onClick={() => {
                   if (selectedCategory) {
+                    const draftAttributes = toDraftAttributes(selectedCategory.attributes_schema);
                     setFormState({
                       name: selectedCategory.name,
-                      slug: selectedCategory.slug,
-                      displayOrder: String(selectedCategory.display_order),
                       isActive: selectedCategory.is_active,
-                      attributesSchemaText: JSON.stringify(selectedCategory.attributes_schema ?? [], null, 2),
+                      attributesSchema: draftAttributes,
                     });
+                    setNextFieldId(getNextFieldId(draftAttributes));
                     return;
                   }
                   setFormState(buildInitialFormState());
+                  setNextFieldId(1);
                 }}
               >
                 Reset form

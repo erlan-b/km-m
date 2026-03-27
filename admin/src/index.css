@@ -619,10 +619,98 @@ textarea:focus-visible {
   padding-top: 28px;
 }
 
-.categories-schema-input {
-  min-height: 180px;
-  font-family: Consolas, "Courier New", monospace;
+.categories-builder {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-page);
+  overflow: hidden;
+}
+
+.categories-builder-head {
+  background: var(--bg-surface);
+}
+
+.categories-builder-list {
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.categories-empty-builder {
+  margin: 0;
+  color: var(--text-subtle);
   font-size: 13px;
+}
+
+.categories-attr-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.categories-attr-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.categories-attr-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.categories-attr-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.categories-attr-grid input {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  background: var(--white-soft);
+}
+
+.categories-field-required {
+  align-self: end;
+  min-height: 36px;
+}
+
+.categories-options-field {
+  grid-column: 1 / -1;
+}
+
+.categories-options-input {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  background: var(--white-soft);
+  color: var(--text-main);
+  font-family: inherit;
+}
+
+.categories-options-list {
+  display: grid;
+  gap: 8px;
+}
+
+.categories-option-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.categories-option-remove {
+  min-width: 84px;
 }
 
 .reports-table-wrap {
@@ -724,6 +812,14 @@ textarea:focus-visible {
 
   .categories-form-checkbox {
     padding-top: 0;
+  }
+
+  .categories-attr-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .categories-option-row {
+    grid-template-columns: 1fr;
   }
 }
 
