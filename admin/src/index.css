@@ -818,6 +818,13 @@ textarea:focus-visible {
 
 .payments-search-strip {
   grid-template-columns: repeat(4, minmax(120px, 1fr)) repeat(4, minmax(180px, 1fr)) auto auto;
+  align-items: end;
+}
+
+.payments-search-strip > input,
+.payments-search-strip > select,
+.payments-search-strip > button {
+  align-self: end;
 }
 
 .payments-filter-field {
