@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
+import { formatDateTime, formatInteger } from "../../shared/i18n/format";
 import { Modal } from "../common/Modal";
 
 type ReportStatus = "open" | "resolved" | "dismissed";
@@ -36,26 +37,14 @@ type ReportResolveRequest = {
   moderation_action: string | null;
 };
 
-function formatDate(value: string | null): string {
-  if (!value) {
-    return "-";
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
-}
-
-function statusLabel(status: ReportStatus): string {
+function statusLabel(status: ReportStatus, t: (key: string, fallback: string) => string): string {
   if (status === "open") {
-    return "Open";
+    return t("status_open", "Open");
   }
   if (status === "resolved") {
-    return "Resolved";
+    return t("status_resolved", "Resolved");
   }
-  return "Dismissed";
+  return t("status_dismissed", "Dismissed");
 }
 
 function extractErrorMessage(error: unknown): string {
@@ -67,7 +56,7 @@ function extractErrorMessage(error: unknown): string {
 
 export function ReportsPage() {
   const { authFetch } = useAuth();
-  const { t } = usePageI18n("reports");
+  const { t, language } = usePageI18n("reports");
 
   const [reports, setReports] = useState<ReportListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,7 +91,7 @@ export function ReportsPage() {
 
       const response = await authFetch(`/reports/admin?${params.toString()}`);
       if (!response.ok) {
-        throw new Error("Failed to load reports");
+        throw new Error(t("error_load_reports", "Failed to load reports"));
       }
 
       const payload = (await response.json()) as ReportListResponse;
@@ -174,7 +163,7 @@ export function ReportsPage() {
       });
 
       if (!response.ok) {
-        let message = "Failed to process report";
+        let message = t("error_process_report", "Failed to process report");
         try {
           const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
           if (typeof payload?.error?.message === "string") {
@@ -183,7 +172,7 @@ export function ReportsPage() {
             message = payload.detail;
           }
         } catch {
-          message = "Failed to process report";
+          message = t("error_process_report", "Failed to process report");
         }
         throw new Error(message);
       }
@@ -215,20 +204,20 @@ export function ReportsPage() {
 
     if (selectedReport.target_type === "listing") {
       return [
-        { value: "approve", label: "Approve listing" },
-        { value: "reject", label: "Reject listing" },
-        { value: "archive", label: "Archive listing" },
-        { value: "deactivate", label: "Deactivate listing" },
+        { value: "approve", label: t("moderation_approve_listing", "Approve listing") },
+        { value: "reject", label: t("moderation_reject_listing", "Reject listing") },
+        { value: "archive", label: t("moderation_archive_listing", "Archive listing") },
+        { value: "deactivate", label: t("moderation_deactivate_listing", "Deactivate listing") },
       ];
     }
 
     return [
-      { value: "block", label: "Block user" },
-      { value: "unblock", label: "Unblock user" },
-      { value: "activate", label: "Activate user" },
-      { value: "deactivate", label: "Deactivate user" },
+      { value: "block", label: t("moderation_block_user", "Block user") },
+      { value: "unblock", label: t("moderation_unblock_user", "Unblock user") },
+      { value: "activate", label: t("moderation_activate_user", "Activate user") },
+      { value: "deactivate", label: t("moderation_deactivate_user", "Deactivate user") },
     ];
-  }, [selectedReport]);
+  }, [selectedReport, t]);
 
   const totalPages = reports?.total_pages ?? 0;
   const canPrev = page > 1;
@@ -239,13 +228,13 @@ export function ReportsPage() {
       return "-";
     }
     if (reports.total_items === 0) {
-      return "No reports found";
+      return t("no_reports_found", "No reports found");
     }
 
     const from = (reports.page - 1) * reports.page_size + 1;
     const to = Math.min(reports.page * reports.page_size, reports.total_items);
-    return `${from}-${to} of ${reports.total_items}`;
-  }, [reports]);
+    return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(reports.total_items, language)}`;
+  }, [language, reports, t]);
 
   return (
     <section className="module-page">
@@ -267,28 +256,28 @@ export function ReportsPage() {
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as ReportStatus | "")}
         >
-          <option value="">All statuses</option>
-          <option value="open">Open</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
+          <option value="">{t("all_statuses", "All statuses")}</option>
+          <option value="open">{t("status_open", "Open")}</option>
+          <option value="resolved">{t("status_resolved", "Resolved")}</option>
+          <option value="dismissed">{t("status_dismissed", "Dismissed")}</option>
         </select>
         <select
           className="users-filter-select"
           value={targetTypeFilter}
           onChange={(event) => setTargetTypeFilter(event.target.value as ReportTargetType | "")}
         >
-          <option value="">All target types</option>
-          <option value="listing">Listing</option>
-          <option value="user">User</option>
+          <option value="">{t("all_target_types", "All target types")}</option>
+          <option value="listing">{t("target_listing", "Listing")}</option>
+          <option value="user">{t("target_user", "User")}</option>
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>
           {t("apply_filters", "Apply filters")}
         </button>
       </div>
 
-      <section className="table-card" aria-label="Reports table">
+      <section className="table-card" aria-label={t("reports_table", "Reports table")}>
         <div className="table-head users-table-head">
-          <strong>Reports queue</strong>
+          <strong>{t("reports_queue", "Reports queue")}</strong>
           <span>{summaryText}</span>
         </div>
 
@@ -297,19 +286,19 @@ export function ReportsPage() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Target</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Reviewed</th>
-                <th>Actions</th>
+                <th>{t("target", "Target")}</th>
+                <th>{t("reason", "Reason")}</th>
+                <th>{t("status", "Status")}</th>
+                <th>{t("created", "Created")}</th>
+                <th>{t("reviewed", "Reviewed")}</th>
+                <th>{t("actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody>
               {(reports?.items ?? []).length === 0 ? (
                 <tr>
                   <td colSpan={7} className="users-empty-cell">
-                    {isLoading ? "Loading reports..." : "No reports found"}
+                    {isLoading ? t("loading_reports", "Loading reports...") : t("no_reports_found", "No reports found")}
                   </td>
                 </tr>
               ) : (
@@ -318,8 +307,8 @@ export function ReportsPage() {
                     <td>#{report.id}</td>
                     <td>
                       <div className="users-name-cell">
-                        <strong>{report.target_type}</strong>
-                        <span>target #{report.target_id}</span>
+                        <strong>{report.target_type === "listing" ? t("target_listing", "Listing") : t("target_user", "User")}</strong>
+                        <span>{t("target", "target")} #{formatInteger(report.target_id, language)}</span>
                       </div>
                     </td>
                     <td>
@@ -330,11 +319,11 @@ export function ReportsPage() {
                     </td>
                     <td>
                       <span className={`users-status-badge users-status-${report.status === "open" ? "pending_verification" : report.status === "resolved" ? "active" : "deactivated"}`}>
-                        {statusLabel(report.status)}
+                        {statusLabel(report.status, t)}
                       </span>
                     </td>
-                    <td>{formatDate(report.created_at)}</td>
-                    <td>{formatDate(report.reviewed_at)}</td>
+                    <td>{formatDateTime(report.created_at, language)}</td>
+                    <td>{formatDateTime(report.reviewed_at, language)}</td>
                     <td>
                       <button
                         type="button"
@@ -347,7 +336,7 @@ export function ReportsPage() {
                           setIsReviewModalOpen(true);
                         }}
                       >
-                        Review
+                        {t("review", "Review")}
                       </button>
                     </td>
                   </tr>
@@ -364,10 +353,10 @@ export function ReportsPage() {
             disabled={!canPrev}
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
           >
-            Previous
+            {t("previous", "Previous")}
           </button>
           <span className="users-page-indicator">
-            Page {reports?.page ?? page}{totalPages ? ` / ${totalPages}` : ""}
+            {t("page", "Page")} {formatInteger(reports?.page ?? page, language)}{totalPages ? ` / ${formatInteger(totalPages, language)}` : ""}
           </span>
           <button
             type="button"
@@ -375,7 +364,7 @@ export function ReportsPage() {
             disabled={!canNext}
             onClick={() => setPage((prev) => prev + 1)}
           >
-            Next
+            {t("next", "Next")}
           </button>
         </div>
       </section>
@@ -383,35 +372,35 @@ export function ReportsPage() {
       <Modal
         open={isReviewModalOpen}
         onClose={() => setIsReviewModalOpen(false)}
-        title="Moderation action"
-        subtitle={selectedReport ? `Report #${selectedReport.id}` : "No report selected"}
+        title={t("moderation_action", "Moderation action")}
+        subtitle={selectedReport ? `${t("report", "Report")} #${formatInteger(selectedReport.id, language)}` : t("no_report_selected", "No report selected")}
       >
         <div className="users-detail-body">
-          {!selectedReport ? <p>Select a report and click Review.</p> : null}
+          {!selectedReport ? <p>{t("select_report", "Select a report and click Review.")}</p> : null}
 
           {selectedReport ? (
             <form className="reports-form" onSubmit={onResolveSubmit}>
               <div className="reports-form-grid">
                 <label>
-                  Action
+                  {t("action", "Action")}
                   <select
                     className="users-filter-select"
                     value={resolveAction}
                     onChange={(event) => setResolveAction(event.target.value as ResolveAction)}
                   >
-                    <option value="resolve">Resolve</option>
-                    <option value="dismiss">Dismiss</option>
+                    <option value="resolve">{t("resolve", "Resolve")}</option>
+                    <option value="dismiss">{t("dismiss", "Dismiss")}</option>
                   </select>
                 </label>
 
                 <label>
-                  Moderation action (optional)
+                  {t("moderation_action_optional", "Moderation action (optional)")}
                   <select
                     className="users-filter-select"
                     value={moderationAction}
                     onChange={(event) => setModerationAction(event.target.value)}
                   >
-                    <option value="">No moderation action</option>
+                    <option value="">{t("no_moderation_action", "No moderation action")}</option>
                     {moderationOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
@@ -422,19 +411,19 @@ export function ReportsPage() {
               </div>
 
               <label className="reports-note-label">
-                Resolution note (optional)
+                {t("resolution_note_optional", "Resolution note (optional)")}
                 <textarea
                   className="reports-note-input"
                   value={resolutionNote}
                   onChange={(event) => setResolutionNote(event.target.value)}
-                  placeholder="Provide moderation context for audit and reporter notifications"
+                  placeholder={t("resolution_note_placeholder", "Provide moderation context for audit and reporter notifications")}
                   maxLength={2000}
                 />
               </label>
 
               <div className="users-actions-cell">
                 <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-                  {isSubmitting ? "Applying..." : t("apply_action", "Apply action")}
+                  {isSubmitting ? t("applying", "Applying...") : t("apply_action", "Apply action")}
                 </button>
                 <button
                   type="button"
@@ -445,7 +434,7 @@ export function ReportsPage() {
                     setResolutionNote(selectedReport.resolution_note ?? "");
                   }}
                 >
-                  Reset form
+                  {t("reset_form", "Reset form")}
                 </button>
               </div>
             </form>

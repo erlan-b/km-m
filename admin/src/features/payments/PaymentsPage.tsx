@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
+import { formatCurrency, formatDateTime, formatInteger } from "../../shared/i18n/format";
 import { Modal } from "../common/Modal";
 
 type PaymentStatus = "pending" | "successful" | "failed" | "cancelled" | "refunded";
@@ -50,32 +51,20 @@ const initialFilters: PaymentFilters = {
   paid_to: "",
 };
 
-function formatDate(value: string | null): string {
-  if (!value) {
-    return "-";
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
-}
-
-function statusLabel(status: PaymentStatus): string {
+function statusLabel(status: PaymentStatus, t: (key: string, fallback: string) => string): string {
   if (status === "pending") {
-    return "Pending";
+    return t("status_pending", "Pending");
   }
   if (status === "successful") {
-    return "Successful";
+    return t("status_successful", "Successful");
   }
   if (status === "failed") {
-    return "Failed";
+    return t("status_failed", "Failed");
   }
   if (status === "cancelled") {
-    return "Cancelled";
+    return t("status_cancelled", "Cancelled");
   }
-  return "Refunded";
+  return t("status_refunded", "Refunded");
 }
 
 function statusClass(status: PaymentStatus): string {
@@ -112,26 +101,9 @@ function parsePositiveInt(value: string): number | null {
   return parsed;
 }
 
-function formatAmount(amount: string | number, currency: string): string {
-  const numericValue = typeof amount === "string" ? Number(amount) : amount;
-  if (!Number.isFinite(numericValue)) {
-    return `${String(amount)} ${currency}`;
-  }
-
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(numericValue);
-  } catch {
-    return `${numericValue.toFixed(2)} ${currency}`;
-  }
-}
-
 export function PaymentsPage() {
   const { authFetch } = useAuth();
-  const { t } = usePageI18n("payments");
+  const { t, language } = usePageI18n("payments");
 
   const [payments, setPayments] = useState<PaymentHistoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -187,7 +159,7 @@ export function PaymentsPage() {
 
       const response = await authFetch(`/payments/admin?${params.toString()}`);
       if (!response.ok) {
-        let message = "Failed to load payments";
+        let message = t("error_load_payments", "Failed to load payments");
         try {
           const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
           if (typeof payload?.error?.message === "string") {
@@ -196,7 +168,7 @@ export function PaymentsPage() {
             message = payload.detail;
           }
         } catch {
-          message = "Failed to load payments";
+          message = t("error_load_payments", "Failed to load payments");
         }
         throw new Error(message);
       }
@@ -250,13 +222,13 @@ export function PaymentsPage() {
       return "-";
     }
     if (payments.total_items === 0) {
-      return "No payments found";
+      return t("no_payments_found", "No payments found");
     }
 
     const from = (payments.page - 1) * payments.page_size + 1;
     const to = Math.min(payments.page * payments.page_size, payments.total_items);
-    return `${from}-${to} of ${payments.total_items}`;
-  }, [payments]);
+    return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(payments.total_items, language)}`;
+  }, [language, payments, t]);
 
   return (
     <section className="module-page">
@@ -272,42 +244,42 @@ export function PaymentsPage() {
 
       {error ? <div className="dashboard-error">{error}</div> : null}
 
-      <section className="search-strip payments-search-strip" aria-label="Payments filters">
+      <section className="search-strip payments-search-strip" aria-label={t("payments_filters", "Payments filters")}>
         <select
           className="users-filter-select"
           value={draftFilters.status_filter}
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, status_filter: event.target.value as PaymentStatus | "" }))}
         >
-          <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="successful">Successful</option>
-          <option value="failed">Failed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="refunded">Refunded</option>
+          <option value="">{t("all_statuses", "All statuses")}</option>
+          <option value="pending">{t("status_pending", "Pending")}</option>
+          <option value="successful">{t("status_successful", "Successful")}</option>
+          <option value="failed">{t("status_failed", "Failed")}</option>
+          <option value="cancelled">{t("status_cancelled", "Cancelled")}</option>
+          <option value="refunded">{t("status_refunded", "Refunded")}</option>
         </select>
 
         <input
-          placeholder="User ID"
+          placeholder={t("user_id", "User ID")}
           value={draftFilters.user_id}
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, user_id: event.target.value }))}
           inputMode="numeric"
         />
 
         <input
-          placeholder="Listing ID"
+          placeholder={t("listing_id", "Listing ID")}
           value={draftFilters.listing_id}
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, listing_id: event.target.value }))}
           inputMode="numeric"
         />
 
         <input
-          placeholder="Provider"
+          placeholder={t("provider", "Provider")}
           value={draftFilters.payment_provider}
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, payment_provider: event.target.value }))}
         />
 
         <label className="payments-filter-field">
-          Created from
+          {t("created_from", "Created from")}
           <input
             type="datetime-local"
             value={draftFilters.created_from}
@@ -316,7 +288,7 @@ export function PaymentsPage() {
         </label>
 
         <label className="payments-filter-field">
-          Created to
+          {t("created_to", "Created to")}
           <input
             type="datetime-local"
             value={draftFilters.created_to}
@@ -325,7 +297,7 @@ export function PaymentsPage() {
         </label>
 
         <label className="payments-filter-field">
-          Paid from
+          {t("paid_from", "Paid from")}
           <input
             type="datetime-local"
             value={draftFilters.paid_from}
@@ -334,7 +306,7 @@ export function PaymentsPage() {
         </label>
 
         <label className="payments-filter-field">
-          Paid to
+          {t("paid_to", "Paid to")}
           <input
             type="datetime-local"
             value={draftFilters.paid_to}
@@ -350,9 +322,9 @@ export function PaymentsPage() {
         </button>
       </section>
 
-      <section className="table-card" aria-label="Payments table">
+      <section className="table-card" aria-label={t("payments_table", "Payments table")}>
         <div className="table-head users-table-head">
-          <strong>Payments</strong>
+          <strong>{t("table_payments", "Payments")}</strong>
           <span>{summaryText}</span>
         </div>
 
@@ -361,45 +333,45 @@ export function PaymentsPage() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>User</th>
-                <th>Listing</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Provider</th>
-                <th>Created</th>
-                <th>Paid</th>
-                <th>Actions</th>
+                <th>{t("user", "User")}</th>
+                <th>{t("listing", "Listing")}</th>
+                <th>{t("amount", "Amount")}</th>
+                <th>{t("status", "Status")}</th>
+                <th>{t("provider", "Provider")}</th>
+                <th>{t("created", "Created")}</th>
+                <th>{t("paid", "Paid")}</th>
+                <th>{t("actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="users-empty-cell">
-                    {isLoading ? "Loading payments..." : "No payments found"}
+                    {isLoading ? t("loading_payments", "Loading payments...") : t("no_payments_found", "No payments found")}
                   </td>
                 </tr>
               ) : (
                 rows.map((item) => (
                   <tr key={item.id}>
-                    <td>#{item.id}</td>
-                    <td>{item.user_id}</td>
-                    <td>{item.listing_id ?? "-"}</td>
+                    <td>#{formatInteger(item.id, language)}</td>
+                    <td>{formatInteger(item.user_id, language)}</td>
+                    <td>{item.listing_id == null ? "-" : formatInteger(item.listing_id, language)}</td>
                     <td>
-                      <strong>{formatAmount(item.amount, item.currency)}</strong>
+                      <strong>{formatCurrency(item.amount, item.currency, language)}</strong>
                     </td>
                     <td>
                       <span className={`users-status-badge ${statusClass(item.status)}`}>
-                        {statusLabel(item.status)}
+                        {statusLabel(item.status, t)}
                       </span>
                     </td>
                     <td>
                       <div className="users-name-cell">
                         <strong>{item.payment_provider}</strong>
-                        <span>{item.provider_reference ?? "No reference"}</span>
+                        <span>{item.provider_reference ?? t("no_reference", "No reference")}</span>
                       </div>
                     </td>
-                    <td>{formatDate(item.created_at)}</td>
-                    <td>{formatDate(item.paid_at)}</td>
+                    <td>{formatDateTime(item.created_at, language)}</td>
+                    <td>{formatDateTime(item.paid_at, language)}</td>
                     <td>
                       <button
                         type="button"
@@ -409,7 +381,7 @@ export function PaymentsPage() {
                           setIsDetailModalOpen(true);
                         }}
                       >
-                        Details
+                        {t("details", "Details")}
                       </button>
                     </td>
                   </tr>
@@ -426,10 +398,10 @@ export function PaymentsPage() {
             disabled={!canPrev}
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
           >
-            Previous
+            {t("previous", "Previous")}
           </button>
           <span className="users-page-indicator">
-            Page {payments?.page ?? page}{totalPages ? ` / ${totalPages}` : ""}
+            {t("page", "Page")} {formatInteger(payments?.page ?? page, language)}{totalPages ? ` / ${formatInteger(totalPages, language)}` : ""}
           </span>
           <button
             type="button"
@@ -437,7 +409,7 @@ export function PaymentsPage() {
             disabled={!canNext}
             onClick={() => setPage((prev) => prev + 1)}
           >
-            Next
+            {t("next", "Next")}
           </button>
         </div>
       </section>
@@ -445,38 +417,38 @@ export function PaymentsPage() {
       <Modal
         open={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
-        title="Payment detail"
-        subtitle={selectedPayment ? `Payment #${selectedPayment.id}` : "No payment selected"}
+        title={t("payment_detail", "Payment detail")}
+        subtitle={selectedPayment ? `${t("payment", "Payment")} #${formatInteger(selectedPayment.id, language)}` : t("no_payment_selected", "No payment selected")}
       >
         <div className="users-detail-body">
-          {!selectedPayment ? <p>Select a payment and click Details.</p> : null}
+          {!selectedPayment ? <p>{t("select_payment", "Select a payment and click Details.")}</p> : null}
 
           {selectedPayment ? (
             <div className="dashboard-stats-grid">
               <article className="dashboard-stat-group">
-                <h3>Payment</h3>
-                <p>ID: <strong>#{selectedPayment.id}</strong></p>
-                <p>Status: <strong>{statusLabel(selectedPayment.status)}</strong></p>
-                <p>Amount: <strong>{formatAmount(selectedPayment.amount, selectedPayment.currency)}</strong></p>
+                <h3>{t("payment", "Payment")}</h3>
+                <p>ID: <strong>#{formatInteger(selectedPayment.id, language)}</strong></p>
+                <p>{t("status", "Status")}: <strong>{statusLabel(selectedPayment.status, t)}</strong></p>
+                <p>{t("amount", "Amount")}: <strong>{formatCurrency(selectedPayment.amount, selectedPayment.currency, language)}</strong></p>
               </article>
 
               <article className="dashboard-stat-group">
-                <h3>Links</h3>
-                <p>User ID: <strong>{selectedPayment.user_id}</strong></p>
-                <p>Listing ID: <strong>{selectedPayment.listing_id ?? "-"}</strong></p>
-                <p>Provider: <strong>{selectedPayment.payment_provider}</strong></p>
+                <h3>{t("links", "Links")}</h3>
+                <p>{t("user_id", "User ID")}: <strong>{formatInteger(selectedPayment.user_id, language)}</strong></p>
+                <p>{t("listing_id", "Listing ID")}: <strong>{selectedPayment.listing_id == null ? "-" : formatInteger(selectedPayment.listing_id, language)}</strong></p>
+                <p>{t("provider", "Provider")}: <strong>{selectedPayment.payment_provider}</strong></p>
               </article>
 
               <article className="dashboard-stat-group">
-                <h3>Provider Reference</h3>
-                <p><strong>{selectedPayment.provider_reference ?? "No provider reference"}</strong></p>
+                <h3>{t("provider_reference", "Provider Reference")}</h3>
+                <p><strong>{selectedPayment.provider_reference ?? t("no_provider_reference", "No provider reference")}</strong></p>
               </article>
 
               <article className="dashboard-stat-group">
-                <h3>Timestamps</h3>
-                <p>Created: <strong>{formatDate(selectedPayment.created_at)}</strong></p>
-                <p>Updated: <strong>{formatDate(selectedPayment.updated_at)}</strong></p>
-                <p>Paid: <strong>{formatDate(selectedPayment.paid_at)}</strong></p>
+                <h3>{t("timestamps", "Timestamps")}</h3>
+                <p>{t("created", "Created")}: <strong>{formatDateTime(selectedPayment.created_at, language)}</strong></p>
+                <p>{t("updated", "Updated")}: <strong>{formatDateTime(selectedPayment.updated_at, language)}</strong></p>
+                <p>{t("paid", "Paid")}: <strong>{formatDateTime(selectedPayment.paid_at, language)}</strong></p>
               </article>
             </div>
           ) : null}

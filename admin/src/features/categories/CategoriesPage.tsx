@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
+import { formatDateTime } from "../../shared/i18n/format";
 import { Modal } from "../common/Modal";
 
 type CategoryAttributeDefinition = {
@@ -58,14 +59,6 @@ function buildEmptyAttributeDraft(id: number, existingKey?: string): CategoryAtt
   };
 }
 
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
-}
-
 function extractErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -110,19 +103,22 @@ function getNextFieldId(drafts: CategoryAttributeDraft[]): number {
   return drafts.reduce((max, item) => Math.max(max, item.id), 0) + 1;
 }
 
-function parseOptionalNumber(value: string): number | null {
+function parseOptionalNumber(value: string, t: (key: string, fallback: string) => string): number | null {
   const trimmed = value.trim();
   if (!trimmed) {
     return null;
   }
   const numeric = Number(trimmed);
   if (!Number.isFinite(numeric)) {
-    throw new Error("Numeric boundaries must be valid numbers");
+    throw new Error(t("error_numeric_boundaries", "Numeric boundaries must be valid numbers"));
   }
   return numeric;
 }
 
-function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAttributeDefinition[] | null {
+function normalizeAttributesSchema(
+  drafts: CategoryAttributeDraft[],
+  t: (key: string, fallback: string) => string,
+): CategoryAttributeDefinition[] | null {
   const cleaned: CategoryAttributeDefinition[] = [];
 
   for (const draft of drafts) {
@@ -134,8 +130,8 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
       continue;
     }
 
-    const minValue = parseOptionalNumber(draft.min_value);
-    const maxValue = parseOptionalNumber(draft.max_value);
+    const minValue = parseOptionalNumber(draft.min_value, t);
+    const maxValue = parseOptionalNumber(draft.max_value, t);
     const options = type === "string"
       ? draft.optionsValues
           .map((part) => part.trim())
@@ -143,7 +139,7 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
       : [];
 
     if (minValue !== null && maxValue !== null && minValue > maxValue) {
-      throw new Error(`Field '${label}': min value cannot be greater than max value`);
+      throw new Error(`${t("error_min_greater_than_max", "Min value cannot be greater than max value")} (${label})`);
     }
 
     const normalized: CategoryAttributeDefinition = {
@@ -169,7 +165,7 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
   const seen = new Set<string>();
   for (const item of cleaned) {
     if (seen.has(item.key)) {
-      throw new Error(`Duplicate field key '${item.key}'`);
+      throw new Error(`${t("error_duplicate_field_key", "Duplicate field key")}: '${item.key}'`);
     }
     seen.add(item.key);
   }
@@ -179,7 +175,7 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
 
 export function CategoriesPage() {
   const { authFetch } = useAuth();
-  const { t } = usePageI18n("categories");
+  const { t, language } = usePageI18n("categories");
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -210,7 +206,7 @@ export function CategoriesPage() {
 
       const response = await authFetch(`/categories/admin?${params.toString()}`);
       if (!response.ok) {
-        throw new Error("Failed to load categories");
+        throw new Error(t("error_load_categories", "Failed to load categories"));
       }
 
       const payload = (await response.json()) as CategoryListResponse;
@@ -273,9 +269,9 @@ export function CategoriesPage() {
 
   const applyActivationToggle = async (category: CategoryItem) => {
     const actionPath = category.is_active ? "deactivate" : "activate";
-    const actionLabel = category.is_active ? "Deactivate" : "Activate";
+    const actionLabel = category.is_active ? t("deactivate", "Deactivate") : t("activate", "Activate");
 
-    const confirmed = window.confirm(`${actionLabel} category '${category.name}'?`);
+    const confirmed = window.confirm(`${actionLabel} ${t("category", "category")} '${category.name}'?`);
     if (!confirmed) {
       return;
     }
@@ -289,7 +285,7 @@ export function CategoriesPage() {
       });
 
       if (!response.ok) {
-        let message = `Failed to ${actionPath} category`;
+        let message = t("error_action_category", "Failed to change category status");
         try {
           const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
           if (typeof payload?.error?.message === "string") {
@@ -298,7 +294,7 @@ export function CategoriesPage() {
             message = payload.detail;
           }
         } catch {
-          message = `Failed to ${actionPath} category`;
+          message = t("error_action_category", "Failed to change category status");
         }
         throw new Error(message);
       }
@@ -323,7 +319,7 @@ export function CategoriesPage() {
     setError(null);
 
     try {
-      const attributesSchema = normalizeAttributesSchema(formState.attributesSchema);
+      const attributesSchema = normalizeAttributesSchema(formState.attributesSchema, t);
 
       const isEditMode = selectedCategory !== null;
       const slug = normalizeSlug(formState.name);
@@ -337,10 +333,10 @@ export function CategoriesPage() {
       const payload = basePayload;
 
       if (!payload.name || payload.name.length < 2) {
-        throw new Error("Name must be at least 2 characters");
+        throw new Error(t("error_name_min_length", "Name must be at least 2 characters"));
       }
       if (!payload.slug || payload.slug.length < 2) {
-        throw new Error("Name should contain at least 2 latin letters or digits");
+        throw new Error(t("error_name_slug", "Name should contain at least 2 latin letters or digits"));
       }
 
       const path = isEditMode ? `/categories/${selectedCategory.id}` : "/categories";
@@ -353,7 +349,7 @@ export function CategoriesPage() {
       });
 
       if (!response.ok) {
-        let message = `Failed to ${isEditMode ? "update" : "create"} category`;
+        let message = t("error_save_category", "Failed to save category");
         try {
           const body = (await response.json()) as { error?: { message?: string }; detail?: unknown };
           if (typeof body?.error?.message === "string") {
@@ -362,7 +358,7 @@ export function CategoriesPage() {
             message = body.detail;
           }
         } catch {
-          message = `Failed to ${isEditMode ? "update" : "create"} category`;
+          message = t("error_save_category", "Failed to save category");
         }
         throw new Error(message);
       }
@@ -499,8 +495,8 @@ export function CategoriesPage() {
 
       <div className="search-strip categories-search-strip">
         <input
-          placeholder="Search by category name"
-          aria-label="Search categories"
+          placeholder={t("search_placeholder", "Search by category name")}
+          aria-label={t("search_categories", "Search categories")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -510,35 +506,35 @@ export function CategoriesPage() {
             checked={showInactive}
             onChange={(event) => setShowInactive(event.target.checked)}
           />
-          Include inactive
+          {t("include_inactive", "Include inactive")}
         </label>
         <button type="button" className="btn btn-ghost" onClick={resetCreateForm}>
           {t("new_category", "New category")}
         </button>
       </div>
 
-      <section className="table-card" aria-label="Categories table">
+      <section className="table-card" aria-label={t("table_categories", "Categories")}> 
         <div className="table-head users-table-head">
-          <strong>Categories</strong>
-          <span>{filteredRows.length} total</span>
+          <strong>{t("table_categories", "Categories")}</strong>
+          <span>{filteredRows.length} {t("total", "total")}</span>
         </div>
 
         <div className="categories-table-wrap">
           <table className="categories-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Attributes</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
+                <th>{t("name", "Name")}</th>
+                <th>{t("attributes", "Attributes")}</th>
+                <th>{t("status", "Status")}</th>
+                <th>{t("created", "Created")}</th>
+                <th>{t("actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody>
               {filteredRows.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="users-empty-cell">
-                    {isLoading ? "Loading categories..." : "No categories found"}
+                    {isLoading ? t("loading_categories", "Loading categories...") : t("no_categories_found", "No categories found")}
                   </td>
                 </tr>
               ) : (
@@ -548,10 +544,10 @@ export function CategoriesPage() {
                     <td>{category.attributes_schema?.length ?? 0}</td>
                     <td>
                       <span className={`users-status-badge ${category.is_active ? "users-status-active" : "users-status-deactivated"}`}>
-                        {category.is_active ? "Active" : "Inactive"}
+                        {category.is_active ? t("active", "Active") : t("inactive", "Inactive")}
                       </span>
                     </td>
-                    <td>{formatDate(category.created_at)}</td>
+                    <td>{formatDateTime(category.created_at, language)}</td>
                     <td>
                       <div className="users-actions-cell">
                         <button
@@ -569,7 +565,7 @@ export function CategoriesPage() {
                             setIsFormModalOpen(true);
                           }}
                         >
-                          Edit
+                          {t("edit", "Edit")}
                         </button>
                         <button
                           type="button"
@@ -578,10 +574,10 @@ export function CategoriesPage() {
                           onClick={() => void applyActivationToggle(category)}
                         >
                           {isActionBusyCategoryId === category.id
-                            ? "Processing..."
+                            ? t("processing", "Processing...")
                             : category.is_active
-                              ? "Deactivate"
-                              : "Activate"}
+                              ? t("deactivate", "Deactivate")
+                              : t("activate", "Activate")}
                         </button>
                       </div>
                     </td>
@@ -596,14 +592,14 @@ export function CategoriesPage() {
       <Modal
         open={isFormModalOpen}
         onClose={() => setIsFormModalOpen(false)}
-        title={selectedCategory ? "Edit category" : "Create category"}
-        subtitle={selectedCategory ? `Category #${selectedCategory.id}` : "New"}
+        title={selectedCategory ? t("edit_category", "Edit category") : t("create_category", "Create category")}
+        subtitle={selectedCategory ? `${t("category", "Category")} #${selectedCategory.id}` : t("new", "New")}
       >
         <div className="users-detail-body">
           <form className="reports-form" onSubmit={onSubmit}>
             <div className="reports-form-grid">
               <label>
-                Name
+                {t("name", "Name")}
                 <input
                   value={formState.name}
                   onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
@@ -620,26 +616,26 @@ export function CategoriesPage() {
                   checked={formState.isActive}
                   onChange={(event) => setFormState((prev) => ({ ...prev, isActive: event.target.checked }))}
                 />
-                Active
+                {t("active", "Active")}
               </label>
             </div>
 
-            <section className="categories-builder" aria-label="Dynamic fields builder">
+            <section className="categories-builder" aria-label={t("dynamic_fields_builder", "Dynamic fields builder")}> 
               <div className="table-head categories-builder-head">
-                <strong>Dynamic fields builder</strong>
-                <button type="button" className="btn btn-ghost" onClick={addField}>Add field</button>
+                <strong>{t("dynamic_fields_builder", "Dynamic fields builder")}</strong>
+                <button type="button" className="btn btn-ghost" onClick={addField}>{t("add_field", "Add field")}</button>
               </div>
 
               <div className="categories-builder-list">
                 {formState.attributesSchema.length === 0 ? (
                   <p className="categories-empty-builder">
-                    No dynamic fields yet. Click Add field to configure attributes for listings in this category.
+                    {t("no_dynamic_fields", "No dynamic fields yet. Click Add field to configure attributes for listings in this category.")}
                   </p>
                 ) : (
                   formState.attributesSchema.map((attribute, index) => (
                     <article key={attribute.id} className="categories-attr-row">
                       <div className="categories-attr-row-head">
-                        <strong>Field {index + 1}</strong>
+                        <strong>{t("field", "Field")} {index + 1}</strong>
                         <div className="users-actions-cell">
                           <button
                             type="button"
@@ -647,7 +643,7 @@ export function CategoriesPage() {
                             disabled={index === 0}
                             onClick={() => moveField(index, -1)}
                           >
-                            Up
+                            {t("up", "Up")}
                           </button>
                           <button
                             type="button"
@@ -655,35 +651,35 @@ export function CategoriesPage() {
                             disabled={index === formState.attributesSchema.length - 1}
                             onClick={() => moveField(index, 1)}
                           >
-                            Down
+                            {t("down", "Down")}
                           </button>
                           <button type="button" className="btn btn-primary" onClick={() => removeField(index)}>
-                            Remove
+                            {t("remove", "Remove")}
                           </button>
                         </div>
                       </div>
 
                       <div className="categories-attr-grid">
                         <label>
-                          Label
+                          {t("label", "Label")}
                           <input
                             value={attribute.label}
-                            placeholder="Rooms count"
+                            placeholder={t("label_placeholder", "Rooms count")}
                             onChange={(event) => updateField(index, { label: event.target.value })}
                           />
                         </label>
 
                         <label>
-                          Type
+                          {t("type", "Type")}
                           <select
                             className="users-filter-select"
                             value={attribute.value_type}
                             onChange={(event) => updateField(index, { value_type: event.target.value as CategoryAttributeDraft["value_type"] })}
                           >
-                            <option value="string">Text</option>
-                            <option value="integer">Integer</option>
-                            <option value="number">Decimal</option>
-                            <option value="boolean">Yes / No</option>
+                            <option value="string">{t("type_text", "Text")}</option>
+                            <option value="integer">{t("type_integer", "Integer")}</option>
+                            <option value="number">{t("type_decimal", "Decimal")}</option>
+                            <option value="boolean">{t("type_yes_no", "Yes / No")}</option>
                           </select>
                         </label>
 
@@ -693,13 +689,13 @@ export function CategoriesPage() {
                             checked={attribute.required}
                             onChange={(event) => updateField(index, { required: event.target.checked })}
                           />
-                          Required
+                          {t("required", "Required")}
                         </label>
 
                         {attribute.value_type === "string" ? (
                           <>
                             <label className="categories-options-field">
-                              Options (optional, type one option per field, max 10)
+                              {t("options_help", "Options (optional, type one option per field, max 10)")}
                               <div className="categories-options-list">
                                 {attribute.optionsValues.map((optionValue, optionIndex) => {
                                   const isLast = optionIndex === attribute.optionsValues.length - 1;
@@ -710,7 +706,7 @@ export function CategoriesPage() {
                                       <input
                                         className="categories-options-input"
                                         value={optionValue}
-                                        placeholder={`Option ${optionIndex + 1}`}
+                                        placeholder={`${t("option", "Option")} ${optionIndex + 1}`}
                                         onChange={(event) => updateOptionValue(index, optionIndex, event.target.value)}
                                       />
                                       <button
@@ -719,7 +715,7 @@ export function CategoriesPage() {
                                         onClick={() => removeOptionValue(index, optionIndex)}
                                         disabled={!canRemove || (isLast && optionValue.trim().length === 0 && attribute.optionsValues.length === 1)}
                                       >
-                                        Remove
+                                        {t("remove", "Remove")}
                                       </button>
                                     </div>
                                   );
@@ -732,7 +728,7 @@ export function CategoriesPage() {
                         {attribute.value_type === "integer" || attribute.value_type === "number" ? (
                           <>
                             <label>
-                              Min value
+                              {t("min_value", "Min value")}
                               <input
                                 type="number"
                                 value={attribute.min_value}
@@ -741,7 +737,7 @@ export function CategoriesPage() {
                             </label>
 
                             <label>
-                              Max value
+                              {t("max_value", "Max value")}
                               <input
                                 type="number"
                                 value={attribute.max_value}
@@ -759,7 +755,7 @@ export function CategoriesPage() {
 
             <div className="users-actions-cell">
               <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : selectedCategory ? t("save", "Save changes") : t("create", "Create category")}
+                {isSubmitting ? t("saving", "Saving...") : selectedCategory ? t("save", "Save changes") : t("create", "Create category")}
               </button>
               <button
                 type="button"
@@ -779,7 +775,7 @@ export function CategoriesPage() {
                   setNextFieldId(1);
                 }}
               >
-                Reset form
+                {t("reset_form", "Reset form")}
               </button>
             </div>
           </form>

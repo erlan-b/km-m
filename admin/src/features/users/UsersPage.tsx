@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
+import { formatDateTime, formatInteger } from "../../shared/i18n/format";
 import { Modal } from "../common/Modal";
 
 type AccountStatus = "active" | "blocked" | "pending_verification" | "deactivated";
@@ -51,25 +52,17 @@ type AdminUserStatusResponse = {
   message: string;
 };
 
-function statusLabel(status: AccountStatus): string {
+function statusLabel(status: AccountStatus, t: (key: string, fallback: string) => string): string {
   if (status === "active") {
-    return "Active";
+    return t("status_active", "Active");
   }
   if (status === "blocked") {
-    return "Blocked";
+    return t("status_blocked", "Blocked");
   }
   if (status === "pending_verification") {
-    return "Pending verification";
+    return t("status_pending_verification", "Pending verification");
   }
-  return "Deactivated";
-}
-
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
+  return t("status_deactivated", "Deactivated");
 }
 
 function extractErrorMessage(error: unknown): string {
@@ -81,7 +74,7 @@ function extractErrorMessage(error: unknown): string {
 
 export function UsersPage() {
   const { authFetch } = useAuth();
-  const { t } = usePageI18n("users");
+  const { t, language } = usePageI18n("users");
 
   const [users, setUsers] = useState<AdminUserListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,7 +113,7 @@ export function UsersPage() {
 
       const response = await authFetch(`/admin/users?${params.toString()}`);
       if (!response.ok) {
-        throw new Error("Failed to load users");
+        throw new Error(t("error_load_users", "Failed to load users"));
       }
 
       const payload = (await response.json()) as AdminUserListResponse;
@@ -156,7 +149,7 @@ export function UsersPage() {
     try {
       const response = await authFetch(`/admin/users/${userId}`);
       if (!response.ok) {
-        throw new Error("Failed to load user details");
+        throw new Error(t("error_load_user_details", "Failed to load user details"));
       }
       const payload = (await response.json()) as AdminUserDetailResponse;
       setSelectedDetail(payload);
@@ -174,14 +167,14 @@ export function UsersPage() {
 
   const applyStatusAction = async (user: AdminUserListItem) => {
     const actionPath = user.account_status === "blocked" ? "unsuspend" : "suspend";
-    const actionLabel = actionPath === "suspend" ? "Suspend" : "Unsuspend";
+    const actionLabel = actionPath === "suspend" ? t("suspend", "Suspend") : t("unsuspend", "Unsuspend");
 
-    const confirmed = window.confirm(`${actionLabel} user ${user.full_name}?`);
+    const confirmed = window.confirm(`${actionLabel} ${t("user_label", "user")} ${user.full_name}?`);
     if (!confirmed) {
       return;
     }
 
-    const reasonInput = window.prompt("Reason (optional):", "");
+    const reasonInput = window.prompt(t("reason_optional", "Reason (optional):"), "");
     const reason = typeof reasonInput === "string" && reasonInput.trim() ? reasonInput.trim() : null;
 
     setActionBusyUserId(user.id);
@@ -253,13 +246,13 @@ export function UsersPage() {
       return "-";
     }
     if (users.total_items === 0) {
-      return "No users found";
+      return t("no_users_found", "No users found");
     }
 
     const from = (users.page - 1) * users.page_size + 1;
     const to = Math.min(users.page * users.page_size, users.total_items);
-    return `${from}-${to} of ${users.total_items}`;
-  }, [users]);
+    return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(users.total_items, language)}`;
+  }, [language, t, users]);
 
   return (
     <section className="module-page">
@@ -278,7 +271,7 @@ export function UsersPage() {
       <form className="search-strip" onSubmit={onSearchSubmit}>
         <input
           placeholder={t("search_placeholder", "Search by full name or email")}
-          aria-label="Search users"
+          aria-label={t("search_users", "Search users")}
           value={queryInput}
           onChange={(event) => setQueryInput(event.target.value)}
         />
@@ -287,17 +280,17 @@ export function UsersPage() {
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as AccountStatus | "")}
         >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="blocked">Blocked</option>
-          <option value="pending_verification">Pending verification</option>
-          <option value="deactivated">Deactivated</option>
+          <option value="">{t("all_statuses", "All statuses")}</option>
+          <option value="active">{t("status_active", "Active")}</option>
+          <option value="blocked">{t("status_blocked", "Blocked")}</option>
+          <option value="pending_verification">{t("status_pending_verification", "Pending verification")}</option>
+          <option value="deactivated">{t("status_deactivated", "Deactivated")}</option>
         </select>
         <select className="users-filter-select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
-          <option value="">All roles</option>
-          <option value="admin">Admin</option>
-          <option value="moderator">Moderator</option>
-          <option value="user">User</option>
+          <option value="">{t("all_roles", "All roles")}</option>
+          <option value="admin">{t("role_admin", "Admin")}</option>
+          <option value="moderator">{t("role_moderator", "Moderator")}</option>
+          <option value="user">{t("role_user", "User")}</option>
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>{t("apply_filters", "Apply filters")}</button>
         <button type="submit" className="btn btn-primary">{t("search", "Search")}</button>
@@ -305,7 +298,7 @@ export function UsersPage() {
 
       <section className="table-card" aria-label="Users table">
         <div className="table-head users-table-head">
-          <strong>Users</strong>
+          <strong>{t("table_users", "Users")}</strong>
           <span>{summaryText}</span>
         </div>
 
@@ -313,19 +306,19 @@ export function UsersPage() {
           <table className="users-table">
             <thead>
               <tr>
-                <th>User</th>
-                <th>Status</th>
-                <th>Roles</th>
-                <th>Language</th>
-                <th>Created</th>
-                <th>Actions</th>
+                <th>{t("user_column", "User")}</th>
+                <th>{t("status", "Status")}</th>
+                <th>{t("roles", "Roles")}</th>
+                <th>{t("language", "Language")}</th>
+                <th>{t("created", "Created")}</th>
+                <th>{t("actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="users-empty-cell">
-                    {isLoading ? "Loading users..." : "No users found"}
+                    {isLoading ? t("loading_users", "Loading users...") : t("no_users_found", "No users found")}
                   </td>
                 </tr>
               ) : (
@@ -339,16 +332,16 @@ export function UsersPage() {
                     </td>
                     <td>
                       <span className={`users-status-badge users-status-${user.account_status}`}>
-                        {statusLabel(user.account_status)}
+                        {statusLabel(user.account_status, t)}
                       </span>
                     </td>
                     <td>{user.roles.join(", ") || "-"}</td>
                     <td>{user.preferred_language}</td>
-                    <td>{formatDate(user.created_at)}</td>
+                    <td>{formatDateTime(user.created_at, language)}</td>
                     <td>
                       <div className="users-actions-cell">
                         <button type="button" className="btn btn-ghost" onClick={() => void openDetail(user.id)}>
-                          Details
+                          {t("details", "Details")}
                         </button>
                         <button
                           type="button"
@@ -357,10 +350,10 @@ export function UsersPage() {
                           disabled={actionBusyUserId === user.id}
                         >
                           {actionBusyUserId === user.id
-                            ? "Processing..."
+                            ? t("processing", "Processing...")
                             : user.account_status === "blocked"
-                              ? "Unsuspend"
-                              : "Suspend"}
+                              ? t("unsuspend", "Unsuspend")
+                              : t("suspend", "Suspend")}
                         </button>
                       </div>
                     </td>
@@ -378,10 +371,10 @@ export function UsersPage() {
             disabled={!canPrev}
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
           >
-            Previous
+            {t("previous", "Previous")}
           </button>
           <span className="users-page-indicator">
-            Page {users?.page ?? page}{totalPages ? ` / ${totalPages}` : ""}
+            {t("page", "Page")} {formatInteger(users?.page ?? page, language)}{totalPages ? ` / ${formatInteger(totalPages, language)}` : ""}
           </span>
           <button
             type="button"
@@ -389,7 +382,7 @@ export function UsersPage() {
             disabled={!canNext}
             onClick={() => setPage((prev) => prev + 1)}
           >
-            Next
+            {t("next", "Next")}
           </button>
         </div>
       </section>
@@ -397,42 +390,42 @@ export function UsersPage() {
       <Modal
         open={isDetailModalOpen}
         onClose={closeDetailModal}
-        title="User detail"
-        subtitle={isDetailLoading ? "Loading..." : selectedDetail ? selectedDetail.email : "No user selected"}
+        title={t("user_detail", "User detail")}
+        subtitle={isDetailLoading ? t("loading", "Loading...") : selectedDetail ? selectedDetail.email : t("no_user_selected", "No user selected")}
       >
         <div className="users-detail-body">
           {detailError ? <div className="dashboard-error">{detailError}</div> : null}
 
-          {!detailError && isDetailLoading ? <p>Loading user detail...</p> : null}
+          {!detailError && isDetailLoading ? <p>{t("loading_user_detail", "Loading user detail...")}</p> : null}
 
-          {!detailError && !isDetailLoading && !selectedDetail ? <p>Select a user row and click Details.</p> : null}
+          {!detailError && !isDetailLoading && !selectedDetail ? <p>{t("select_user_row", "Select a user row and click Details.")}</p> : null}
 
           {selectedDetail ? (
             <div className="dashboard-stats-grid">
               <article className="dashboard-stat-group">
-                <h3>Profile</h3>
-                <p>Name: <strong>{selectedDetail.full_name}</strong></p>
-                <p>Status: <strong>{statusLabel(selectedDetail.account_status)}</strong></p>
-                <p>Subscription: <strong>{selectedDetail.subscription_count > 0 ? "Sub" : "No sub"}</strong></p>
-                <p>Roles: <strong>{selectedDetail.roles.join(", ") || "-"}</strong></p>
-                <p>Language: <strong>{selectedDetail.preferred_language}</strong></p>
+                <h3>{t("profile", "Profile")}</h3>
+                <p>{t("name", "Name")}: <strong>{selectedDetail.full_name}</strong></p>
+                <p>{t("status", "Status")}: <strong>{statusLabel(selectedDetail.account_status, t)}</strong></p>
+                <p>{t("subscription", "Subscription")}: <strong>{selectedDetail.subscription_count > 0 ? t("sub", "Sub") : t("no_sub", "No sub")}</strong></p>
+                <p>{t("roles", "Roles")}: <strong>{selectedDetail.roles.join(", ") || "-"}</strong></p>
+                <p>{t("language", "Language")}: <strong>{selectedDetail.preferred_language}</strong></p>
               </article>
               <article className="dashboard-stat-group">
-                <h3>Activity</h3>
-                <p>Listings: <strong>{selectedDetail.listing_count}</strong></p>
-                <p>Active listings: <strong>{selectedDetail.active_listing_count}</strong></p>
-                <p>Reports: <strong>{selectedDetail.report_count}</strong></p>
-                <p>Conversations: <strong>{selectedDetail.conversation_count}</strong></p>
+                <h3>{t("activity", "Activity")}</h3>
+                <p>{t("listings", "Listings")}: <strong>{formatInteger(selectedDetail.listing_count, language)}</strong></p>
+                <p>{t("active_listings", "Active listings")}: <strong>{formatInteger(selectedDetail.active_listing_count, language)}</strong></p>
+                <p>{t("reports", "Reports")}: <strong>{formatInteger(selectedDetail.report_count, language)}</strong></p>
+                <p>{t("conversations", "Conversations")}: <strong>{formatInteger(selectedDetail.conversation_count, language)}</strong></p>
               </article>
               <article className="dashboard-stat-group">
-                <h3>Commerce</h3>
-                <p>Payments: <strong>{selectedDetail.payment_count}</strong></p>
-                <p>Subscriptions: <strong>{selectedDetail.subscription_count}</strong></p>
+                <h3>{t("commerce", "Commerce")}</h3>
+                <p>{t("payments", "Payments")}: <strong>{formatInteger(selectedDetail.payment_count, language)}</strong></p>
+                <p>{t("subscriptions", "Subscriptions")}: <strong>{formatInteger(selectedDetail.subscription_count, language)}</strong></p>
               </article>
               <article className="dashboard-stat-group">
-                <h3>Timestamps</h3>
-                <p>Created: <strong>{formatDate(selectedDetail.created_at)}</strong></p>
-                <p>Updated: <strong>{formatDate(selectedDetail.updated_at)}</strong></p>
+                <h3>{t("timestamps", "Timestamps")}</h3>
+                <p>{t("created", "Created")}: <strong>{formatDateTime(selectedDetail.created_at, language)}</strong></p>
+                <p>{t("updated", "Updated")}: <strong>{formatDateTime(selectedDetail.updated_at, language)}</strong></p>
               </article>
             </div>
           ) : null}

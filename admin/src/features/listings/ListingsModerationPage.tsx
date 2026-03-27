@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
+import { formatDateTime, formatInteger } from "../../shared/i18n/format";
 import { Modal } from "../common/Modal";
 
 type ListingStatus = "draft" | "pending_review" | "published" | "rejected" | "archived" | "inactive" | "sold";
@@ -40,35 +41,13 @@ type ListingStatusUpdateResponse = {
   note: string | null;
 };
 
-type ModerationActionOption = {
-  value: string;
-  label: string;
-};
-
-const ACTIONS_BY_STATUS: Record<ListingStatus, ModerationActionOption[]> = {
-  draft: [
-    { value: "approve", label: "Approve" },
-    { value: "reject", label: "Reject" },
-    { value: "archive", label: "Archive" },
-  ],
-  pending_review: [
-    { value: "approve", label: "Approve" },
-    { value: "reject", label: "Reject" },
-    { value: "archive", label: "Archive" },
-  ],
-  rejected: [
-    { value: "approve", label: "Approve" },
-    { value: "archive", label: "Archive" },
-  ],
-  published: [
-    { value: "deactivate", label: "Deactivate" },
-    { value: "archive", label: "Archive" },
-  ],
-  inactive: [
-    { value: "approve", label: "Approve" },
-    { value: "archive", label: "Archive" },
-  ],
-  sold: [{ value: "archive", label: "Archive" }],
+const ACTIONS_BY_STATUS: Record<ListingStatus, string[]> = {
+  draft: ["approve", "reject", "archive"],
+  pending_review: ["approve", "reject", "archive"],
+  rejected: ["approve", "archive"],
+  published: ["deactivate", "archive"],
+  inactive: ["approve", "archive"],
+  sold: ["archive"],
   archived: [],
 };
 
@@ -79,52 +58,60 @@ function extractErrorMessage(error: unknown): string {
   return "Request failed";
 }
 
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
-}
-
-function formatPrice(value: string | number, currency: string): string {
+function formatPrice(value: string | number, currency: string, language: "en" | "ru"): string {
   const numeric = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(numeric)) {
     return `${value} ${currency}`;
   }
-  return `${numeric.toLocaleString()} ${currency}`;
+  return `${formatInteger(numeric, language)} ${currency}`;
 }
 
-function statusLabel(status: ListingStatus): string {
+function statusLabel(status: ListingStatus, t: (key: string, fallback: string) => string): string {
   if (status === "pending_review") {
-    return "Pending review";
+    return t("status_pending_review", "Pending review");
   }
   if (status === "published") {
-    return "Published";
+    return t("status_published", "Published");
   }
   if (status === "rejected") {
-    return "Rejected";
+    return t("status_rejected", "Rejected");
   }
   if (status === "inactive") {
-    return "Inactive";
+    return t("status_inactive", "Inactive");
   }
   if (status === "sold") {
-    return "Sold";
+    return t("status_sold", "Sold");
   }
   if (status === "archived") {
-    return "Archived";
+    return t("status_archived", "Archived");
   }
-  return "Draft";
+  return t("status_draft", "Draft");
 }
 
-function transactionLabel(value: TransactionType): string {
+function transactionLabel(value: TransactionType, t: (key: string, fallback: string) => string): string {
   if (value === "sale") {
-    return "Sale";
+    return t("transaction_sale", "Sale");
   }
   if (value === "rent_long") {
-    return "Long rent";
+    return t("transaction_rent_long", "Long rent");
   }
-  return "Daily rent";
+  return t("transaction_rent_daily", "Daily rent");
+}
+
+function moderationActionLabel(action: string, t: (key: string, fallback: string) => string): string {
+  if (action === "approve") {
+    return t("action_approve", "Approve");
+  }
+  if (action === "reject") {
+    return t("action_reject", "Reject");
+  }
+  if (action === "archive") {
+    return t("action_archive", "Archive");
+  }
+  if (action === "deactivate") {
+    return t("action_deactivate", "Deactivate");
+  }
+  return action;
 }
 
 function statusBadgeClass(status: ListingStatus): string {
@@ -145,7 +132,7 @@ function statusBadgeClass(status: ListingStatus): string {
 
 export function ListingsModerationPage() {
   const { authFetch } = useAuth();
-  const { t } = usePageI18n("listings");
+  const { t, language } = usePageI18n("listings");
 
   const [listings, setListings] = useState<ListingListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -190,7 +177,7 @@ export function ListingsModerationPage() {
 
       const response = await authFetch(`/listings/admin/moderation?${params.toString()}`);
       if (!response.ok) {
-        throw new Error("Failed to load listings moderation queue");
+        throw new Error(t("error_load_queue", "Failed to load listings moderation queue"));
       }
 
       const payload = (await response.json()) as ListingListResponse;
@@ -224,7 +211,7 @@ export function ListingsModerationPage() {
 
   const availableActions = useMemo(() => {
     if (!selectedListing) {
-      return [] as ModerationActionOption[];
+      return [] as string[];
     }
     return ACTIONS_BY_STATUS[selectedListing.status] ?? [];
   }, [selectedListing]);
@@ -233,7 +220,7 @@ export function ListingsModerationPage() {
     if (availableActions.length === 0) {
       setAction("");
     } else {
-      setAction(availableActions[0].value);
+      setAction(availableActions[0]);
     }
     setNote("");
   }, [selectedListing?.id, availableActions]);
@@ -259,7 +246,7 @@ export function ListingsModerationPage() {
       return;
     }
 
-    const confirmed = window.confirm(`Apply action '${action}' to listing #${selectedListing.id}?`);
+    const confirmed = window.confirm(`${t("confirm_apply_action", "Apply action")} '${moderationActionLabel(action, t)}' ${t("to_listing", "to listing")} #${selectedListing.id}?`);
     if (!confirmed) {
       return;
     }
@@ -278,7 +265,7 @@ export function ListingsModerationPage() {
       });
 
       if (!response.ok) {
-        let message = "Failed to apply moderation action";
+        let message = t("error_apply_action", "Failed to apply moderation action");
         try {
           const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
           if (typeof payload?.error?.message === "string") {
@@ -287,7 +274,7 @@ export function ListingsModerationPage() {
             message = payload.detail;
           }
         } catch {
-          message = "Failed to apply moderation action";
+          message = t("error_apply_action", "Failed to apply moderation action");
         }
         throw new Error(message);
       }
@@ -327,13 +314,13 @@ export function ListingsModerationPage() {
       return "-";
     }
     if (listings.total_items === 0) {
-      return "No listings found";
+      return t("no_listings_found", "No listings found");
     }
 
     const from = (listings.page - 1) * listings.page_size + 1;
     const to = Math.min(listings.page * listings.page_size, listings.total_items);
-    return `${from}-${to} of ${listings.total_items}`;
-  }, [listings]);
+    return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(listings.total_items, language)}`;
+  }, [language, listings, t]);
 
   return (
     <section className="module-page">
@@ -351,8 +338,8 @@ export function ListingsModerationPage() {
 
       <form className="search-strip listings-search-strip" onSubmit={onSearchSubmit}>
         <input
-          placeholder="Search by title or description"
-          aria-label="Search listings"
+          placeholder={t("search_placeholder", "Search by title or description")}
+          aria-label={t("search_listings", "Search listings")}
           value={queryInput}
           onChange={(event) => setQueryInput(event.target.value)}
         />
@@ -361,28 +348,28 @@ export function ListingsModerationPage() {
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as ListingStatus | "")}
         >
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="pending_review">Pending review</option>
-          <option value="published">Published</option>
-          <option value="rejected">Rejected</option>
-          <option value="inactive">Inactive</option>
-          <option value="sold">Sold</option>
-          <option value="archived">Archived</option>
+          <option value="">{t("all_statuses", "All statuses")}</option>
+          <option value="draft">{t("status_draft", "Draft")}</option>
+          <option value="pending_review">{t("status_pending_review", "Pending review")}</option>
+          <option value="published">{t("status_published", "Published")}</option>
+          <option value="rejected">{t("status_rejected", "Rejected")}</option>
+          <option value="inactive">{t("status_inactive", "Inactive")}</option>
+          <option value="sold">{t("status_sold", "Sold")}</option>
+          <option value="archived">{t("status_archived", "Archived")}</option>
         </select>
         <select
           className="users-filter-select"
           value={transactionTypeFilter}
           onChange={(event) => setTransactionTypeFilter(event.target.value as TransactionType | "")}
         >
-          <option value="">All transaction types</option>
-          <option value="sale">Sale</option>
-          <option value="rent_long">Long rent</option>
-          <option value="rent_daily">Daily rent</option>
+          <option value="">{t("all_transaction_types", "All transaction types")}</option>
+          <option value="sale">{t("transaction_sale", "Sale")}</option>
+          <option value="rent_long">{t("transaction_rent_long", "Long rent")}</option>
+          <option value="rent_daily">{t("transaction_rent_daily", "Daily rent")}</option>
         </select>
         <input
-          placeholder="City"
-          aria-label="Filter by city"
+          placeholder={t("city", "City")}
+          aria-label={t("filter_by_city", "Filter by city")}
           value={cityFilter}
           onChange={(event) => setCityFilter(event.target.value)}
         />
@@ -391,10 +378,10 @@ export function ListingsModerationPage() {
           value={sortBy}
           onChange={(event) => setSortBy(event.target.value as "newest" | "oldest" | "price_asc" | "price_desc")}
         >
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="price_asc">Price asc</option>
-          <option value="price_desc">Price desc</option>
+          <option value="newest">{t("sort_newest", "Newest")}</option>
+          <option value="oldest">{t("sort_oldest", "Oldest")}</option>
+          <option value="price_asc">{t("sort_price_asc", "Price asc")}</option>
+          <option value="price_desc">{t("sort_price_desc", "Price desc")}</option>
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>
           {t("apply_filters", "Apply filters")}
@@ -402,9 +389,9 @@ export function ListingsModerationPage() {
         <button type="submit" className="btn btn-primary">{t("search", "Search")}</button>
       </form>
 
-      <section className="table-card" aria-label="Listings moderation queue">
+      <section className="table-card" aria-label={t("table_listings_queue", "Listings moderation queue")}>
         <div className="table-head users-table-head">
-          <strong>Queue</strong>
+          <strong>{t("queue", "Queue")}</strong>
           <span>{summaryText}</span>
         </div>
 
@@ -412,21 +399,21 @@ export function ListingsModerationPage() {
           <table className="listings-table">
             <thead>
               <tr>
-                <th>Listing</th>
-                <th>Owner</th>
-                <th>Category</th>
-                <th>Transaction</th>
-                <th>Price</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
+                <th>{t("listing", "Listing")}</th>
+                <th>{t("owner", "Owner")}</th>
+                <th>{t("category", "Category")}</th>
+                <th>{t("transaction", "Transaction")}</th>
+                <th>{t("price", "Price")}</th>
+                <th>{t("status", "Status")}</th>
+                <th>{t("created", "Created")}</th>
+                <th>{t("actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="users-empty-cell">
-                    {isLoading ? "Loading moderation queue..." : "No listings found"}
+                    {isLoading ? t("loading_queue", "Loading moderation queue...") : t("no_listings_found", "No listings found")}
                   </td>
                 </tr>
               ) : (
@@ -440,27 +427,27 @@ export function ListingsModerationPage() {
                     </td>
                     <td>#{listing.owner_id}</td>
                     <td>#{listing.category_id}</td>
-                    <td>{transactionLabel(listing.transaction_type)}</td>
-                    <td>{formatPrice(listing.price, listing.currency)}</td>
+                    <td>{transactionLabel(listing.transaction_type, t)}</td>
+                    <td>{formatPrice(listing.price, listing.currency, language)}</td>
                     <td>
                       <span className={`users-status-badge ${statusBadgeClass(listing.status)}`}>
-                        {statusLabel(listing.status)}
+                        {statusLabel(listing.status, t)}
                       </span>
                     </td>
-                    <td>{formatDate(listing.created_at)}</td>
+                    <td>{formatDateTime(listing.created_at, language)}</td>
                     <td>
                       <button
                         type="button"
                         className="btn btn-ghost"
                         onClick={() => {
                           const defaults = ACTIONS_BY_STATUS[listing.status] ?? [];
-                          setAction(defaults.length > 0 ? defaults[0].value : "");
+                          setAction(defaults.length > 0 ? defaults[0] : "");
                           setNote("");
                           setSelectedListingId(listing.id);
                           setIsReviewModalOpen(true);
                         }}
                       >
-                        Review
+                        {t("review", "Review")}
                       </button>
                     </td>
                   </tr>
@@ -477,10 +464,10 @@ export function ListingsModerationPage() {
             disabled={!canPrev}
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
           >
-            Previous
+            {t("previous", "Previous")}
           </button>
           <span className="users-page-indicator">
-            Page {listings?.page ?? page}{totalPages ? ` / ${totalPages}` : ""}
+            {t("page", "Page")} {formatInteger(listings?.page ?? page, language)}{totalPages ? ` / ${formatInteger(totalPages, language)}` : ""}
           </span>
           <button
             type="button"
@@ -488,7 +475,7 @@ export function ListingsModerationPage() {
             disabled={!canNext}
             onClick={() => setPage((prev) => prev + 1)}
           >
-            Next
+            {t("next", "Next")}
           </button>
         </div>
       </section>
@@ -496,36 +483,36 @@ export function ListingsModerationPage() {
       <Modal
         open={isReviewModalOpen}
         onClose={() => setIsReviewModalOpen(false)}
-        title="Moderation action"
-        subtitle={selectedListing ? `Listing #${selectedListing.id}` : "No listing selected"}
+        title={t("moderation_action", "Moderation action")}
+        subtitle={selectedListing ? `${t("listing", "Listing")} #${selectedListing.id}` : t("no_listing_selected", "No listing selected")}
       >
         <div className="users-detail-body">
-          {!selectedListing ? <p>Select a listing row and click Review.</p> : null}
+          {!selectedListing ? <p>{t("select_listing_row", "Select a listing row and click Review.")}</p> : null}
 
           {selectedListing ? (
             <div className="listings-detail-stack">
               <div className="dashboard-stats-grid">
                 <article className="dashboard-stat-group">
-                  <h3>Summary</h3>
-                  <p>Title: <strong>{selectedListing.title}</strong></p>
-                  <p>Status: <strong>{statusLabel(selectedListing.status)}</strong></p>
-                  <p>Transaction: <strong>{transactionLabel(selectedListing.transaction_type)}</strong></p>
-                  <p>Price: <strong>{formatPrice(selectedListing.price, selectedListing.currency)}</strong></p>
+                  <h3>{t("summary", "Summary")}</h3>
+                  <p>{t("title_label", "Title")}: <strong>{selectedListing.title}</strong></p>
+                  <p>{t("status", "Status")}: <strong>{statusLabel(selectedListing.status, t)}</strong></p>
+                  <p>{t("transaction", "Transaction")}: <strong>{transactionLabel(selectedListing.transaction_type, t)}</strong></p>
+                  <p>{t("price", "Price")}: <strong>{formatPrice(selectedListing.price, selectedListing.currency, language)}</strong></p>
                 </article>
                 <article className="dashboard-stat-group">
-                  <h3>Metadata</h3>
-                  <p>Owner: <strong>#{selectedListing.owner_id}</strong></p>
-                  <p>Category: <strong>#{selectedListing.category_id}</strong></p>
-                  <p>Views: <strong>{selectedListing.view_count}</strong></p>
-                  <p>Favorites: <strong>{selectedListing.favorite_count}</strong></p>
+                  <h3>{t("metadata", "Metadata")}</h3>
+                  <p>{t("owner", "Owner")}: <strong>#{selectedListing.owner_id}</strong></p>
+                  <p>{t("category", "Category")}: <strong>#{selectedListing.category_id}</strong></p>
+                  <p>{t("views", "Views")}: <strong>{formatInteger(selectedListing.view_count, language)}</strong></p>
+                  <p>{t("favorites", "Favorites")}: <strong>{formatInteger(selectedListing.favorite_count, language)}</strong></p>
                 </article>
               </div>
 
               <article className="dashboard-stat-group listings-description-block">
-                <h3>Description</h3>
+                <h3>{t("description", "Description")}</h3>
                 <p>{selectedListing.description}</p>
                 <p>
-                  Location: <strong>{selectedListing.city}</strong>
+                  {t("location", "Location")}: <strong>{selectedListing.city}</strong>
                   {selectedListing.address_line ? `, ${selectedListing.address_line}` : ""}
                 </p>
               </article>
@@ -533,38 +520,38 @@ export function ListingsModerationPage() {
               <form className="reports-form" onSubmit={onModerateSubmit}>
                 <div className="reports-form-grid">
                   <label>
-                    Action
+                    {t("action", "Action")}
                     <select
                       className="users-filter-select"
                       value={action}
                       onChange={(event) => setAction(event.target.value)}
                       disabled={availableActions.length === 0}
                     >
-                      {availableActions.length === 0 ? <option value="">No available actions</option> : null}
+                      {availableActions.length === 0 ? <option value="">{t("no_available_actions", "No available actions")}</option> : null}
                       {availableActions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
+                        <option key={option} value={option}>
+                          {moderationActionLabel(option, t)}
                         </option>
                       ))}
                     </select>
                   </label>
 
                   <label>
-                    Current state
+                    {t("current_state", "Current state")}
                     <input
-                      value={`${statusLabel(selectedListing.status)} (${selectedListing.status})`}
+                      value={`${statusLabel(selectedListing.status, t)} (${selectedListing.status})`}
                       readOnly
                     />
                   </label>
                 </div>
 
                 <label className="reports-note-label">
-                  Moderation note (optional)
+                  {t("moderation_note_optional", "Moderation note (optional)")}
                   <textarea
                     className="reports-note-input"
                     value={note}
                     onChange={(event) => setNote(event.target.value)}
-                    placeholder="Add context for audit trail"
+                    placeholder={t("note_placeholder", "Add context for audit trail")}
                     maxLength={1000}
                   />
                 </label>
@@ -575,14 +562,14 @@ export function ListingsModerationPage() {
                     className="btn btn-primary"
                     disabled={isSubmitting || availableActions.length === 0 || action.length === 0}
                   >
-                    {isSubmitting ? "Applying..." : t("apply_action", "Apply action")}
+                    {isSubmitting ? t("applying", "Applying...") : t("apply_action", "Apply action")}
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => {
                       if (availableActions.length > 0) {
-                        setAction(availableActions[0].value);
+                        setAction(availableActions[0]);
                       }
                       setNote("");
                     }}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
+import { formatDateTime, formatInteger } from "../../shared/i18n/format";
 import { Modal } from "../common/Modal";
 
 type AdminAuditLogItem = {
@@ -34,14 +35,6 @@ const initialFilters: AuditFilters = {
   admin_user_id: "",
 };
 
-function formatDate(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleString();
-}
-
 function extractErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -72,7 +65,7 @@ function truncateText(value: string, maxLength: number): string {
 
 export function AuditLogsPage() {
   const { authFetch } = useAuth();
-  const { t } = usePageI18n("audit_logs");
+  const { t, language } = usePageI18n("audit_logs");
 
   const [logs, setLogs] = useState<AdminAuditLogListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,7 +104,7 @@ export function AuditLogsPage() {
 
       const response = await authFetch(`/admin/audit-logs?${params.toString()}`);
       if (!response.ok) {
-        let message = "Failed to load audit logs";
+        let message = t("error_load_audit_logs", "Failed to load audit logs");
         try {
           const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
           if (typeof payload?.error?.message === "string") {
@@ -120,7 +113,7 @@ export function AuditLogsPage() {
             message = payload.detail;
           }
         } catch {
-          message = "Failed to load audit logs";
+          message = t("error_load_audit_logs", "Failed to load audit logs");
         }
         throw new Error(message);
       }
@@ -175,13 +168,13 @@ export function AuditLogsPage() {
       return "-";
     }
     if (logs.total_items === 0) {
-      return "No audit logs found";
+      return t("no_audit_logs_found", "No audit logs found");
     }
 
     const from = (logs.page - 1) * logs.page_size + 1;
     const to = Math.min(logs.page * logs.page_size, logs.total_items);
-    return `${from}-${to} of ${logs.total_items}`;
-  }, [logs]);
+    return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(logs.total_items, language)}`;
+  }, [language, logs, t]);
 
   return (
     <section className="module-page">
@@ -197,21 +190,21 @@ export function AuditLogsPage() {
 
       {error ? <div className="dashboard-error">{error}</div> : null}
 
-      <section className="search-strip audit-search-strip" aria-label="Audit logs filters">
+      <section className="search-strip audit-search-strip" aria-label={t("audit_logs_filters", "Audit logs filters")}>
         <input
-          placeholder="Action"
+          placeholder={t("action", "Action")}
           value={draftFilters.action}
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, action: event.target.value }))}
         />
 
         <input
-          placeholder="Target type"
+          placeholder={t("target_type", "Target type")}
           value={draftFilters.target_type}
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, target_type: event.target.value }))}
         />
 
         <input
-          placeholder="Admin user ID"
+          placeholder={t("admin_user_id", "Admin user ID")}
           inputMode="numeric"
           value={draftFilters.admin_user_id}
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, admin_user_id: event.target.value }))}
@@ -225,9 +218,9 @@ export function AuditLogsPage() {
         </button>
       </section>
 
-      <section className="table-card" aria-label="Audit logs table">
+      <section className="table-card" aria-label={t("audit_logs_table", "Audit logs table")}>
         <div className="table-head users-table-head">
-          <strong>Audit logs</strong>
+          <strong>{t("table_audit_logs", "Audit logs")}</strong>
           <span>{summaryText}</span>
         </div>
 
@@ -236,35 +229,35 @@ export function AuditLogsPage() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Admin</th>
-                <th>Action</th>
-                <th>Target</th>
-                <th>Details</th>
-                <th>Created</th>
-                <th>Actions</th>
+                <th>{t("admin", "Admin")}</th>
+                <th>{t("action", "Action")}</th>
+                <th>{t("target", "Target")}</th>
+                <th>{t("details", "Details")}</th>
+                <th>{t("created", "Created")}</th>
+                <th>{t("actions", "Actions")}</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="users-empty-cell">
-                    {isLoading ? "Loading audit logs..." : "No audit logs found"}
+                    {isLoading ? t("loading_audit_logs", "Loading audit logs...") : t("no_audit_logs_found", "No audit logs found")}
                   </td>
                 </tr>
               ) : (
                 rows.map((item) => (
                   <tr key={item.id}>
-                    <td>#{item.id}</td>
-                    <td>{item.admin_user_id ?? "-"}</td>
+                    <td>#{formatInteger(item.id, language)}</td>
+                    <td>{item.admin_user_id == null ? "-" : formatInteger(item.admin_user_id, language)}</td>
                     <td>{item.action}</td>
                     <td>
                       <div className="users-name-cell">
                         <strong>{item.target_type}</strong>
-                        <span>target #{item.target_id}</span>
+                        <span>{t("target", "target")} #{formatInteger(item.target_id, language)}</span>
                       </div>
                     </td>
                     <td>{item.details ? truncateText(item.details, 80) : "-"}</td>
-                    <td>{formatDate(item.created_at)}</td>
+                    <td>{formatDateTime(item.created_at, language)}</td>
                     <td>
                       <button
                         type="button"
@@ -274,7 +267,7 @@ export function AuditLogsPage() {
                           setIsDetailModalOpen(true);
                         }}
                       >
-                        Details
+                        {t("details", "Details")}
                       </button>
                     </td>
                   </tr>
@@ -291,10 +284,10 @@ export function AuditLogsPage() {
             disabled={!canPrev}
             onClick={() => setPage((prev) => Math.max(1, prev - 1))}
           >
-            Previous
+            {t("previous", "Previous")}
           </button>
           <span className="users-page-indicator">
-            Page {logs?.page ?? page}{totalPages ? ` / ${totalPages}` : ""}
+            {t("page", "Page")} {formatInteger(logs?.page ?? page, language)}{totalPages ? ` / ${formatInteger(totalPages, language)}` : ""}
           </span>
           <button
             type="button"
@@ -302,7 +295,7 @@ export function AuditLogsPage() {
             disabled={!canNext}
             onClick={() => setPage((prev) => prev + 1)}
           >
-            Next
+            {t("next", "Next")}
           </button>
         </div>
       </section>
@@ -310,34 +303,34 @@ export function AuditLogsPage() {
       <Modal
         open={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
-        title="Audit log detail"
-        subtitle={selectedLog ? `Log #${selectedLog.id}` : "No log selected"}
+        title={t("audit_log_detail", "Audit log detail")}
+        subtitle={selectedLog ? `${t("log", "Log")} #${formatInteger(selectedLog.id, language)}` : t("no_log_selected", "No log selected")}
       >
         <div className="users-detail-body">
-          {!selectedLog ? <p>Select a log entry and click Details.</p> : null}
+          {!selectedLog ? <p>{t("select_log_entry", "Select a log entry and click Details.")}</p> : null}
 
           {selectedLog ? (
             <div className="dashboard-stats-grid">
               <article className="dashboard-stat-group">
-                <h3>Actor</h3>
-                <p>Admin user ID: <strong>{selectedLog.admin_user_id ?? "-"}</strong></p>
-                <p>Action: <strong>{selectedLog.action}</strong></p>
+                <h3>{t("actor", "Actor")}</h3>
+                <p>{t("admin_user_id", "Admin user ID")}: <strong>{selectedLog.admin_user_id == null ? "-" : formatInteger(selectedLog.admin_user_id, language)}</strong></p>
+                <p>{t("action", "Action")}: <strong>{selectedLog.action}</strong></p>
               </article>
 
               <article className="dashboard-stat-group">
-                <h3>Target</h3>
-                <p>Type: <strong>{selectedLog.target_type}</strong></p>
-                <p>ID: <strong>{selectedLog.target_id}</strong></p>
+                <h3>{t("target", "Target")}</h3>
+                <p>{t("type", "Type")}: <strong>{selectedLog.target_type}</strong></p>
+                <p>ID: <strong>{formatInteger(selectedLog.target_id, language)}</strong></p>
               </article>
 
               <article className="dashboard-stat-group">
-                <h3>Timestamp</h3>
-                <p>Created: <strong>{formatDate(selectedLog.created_at)}</strong></p>
+                <h3>{t("timestamp", "Timestamp")}</h3>
+                <p>{t("created", "Created")}: <strong>{formatDateTime(selectedLog.created_at, language)}</strong></p>
               </article>
 
               <article className="dashboard-stat-group">
-                <h3>Details</h3>
-                <p className="audit-log-details">{selectedLog.details ?? "No details"}</p>
+                <h3>{t("details", "Details")}</h3>
+                <p className="audit-log-details">{selectedLog.details ?? t("no_details", "No details")}</p>
               </article>
             </div>
           ) : null}
