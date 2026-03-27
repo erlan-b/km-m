@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
+from math import ceil
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin_or_moderator
@@ -13,6 +14,9 @@ from app.models.promotion import Promotion, PromotionStatus
 from app.models.promotion_package import PromotionPackage
 from app.models.user import AccountStatus, User
 from app.schemas.promotion import (
+    PromotionExpireRunResponse,
+    PromotionHistoryItem,
+    PromotionHistoryResponse,
     PromotionPackageCreateRequest,
     PromotionPackageListResponse,
     PromotionPackageResponse,
@@ -155,4 +159,93 @@ def purchase_promotion(
         amount=payment.amount,
         currency=payment.currency,
         duration_days=package.duration_days,
+    )
+
+
+@router.get("/me", response_model=PromotionHistoryResponse)
+def list_my_promotions(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    status_filter: PromotionStatus | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PromotionHistoryResponse:
+    filters = [Promotion.user_id == current_user.id]
+    if status_filter is not None:
+        filters.append(Promotion.status == status_filter)
+
+    total_items = db.scalar(select(func.count()).select_from(Promotion).where(*filters)) or 0
+    total_pages = ceil(total_items / page_size) if total_items else 0
+
+    stmt = (
+        select(Promotion)
+        .where(*filters)
+        .order_by(Promotion.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    promotions = db.scalars(stmt).all()
+
+    return PromotionHistoryResponse(
+        items=[PromotionHistoryItem.model_validate(item) for item in promotions],
+        page=page,
+        page_size=page_size,
+        total_items=total_items,
+        total_pages=total_pages,
+    )
+
+
+@router.post("/expire-premium", response_model=PromotionExpireRunResponse)
+def expire_premium_promotions(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin_or_moderator),
+) -> PromotionExpireRunResponse:
+    now = datetime.utcnow()
+    checked = db.scalar(
+        select(func.count())
+        .select_from(Promotion)
+        .where(Promotion.status == PromotionStatus.ACTIVE)
+    ) or 0
+
+    to_expire = db.scalars(
+        select(Promotion).where(
+            Promotion.status == PromotionStatus.ACTIVE,
+            Promotion.ends_at <= now,
+        )
+    ).all()
+
+    listing_ids = set[int]()
+    for promotion in to_expire:
+        promotion.status = PromotionStatus.EXPIRED
+        listing_ids.add(promotion.listing_id)
+        db.add(promotion)
+
+    updated_listings = 0
+    for listing_id in listing_ids:
+        active_count = db.scalar(
+            select(func.count())
+            .select_from(Promotion)
+            .where(
+                Promotion.listing_id == listing_id,
+                Promotion.status == PromotionStatus.ACTIVE,
+                Promotion.ends_at > now,
+            )
+        ) or 0
+
+        if active_count == 0:
+            listing = db.scalar(select(Listing).where(Listing.id == listing_id))
+            if listing is not None:
+                if listing.is_premium:
+                    updated_listings += 1
+                listing.is_premium = False
+                if listing.premium_expires_at is not None and listing.premium_expires_at <= now:
+                    listing.premium_expires_at = None
+                db.add(listing)
+
+    db.commit()
+
+    return PromotionExpireRunResponse(
+        checked_promotions=checked,
+        expired_promotions=len(to_expire),
+        updated_listings=updated_listings,
     )

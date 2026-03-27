@@ -57,3 +57,35 @@ class PromotionPurchaseResponse(BaseModel):
     amount: Decimal
     currency: str
     duration_days: int
+
+
+class PromotionHistoryItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    listing_id: int
+    user_id: int
+    promotion_package_id: int
+    promotion_type: str
+    target_city: str | None
+    target_category_id: int | None
+    starts_at: datetime
+    ends_at: datetime
+    status: PromotionStatus
+    purchased_price: Decimal
+    currency: str
+    created_at: datetime
+
+
+class PromotionHistoryResponse(BaseModel):
+    items: list[PromotionHistoryItem]
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+
+
+class PromotionExpireRunResponse(BaseModel):
+    checked_promotions: int
+    expired_promotions: int
+    updated_listings: int
