@@ -24,6 +24,91 @@ from app.schemas.listing import (
 router = APIRouter()
 
 
+def validate_dynamic_attributes(
+    *,
+    category: Category,
+    dynamic_attributes: dict[str, object] | None,
+) -> None:
+    schema = category.attributes_schema or []
+    if not schema:
+        return
+
+    values = dynamic_attributes or {}
+    schema_map = {
+        str(definition.get("key")): definition
+        for definition in schema
+        if isinstance(definition, dict) and definition.get("key")
+    }
+
+    for key in values.keys():
+        if key not in schema_map:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown dynamic attribute '{key}'")
+
+    for key, definition in schema_map.items():
+        value_type = definition.get("value_type")
+        required = bool(definition.get("required", False))
+        if required and key not in values:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Dynamic attribute '{key}' is required",
+            )
+
+        if key not in values:
+            continue
+
+        value = values[key]
+        if value is None:
+            if required:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Dynamic attribute '{key}' cannot be null",
+                )
+            continue
+
+        if value_type == "string":
+            if not isinstance(value, str):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{key}' must be a string")
+            min_length = definition.get("min_length")
+            max_length = definition.get("max_length")
+            if min_length is not None and len(value) < int(min_length):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{key}' is too short")
+            if max_length is not None and len(value) > int(max_length):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{key}' is too long")
+            options = definition.get("options")
+            if isinstance(options, list) and options and value not in options:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"'{key}' must be one of allowed options",
+                )
+            continue
+
+        if value_type == "boolean":
+            if not isinstance(value, bool):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{key}' must be a boolean")
+            continue
+
+        if value_type == "integer":
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{key}' must be an integer")
+            numeric_value = float(value)
+        elif value_type == "number":
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{key}' must be a number")
+            numeric_value = float(value)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported value_type for dynamic attribute '{key}'",
+            )
+
+        min_value = definition.get("min_value")
+        max_value = definition.get("max_value")
+        if min_value is not None and numeric_value < float(min_value):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{key}' is below minimum")
+        if max_value is not None and numeric_value > float(max_value):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{key}' is above maximum")
+
+
 def build_order_clause(sort_by: str):
     if sort_by == "oldest":
         return asc(Listing.created_at)
@@ -53,6 +138,8 @@ def create_listing(
     if category is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or inactive category")
 
+    validate_dynamic_attributes(category=category, dynamic_attributes=payload.dynamic_attributes)
+
     listing = Listing(
         owner_id=current_user.id,
         category_id=payload.category_id,
@@ -66,6 +153,7 @@ def create_listing(
         latitude=payload.latitude,
         longitude=payload.longitude,
         map_address_label=payload.map_address_label,
+        dynamic_attributes=payload.dynamic_attributes,
         status=ListingStatus.PENDING_REVIEW,
     )
     db.add(listing)
@@ -126,10 +214,15 @@ def update_listing(
     if current_user.account_status != AccountStatus.ACTIVE and not is_admin_like:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
-    if payload.category_id is not None:
-        category = db.scalar(select(Category).where(Category.id == payload.category_id, Category.is_active.is_(True)))
-        if category is None:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or inactive category")
+    target_category_id = payload.category_id if payload.category_id is not None else listing.category_id
+    target_category = db.scalar(select(Category).where(Category.id == target_category_id, Category.is_active.is_(True)))
+    if target_category is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or inactive category")
+
+    target_dynamic_attributes = payload.dynamic_attributes
+    if target_dynamic_attributes is None:
+        target_dynamic_attributes = listing.dynamic_attributes
+    validate_dynamic_attributes(category=target_category, dynamic_attributes=target_dynamic_attributes)
 
     apply_listing_update_payload(listing, payload)
 

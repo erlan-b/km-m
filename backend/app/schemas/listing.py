@@ -18,6 +18,7 @@ class ListingCreateRequest(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     map_address_label: str | None = Field(default=None, max_length=255)
+    dynamic_attributes: dict[str, object] | None = None
 
     @field_validator("currency")
     @classmethod
@@ -37,6 +38,7 @@ class ListingUpdateRequest(BaseModel):
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     map_address_label: str | None = Field(default=None, max_length=255)
+    dynamic_attributes: dict[str, object] | None = None
 
     @field_validator("currency")
     @classmethod
@@ -83,6 +85,7 @@ class ListingResponse(BaseModel):
     latitude: Decimal
     longitude: Decimal
     map_address_label: str | None
+    dynamic_attributes: dict[str, object] | None
     status: ListingStatus
     view_count: int
     favorite_count: int

@@ -65,13 +65,13 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/admin/messages/attachments/{attachment_id}/download`
 - `GET /api/v1/categories`
 - `GET /api/v1/categories/admin`
-- `POST /api/v1/categories`
-- `PATCH /api/v1/categories/{category_id}`
+- `POST /api/v1/categories` (supports `attributes_schema` for category-specific dynamic fields)
+- `PATCH /api/v1/categories/{category_id}` (supports `attributes_schema` updates)
 - `POST /api/v1/categories/{category_id}/activate`
 - `POST /api/v1/categories/{category_id}/deactivate`
-- `POST /api/v1/listings`
+- `POST /api/v1/listings` (supports `dynamic_attributes` validated against category schema)
 - `GET /api/v1/listings/my`
-- `PATCH /api/v1/listings/{listing_id}`
+- `PATCH /api/v1/listings/{listing_id}` (supports `dynamic_attributes` validated against category schema)
 - `PATCH /api/v1/listings/{listing_id}/status`
 - `PATCH /api/v1/listings/{listing_id}/moderation`
 - `GET /api/v1/listings` (supports `q` for title/description keyword search and `min_price`/`max_price` range filters)

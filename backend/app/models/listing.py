@@ -3,7 +3,7 @@ from decimal import Decimal
 import enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -54,6 +54,7 @@ class Listing(Base):
     latitude: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=False)
     longitude: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=False)
     map_address_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dynamic_attributes: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     status: Mapped[ListingStatus] = mapped_column(
         Enum(
             ListingStatus,

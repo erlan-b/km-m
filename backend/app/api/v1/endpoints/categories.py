@@ -49,11 +49,13 @@ def create_category(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin_or_moderator),
 ) -> CategoryResponse:
+    payload_data = payload.model_dump()
     category = Category(
-        name=payload.name,
-        slug=payload.slug,
-        is_active=payload.is_active,
-        display_order=payload.display_order,
+        name=payload_data["name"],
+        slug=payload_data["slug"],
+        is_active=payload_data["is_active"],
+        display_order=payload_data["display_order"],
+        attributes_schema=payload_data.get("attributes_schema"),
     )
 
     db.add(category)
