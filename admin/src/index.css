@@ -517,6 +517,46 @@ textarea:focus-visible {
   color: var(--text-subtle);
 }
 
+.listings-search-strip {
+  grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(140px, 1fr)) auto auto;
+}
+
+.listings-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.listings-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1080px;
+}
+
+.listings-table th,
+.listings-table td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.listings-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+  background: var(--bg-muted);
+}
+
+.listings-detail-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.listings-description-block p {
+  margin: 6px 0;
+}
+
 .reports-table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -603,6 +643,10 @@ textarea:focus-visible {
   }
 
   .reports-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .listings-search-strip {
     grid-template-columns: 1fr;
   }
 }
