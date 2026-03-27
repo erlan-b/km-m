@@ -1,5 +1,6 @@
 from math import ceil
 from decimal import Decimal
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,9 +8,14 @@ from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin_or_moderator, user_has_role
+from app.core.config import get_settings
 from app.db.session import get_db
+from app.models.admin_audit_log import AdminAuditLog
 from app.models.category import Category
+from app.models.conversation import Conversation
+from app.models.favorite import Favorite
 from app.models.listing import Listing, ListingStatus, TransactionType
+from app.models.listing_media import ListingMedia
 from app.models.user import AccountStatus, User
 from app.schemas.listing import (
     ListingCreateRequest,
@@ -130,6 +136,38 @@ def require_listing_owner_or_admin_like(*, listing: Listing, current_user: User)
     if listing.owner_id != current_user.id and not is_admin_like:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
     return is_admin_like
+
+
+def delete_listing_media_files(file_paths: list[str]) -> None:
+    settings = get_settings()
+    base_dir = Path(settings.media_root).resolve()
+
+    for relative_path in file_paths:
+        absolute_path = (base_dir / relative_path).resolve()
+        try:
+            absolute_path.relative_to(base_dir)
+        except ValueError:
+            continue
+        absolute_path.unlink(missing_ok=True)
+
+
+def write_listing_audit_log(
+    db: Session,
+    *,
+    actor_user_id: int,
+    action: str,
+    listing_id: int,
+    details: str | None = None,
+) -> None:
+    db.add(
+        AdminAuditLog(
+            admin_user_id=actor_user_id,
+            action=action,
+            target_type="listing",
+            target_id=listing_id,
+            details=details,
+        )
+    )
 
 
 @router.post("", response_model=ListingResponse, status_code=status.HTTP_201_CREATED)
@@ -309,8 +347,37 @@ def hard_delete_archived_listing(
             detail="Only archived listings can be permanently deleted",
         )
 
+    favorites = db.scalars(select(Favorite).where(Favorite.listing_id == listing.id)).all()
+    media_items = db.scalars(select(ListingMedia).where(ListingMedia.listing_id == listing.id)).all()
+    conversations = db.scalars(select(Conversation).where(Conversation.listing_id == listing.id)).all()
+
+    media_file_paths = [item.file_path for item in media_items]
+
+    for favorite in favorites:
+        db.delete(favorite)
+    for media in media_items:
+        db.delete(media)
+    for conversation in conversations:
+        db.delete(conversation)
+
     db.delete(listing)
+
+    role_names = ",".join(sorted(role.name for role in current_user.roles))
+    write_listing_audit_log(
+        db,
+        actor_user_id=current_user.id,
+        action="listing_hard_delete",
+        listing_id=listing.id,
+        details=(
+            f"actor_user_id={current_user.id};actor_roles={role_names};"
+            f"favorites_deleted={len(favorites)};"
+            f"media_deleted={len(media_items)};"
+            f"conversations_deleted={len(conversations)}"
+        ),
+    )
+
     db.commit()
+    delete_listing_media_files(media_file_paths)
 
 
 @router.patch("/{listing_id}/status", response_model=ListingStatusUpdateResponse)
@@ -373,11 +440,13 @@ def moderate_listing_status(
     listing_id: int,
     payload: ListingModerationActionRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_admin_or_moderator),
 ) -> ListingStatusUpdateResponse:
     listing = db.scalar(select(Listing).where(Listing.id == listing_id))
     if listing is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+
+    previous_status = listing.status
 
     transitions: dict[ListingStatus, dict[str, ListingStatus]] = {
         ListingStatus.DRAFT: {
@@ -417,6 +486,17 @@ def moderate_listing_status(
 
     listing.status = next_status
     db.add(listing)
+    write_listing_audit_log(
+        db,
+        actor_user_id=admin_user.id,
+        action=f"listing_moderation_{payload.action}",
+        listing_id=listing.id,
+        details=(
+            f"from_status={previous_status.value};"
+            f"to_status={next_status.value};"
+            f"note={payload.note or ''}"
+        ),
+    )
     db.commit()
     db.refresh(listing)
 
@@ -424,6 +504,62 @@ def moderate_listing_status(
         listing_id=listing.id,
         status=listing.status,
         note=payload.note,
+    )
+
+
+@router.get("/admin/moderation", response_model=ListingListResponse)
+def list_listings_for_moderation(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    q: str | None = Query(default=None, min_length=1, max_length=120),
+    status_filter: ListingStatus | None = None,
+    owner_id: int | None = Query(default=None, gt=0),
+    category_id: int | None = Query(default=None, gt=0),
+    city: str | None = Query(default=None, min_length=2, max_length=120),
+    transaction_type: TransactionType | None = None,
+    sort_by: Literal["newest", "oldest", "price_asc", "price_desc"] = "newest",
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin_or_moderator),
+) -> ListingListResponse:
+    filters = []
+
+    if q is not None:
+        term = q.strip()
+        if term:
+            filters.append(
+                or_(
+                    Listing.title.ilike(f"%{term}%"),
+                    Listing.description.ilike(f"%{term}%"),
+                )
+            )
+    if status_filter is not None:
+        filters.append(Listing.status == status_filter)
+    if owner_id is not None:
+        filters.append(Listing.owner_id == owner_id)
+    if category_id is not None:
+        filters.append(Listing.category_id == category_id)
+    if city is not None:
+        filters.append(Listing.city.ilike(f"%{city}%"))
+    if transaction_type is not None:
+        filters.append(Listing.transaction_type == transaction_type)
+
+    total_items = db.scalar(select(func.count()).select_from(Listing).where(*filters)) or 0
+    total_pages = ceil(total_items / page_size) if total_items else 0
+
+    items = db.scalars(
+        select(Listing)
+        .where(*filters)
+        .order_by(build_order_clause(sort_by))
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    return ListingListResponse(
+        items=[ListingResponse.model_validate(item) for item in items],
+        page=page,
+        page_size=page_size,
+        total_items=total_items,
+        total_pages=total_pages,
     )
 
 

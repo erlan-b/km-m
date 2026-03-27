@@ -75,6 +75,7 @@ uvicorn app.main:app --reload --port 8000
 - `DELETE /api/v1/listings/{listing_id}` (soft-delete: archives listing)
 - `POST /api/v1/listings/{listing_id}/restore` (restore archived listing to moderation queue)
 - `DELETE /api/v1/listings/{listing_id}/hard` (permanent delete, only for archived listings)
+- `GET /api/v1/listings/admin/moderation` (admin/moderator listing queue with filters)
 - `PATCH /api/v1/listings/{listing_id}/status`
 - `PATCH /api/v1/listings/{listing_id}/moderation`
 - `GET /api/v1/listings` (supports `q` for title/description keyword search and `min_price`/`max_price` range filters)
