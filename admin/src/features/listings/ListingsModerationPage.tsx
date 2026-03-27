@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { usePageI18n } from "../../app/i18n/I18nContext";
 import { Modal } from "../common/Modal";
 
 type ListingStatus = "draft" | "pending_review" | "published" | "rejected" | "archived" | "inactive" | "sold";
@@ -144,6 +145,7 @@ function statusBadgeClass(status: ListingStatus): string {
 
 export function ListingsModerationPage() {
   const { authFetch } = useAuth();
+  const { t } = usePageI18n("listings");
 
   const [listings, setListings] = useState<ListingListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -337,11 +339,11 @@ export function ListingsModerationPage() {
     <section className="module-page">
       <header className="module-header">
         <div>
-          <h1>Listings Moderation</h1>
-          <p>Review queue, apply status transitions, and keep moderation notes.</p>
+          <h1>{t("title", "Listings Moderation")}</h1>
+          <p>{t("subtitle", "Review queue, apply status transitions, and keep moderation notes.")}</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => void loadListings()} disabled={isLoading}>
-          {isLoading ? "Refreshing..." : "Refresh"}
+          {isLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
         </button>
       </header>
 
@@ -395,9 +397,9 @@ export function ListingsModerationPage() {
           <option value="price_desc">Price desc</option>
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>
-          Apply filters
+          {t("apply_filters", "Apply filters")}
         </button>
-        <button type="submit" className="btn btn-primary">Search</button>
+        <button type="submit" className="btn btn-primary">{t("search", "Search")}</button>
       </form>
 
       <section className="table-card" aria-label="Listings moderation queue">
@@ -573,7 +575,7 @@ export function ListingsModerationPage() {
                     className="btn btn-primary"
                     disabled={isSubmitting || availableActions.length === 0 || action.length === 0}
                   >
-                    {isSubmitting ? "Applying..." : "Apply action"}
+                    {isSubmitting ? "Applying..." : t("apply_action", "Apply action")}
                   </button>
                   <button
                     type="button"
@@ -585,7 +587,7 @@ export function ListingsModerationPage() {
                       setNote("");
                     }}
                   >
-                    Reset form
+                    {t("reset_form", "Reset form")}
                   </button>
                 </div>
               </form>

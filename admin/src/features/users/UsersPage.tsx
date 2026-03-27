@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { usePageI18n } from "../../app/i18n/I18nContext";
 import { Modal } from "../common/Modal";
 
 type AccountStatus = "active" | "blocked" | "pending_verification" | "deactivated";
@@ -80,6 +81,7 @@ function extractErrorMessage(error: unknown): string {
 
 export function UsersPage() {
   const { authFetch } = useAuth();
+  const { t } = usePageI18n("users");
 
   const [users, setUsers] = useState<AdminUserListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -263,11 +265,11 @@ export function UsersPage() {
     <section className="module-page">
       <header className="module-header">
         <div>
-          <h1>Users</h1>
-          <p>Search users, inspect profile statistics, suspend and unsuspend.</p>
+          <h1>{t("title", "Users")}</h1>
+          <p>{t("subtitle", "Search users, inspect profile statistics, suspend and unsuspend.")}</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => void loadUsers()} disabled={isLoading}>
-          {isLoading ? "Refreshing..." : "Refresh"}
+          {isLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
         </button>
       </header>
 
@@ -275,7 +277,7 @@ export function UsersPage() {
 
       <form className="search-strip" onSubmit={onSearchSubmit}>
         <input
-          placeholder="Search by full name or email"
+          placeholder={t("search_placeholder", "Search by full name or email")}
           aria-label="Search users"
           value={queryInput}
           onChange={(event) => setQueryInput(event.target.value)}
@@ -297,8 +299,8 @@ export function UsersPage() {
           <option value="moderator">Moderator</option>
           <option value="user">User</option>
         </select>
-        <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>Apply filters</button>
-        <button type="submit" className="btn btn-primary">Search</button>
+        <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>{t("apply_filters", "Apply filters")}</button>
+        <button type="submit" className="btn btn-primary">{t("search", "Search")}</button>
       </form>
 
       <section className="table-card" aria-label="Users table">

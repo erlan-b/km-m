@@ -247,6 +247,19 @@ textarea:focus-visible {
   gap: 10px;
 }
 
+.language-switch {
+  display: inline-flex;
+  gap: 6px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-muted);
+}
+
+.language-switch .btn {
+  min-width: 48px;
+}
+
 .admin-content {
   padding: 16px;
 }

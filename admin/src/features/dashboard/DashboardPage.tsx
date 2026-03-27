@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { usePageI18n } from "../../app/i18n/I18nContext";
 
 type AdminDashboardResponse = {
   generated_at: string;
@@ -42,6 +43,7 @@ function extractErrorMessage(error: unknown): string {
 
 export function DashboardPage() {
   const { authFetch } = useAuth();
+  const { t } = usePageI18n("dashboard");
 
   const [data, setData] = useState<AdminDashboardResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,11 +105,11 @@ export function DashboardPage() {
     <section className="module-page">
       <header className="module-header">
         <div>
-          <h1>Dashboard</h1>
-          <p>Operational overview and moderation shortcuts.</p>
+          <h1>{t("title", "Dashboard")}</h1>
+          <p>{t("subtitle", "Operational overview and moderation shortcuts.")}</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => void loadDashboard()} disabled={isLoading}>
-          {isLoading ? "Refreshing..." : "Refresh"}
+          {isLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
         </button>
       </header>
 
@@ -115,19 +117,19 @@ export function DashboardPage() {
 
       <div className="kpi-grid">
         <article>
-          <h3>Total Users</h3>
+          <h3>{t("total_users", "Total Users")}</h3>
           <strong>{totalUsers}</strong>
         </article>
         <article>
-          <h3>Pending Listings</h3>
+          <h3>{t("pending_listings", "Pending Listings")}</h3>
           <strong>{pendingListings}</strong>
         </article>
         <article>
-          <h3>Total Reports</h3>
+          <h3>{t("total_reports", "Total Reports")}</h3>
           <strong>{totalReports}</strong>
         </article>
         <article>
-          <h3>Active Subscriptions</h3>
+          <h3>{t("active_subscriptions", "Active Subscriptions")}</h3>
           <strong>{activeSubscriptions}</strong>
         </article>
       </div>
@@ -135,7 +137,7 @@ export function DashboardPage() {
       <section className="table-card" aria-label="Detailed dashboard metrics">
         <div className="table-head">
           <strong>Detailed statistics</strong>
-          <span>Generated at: {generatedAtText}</span>
+          <span>{t("generated_at", "Generated at")}: {generatedAtText}</span>
         </div>
         <div className="dashboard-stats-grid">
           <article className="dashboard-stat-group">

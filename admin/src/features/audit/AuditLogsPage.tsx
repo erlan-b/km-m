@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { usePageI18n } from "../../app/i18n/I18nContext";
 import { Modal } from "../common/Modal";
 
 type AdminAuditLogItem = {
@@ -71,6 +72,7 @@ function truncateText(value: string, maxLength: number): string {
 
 export function AuditLogsPage() {
   const { authFetch } = useAuth();
+  const { t } = usePageI18n("audit_logs");
 
   const [logs, setLogs] = useState<AdminAuditLogListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -185,11 +187,11 @@ export function AuditLogsPage() {
     <section className="module-page">
       <header className="module-header">
         <div>
-          <h1>Audit Logs</h1>
-          <p>Trace moderation actions, actors, targets and details.</p>
+          <h1>{t("title", "Audit Logs")}</h1>
+          <p>{t("subtitle", "Trace moderation actions, actors, targets and details.")}</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => void loadLogs()} disabled={isLoading}>
-          {isLoading ? "Refreshing..." : "Refresh"}
+          {isLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
         </button>
       </header>
 
@@ -216,10 +218,10 @@ export function AuditLogsPage() {
         />
 
         <button type="button" className="btn btn-ghost" onClick={onResetFilters}>
-          Reset
+          {t("reset", "Reset")}
         </button>
         <button type="button" className="btn btn-primary" onClick={onApplyFilters}>
-          Apply filters
+          {t("apply_filters", "Apply filters")}
         </button>
       </section>
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { usePageI18n } from "../../app/i18n/I18nContext";
 import { Modal } from "../common/Modal";
 
 type PaymentStatus = "pending" | "successful" | "failed" | "cancelled" | "refunded";
@@ -130,6 +131,7 @@ function formatAmount(amount: string | number, currency: string): string {
 
 export function PaymentsPage() {
   const { authFetch } = useAuth();
+  const { t } = usePageI18n("payments");
 
   const [payments, setPayments] = useState<PaymentHistoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -260,11 +262,11 @@ export function PaymentsPage() {
     <section className="module-page">
       <header className="module-header">
         <div>
-          <h1>Payments</h1>
-          <p>Track payment history, providers, statuses and timestamps.</p>
+          <h1>{t("title", "Payments")}</h1>
+          <p>{t("subtitle", "Track payment history, providers, statuses and timestamps.")}</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => void loadPayments()} disabled={isLoading}>
-          {isLoading ? "Refreshing..." : "Refresh"}
+          {isLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
         </button>
       </header>
 
@@ -341,10 +343,10 @@ export function PaymentsPage() {
         </label>
 
         <button type="button" className="btn btn-ghost" onClick={onResetFilters}>
-          Reset
+          {t("reset", "Reset")}
         </button>
         <button type="button" className="btn btn-primary" onClick={onApplyFilters}>
-          Apply filters
+          {t("apply_filters", "Apply filters")}
         </button>
       </section>
 

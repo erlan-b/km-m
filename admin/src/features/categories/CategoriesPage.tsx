@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { usePageI18n } from "../../app/i18n/I18nContext";
 import { Modal } from "../common/Modal";
 
 type CategoryAttributeDefinition = {
@@ -178,6 +179,7 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
 
 export function CategoriesPage() {
   const { authFetch } = useAuth();
+  const { t } = usePageI18n("categories");
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -485,11 +487,11 @@ export function CategoriesPage() {
     <section className="module-page">
       <header className="module-header">
         <div>
-          <h1>Categories</h1>
-          <p>Manage category metadata, active state, and dynamic listing fields with a visual builder.</p>
+          <h1>{t("title", "Categories")}</h1>
+          <p>{t("subtitle", "Manage category metadata, active state, and dynamic listing fields with a visual builder.")}</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => void loadCategories()} disabled={isLoading}>
-          {isLoading ? "Refreshing..." : "Refresh"}
+          {isLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
         </button>
       </header>
 
@@ -511,7 +513,7 @@ export function CategoriesPage() {
           Include inactive
         </label>
         <button type="button" className="btn btn-ghost" onClick={resetCreateForm}>
-          New category
+          {t("new_category", "New category")}
         </button>
       </div>
 
@@ -757,7 +759,7 @@ export function CategoriesPage() {
 
             <div className="users-actions-cell">
               <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : selectedCategory ? "Save changes" : "Create category"}
+                {isSubmitting ? "Saving..." : selectedCategory ? t("save", "Save changes") : t("create", "Create category")}
               </button>
               <button
                 type="button"

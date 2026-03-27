@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 import { useAuth } from "../../app/auth/AuthContext";
+import { usePageI18n } from "../../app/i18n/I18nContext";
 import { Modal } from "../common/Modal";
 
 type ReportStatus = "open" | "resolved" | "dismissed";
@@ -66,6 +67,7 @@ function extractErrorMessage(error: unknown): string {
 
 export function ReportsPage() {
   const { authFetch } = useAuth();
+  const { t } = usePageI18n("reports");
 
   const [reports, setReports] = useState<ReportListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -249,11 +251,11 @@ export function ReportsPage() {
     <section className="module-page">
       <header className="module-header">
         <div>
-          <h1>Reports</h1>
-          <p>Review reports, apply moderation actions, and resolve or dismiss.</p>
+          <h1>{t("title", "Reports")}</h1>
+          <p>{t("subtitle", "Review reports, apply moderation actions, and resolve or dismiss.")}</p>
         </div>
         <button type="button" className="btn btn-ghost" onClick={() => void loadReports()} disabled={isLoading}>
-          {isLoading ? "Refreshing..." : "Refresh"}
+          {isLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
         </button>
       </header>
 
@@ -280,7 +282,7 @@ export function ReportsPage() {
           <option value="user">User</option>
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>
-          Apply filters
+          {t("apply_filters", "Apply filters")}
         </button>
       </div>
 
@@ -432,7 +434,7 @@ export function ReportsPage() {
 
               <div className="users-actions-cell">
                 <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-                  {isSubmitting ? "Applying..." : "Apply action"}
+                  {isSubmitting ? "Applying..." : t("apply_action", "Apply action")}
                 </button>
                 <button
                   type="button"

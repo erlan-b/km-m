@@ -44,6 +44,7 @@ type AuthContextValue = {
 };
 
 const STORAGE_KEY = "km_admin_auth";
+const LANGUAGE_STORAGE_KEY = "km_admin_language";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -131,6 +132,15 @@ function persistState(state: AuthState): void {
     return;
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function readUiLanguage(): "en" | "ru" {
+  if (typeof window === "undefined") {
+    return "en";
+  }
+
+  const stored = (localStorage.getItem(LANGUAGE_STORAGE_KEY) ?? "").toLowerCase();
+  return stored.startsWith("ru") ? "ru" : "en";
 }
 
 async function fetchMe(accessToken: string): Promise<MePayload> {
@@ -286,6 +296,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const withToken = async (accessToken: string): Promise<Response> => {
         const headers = new Headers(init?.headers);
         headers.set("Authorization", `Bearer ${accessToken}`);
+        if (!headers.has("X-Language")) {
+          headers.set("X-Language", readUiLanguage());
+        }
         return fetch(toApiUrl(path), {
           ...init,
           headers,
