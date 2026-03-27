@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     supported_languages_csv: str = "en,ru,ky"
+    media_root: str = "storage"
+    message_attachments_subdir: str = "message_attachments"
+    message_attachment_max_size_mb: int = 10
+    message_attachment_max_files_per_message: int = 5
+    message_attachment_allowed_mime_csv: str = "image/jpeg,image/png,image/webp,application/pdf"
 
     db_host: str = "127.0.0.1"
     db_port: int = 3306
@@ -32,6 +37,14 @@ class Settings(BaseSettings):
     @property
     def supported_languages(self) -> list[str]:
         return [lang.strip() for lang in self.supported_languages_csv.split(",") if lang.strip()]
+
+    @property
+    def message_attachment_allowed_mime_types(self) -> list[str]:
+        return [
+            mime_type.strip().lower()
+            for mime_type in self.message_attachment_allowed_mime_csv.split(",")
+            if mime_type.strip()
+        ]
 
 
 @lru_cache

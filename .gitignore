@@ -41,6 +41,7 @@ Thumbs.db
 *.log
 tmp/
 temp/
+backend/storage/
 
 # Project-specific non-runtime assets
 start-t/

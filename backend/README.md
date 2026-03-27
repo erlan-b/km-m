@@ -65,6 +65,15 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/notifications`
 - `GET /api/v1/notifications/unread-count`
 - `POST /api/v1/notifications/{notification_id}/read`
+- `POST /api/v1/conversations`
+- `GET /api/v1/conversations`
+- `GET /api/v1/conversations/{conversation_id}`
+- `GET /api/v1/messages`
+- `POST /api/v1/messages/text`
+- `POST /api/v1/messages`
+- `POST /api/v1/messages/{message_id}/read`
+- `GET /api/v1/attachments/{attachment_id}`
+- `GET /api/v1/attachments/{attachment_id}/download`
 - `POST /api/v1/favorites/{listing_id}`
 - `DELETE /api/v1/favorites/{listing_id}`
 - `GET /api/v1/favorites`
