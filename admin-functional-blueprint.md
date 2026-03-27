@@ -124,9 +124,7 @@ Apply this same UX pattern to required modules:
 4. Reports queue
 5. Categories
 6. Payments
-7. Promotions
-8. Localization
-9. Audit logs
+7. Audit logs
 
 ## Our Implementation Rules
 

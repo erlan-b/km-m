@@ -67,8 +67,8 @@ class Listing(Base):
     )
     view_count: Mapped[int] = mapped_column(default=0, nullable=False)
     favorite_count: Mapped[int] = mapped_column(default=0, nullable=False)
-    is_subscription: Mapped[bool] = mapped_column("is_premium", Boolean, default=False, nullable=False)
-    subscription_expires_at: Mapped[datetime | None] = mapped_column("premium_expires_at", DateTime, nullable=True)
+    is_subscription: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False
