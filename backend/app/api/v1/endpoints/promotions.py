@@ -217,6 +217,70 @@ def list_my_promotions(
     )
 
 
+@router.get("/admin", response_model=PromotionHistoryResponse)
+def list_promotions_admin(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    status_filter: PromotionStatus | None = None,
+    user_id: int | None = Query(default=None, gt=0),
+    listing_id: int | None = Query(default=None, gt=0),
+    promotion_package_id: int | None = Query(default=None, gt=0),
+    target_city: str | None = Query(default=None, min_length=2, max_length=120),
+    target_category_id: int | None = Query(default=None, gt=0),
+    starts_from: datetime | None = None,
+    starts_to: datetime | None = None,
+    ends_from: datetime | None = None,
+    ends_to: datetime | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin_or_moderator),
+) -> PromotionHistoryResponse:
+    if starts_from is not None and starts_to is not None and starts_from > starts_to:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="starts_from cannot be after starts_to")
+    if ends_from is not None and ends_to is not None and ends_from > ends_to:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ends_from cannot be after ends_to")
+
+    filters = []
+    if status_filter is not None:
+        filters.append(Promotion.status == status_filter)
+    if user_id is not None:
+        filters.append(Promotion.user_id == user_id)
+    if listing_id is not None:
+        filters.append(Promotion.listing_id == listing_id)
+    if promotion_package_id is not None:
+        filters.append(Promotion.promotion_package_id == promotion_package_id)
+    if target_city is not None:
+        filters.append(Promotion.target_city.ilike(f"%{target_city}%"))
+    if target_category_id is not None:
+        filters.append(Promotion.target_category_id == target_category_id)
+    if starts_from is not None:
+        filters.append(Promotion.starts_at >= starts_from)
+    if starts_to is not None:
+        filters.append(Promotion.starts_at <= starts_to)
+    if ends_from is not None:
+        filters.append(Promotion.ends_at >= ends_from)
+    if ends_to is not None:
+        filters.append(Promotion.ends_at <= ends_to)
+
+    total_items = db.scalar(select(func.count()).select_from(Promotion).where(*filters)) or 0
+    total_pages = ceil(total_items / page_size) if total_items else 0
+
+    promotions = db.scalars(
+        select(Promotion)
+        .where(*filters)
+        .order_by(Promotion.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    return PromotionHistoryResponse(
+        items=[PromotionHistoryItem.model_validate(item) for item in promotions],
+        page=page,
+        page_size=page_size,
+        total_items=total_items,
+        total_pages=total_pages,
+    )
+
+
 @router.post("/expire-premium", response_model=PromotionExpireRunResponse)
 def expire_premium_promotions(
     db: Session = Depends(get_db),

@@ -1,6 +1,7 @@
 from math import ceil
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -52,14 +53,42 @@ def list_payments_admin(
     page_size: int = Query(default=20, ge=1, le=100),
     status_filter: PaymentStatus | None = None,
     user_id: int | None = Query(default=None, gt=0),
+    listing_id: int | None = Query(default=None, gt=0),
+    promotion_package_id: int | None = Query(default=None, gt=0),
+    payment_provider: str | None = Query(default=None, min_length=2, max_length=50),
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+    paid_from: datetime | None = None,
+    paid_to: datetime | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(require_admin_or_moderator),
 ) -> PaymentHistoryResponse:
+    if created_from is not None and created_to is not None and created_from > created_to:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="created_from cannot be after created_to")
+    if paid_from is not None and paid_to is not None and paid_from > paid_to:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="paid_from cannot be after paid_to")
+
     filters = []
     if status_filter is not None:
         filters.append(Payment.status == status_filter)
     if user_id is not None:
         filters.append(Payment.user_id == user_id)
+    if listing_id is not None:
+        filters.append(Payment.listing_id == listing_id)
+    if promotion_package_id is not None:
+        filters.append(Payment.promotion_package_id == promotion_package_id)
+    if payment_provider is not None:
+        filters.append(Payment.payment_provider == payment_provider)
+    if created_from is not None:
+        filters.append(Payment.created_at >= created_from)
+    if created_to is not None:
+        filters.append(Payment.created_at <= created_to)
+    if paid_from is not None:
+        filters.append(Payment.paid_at.is_not(None))
+        filters.append(Payment.paid_at >= paid_from)
+    if paid_to is not None:
+        filters.append(Payment.paid_at.is_not(None))
+        filters.append(Payment.paid_at <= paid_to)
 
     total_items = db.scalar(select(func.count()).select_from(Payment).where(*filters)) or 0
     total_pages = ceil(total_items / page_size) if total_items else 0

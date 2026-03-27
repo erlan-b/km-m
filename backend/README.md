@@ -97,11 +97,12 @@ uvicorn app.main:app --reload --port 8000
 - `DELETE /api/v1/favorites/{listing_id}`
 - `GET /api/v1/favorites`
 - `GET /api/v1/payments/me`
-- `GET /api/v1/payments/admin`
+- `GET /api/v1/payments/admin` (filters: status, provider, user, listing, package, created/paid date range)
 - `GET /api/v1/promotions/packages`
 - `POST /api/v1/promotions/packages`
 - `POST /api/v1/promotions/purchase`
 - `GET /api/v1/promotions/me`
+- `GET /api/v1/promotions/admin` (filters: status, user, listing, package, target city/category, starts/ends date range)
 - `POST /api/v1/promotions/expire-premium`
 - `POST /api/v1/reports`
 - `GET /api/v1/reports/my`
