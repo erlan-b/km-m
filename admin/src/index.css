@@ -870,6 +870,43 @@ textarea:focus-visible {
   background: var(--bg-muted);
 }
 
+.audit-search-strip {
+  grid-template-columns: minmax(220px, 1.5fr) minmax(180px, 1fr) minmax(140px, 0.8fr) auto auto;
+}
+
+.audit-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 960px;
+}
+
+.audit-table th,
+.audit-table td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.audit-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+  background: var(--bg-muted);
+}
+
+.audit-log-details {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .page-center {
   min-height: 100vh;
   display: grid;
@@ -910,6 +947,10 @@ textarea:focus-visible {
   }
 
   .payments-search-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .audit-search-strip {
     grid-template-columns: 1fr;
   }
 

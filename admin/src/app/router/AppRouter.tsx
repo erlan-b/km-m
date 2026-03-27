@@ -4,12 +4,12 @@ import { ProtectedRoute } from "../auth/ProtectedRoute";
 import { AdminLayout } from "../layout/AdminLayout";
 import { LoginPage } from "../../features/auth/LoginPage";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
-import { ModulePage } from "../../features/common/ModulePage";
 import { UsersPage } from "../../features/users/UsersPage";
 import { ReportsPage } from "../../features/reports/ReportsPage";
 import { ListingsModerationPage } from "../../features/listings/ListingsModerationPage";
 import { CategoriesPage } from "../../features/categories/CategoriesPage";
 import { PaymentsPage } from "../../features/payments/PaymentsPage";
+import { AuditLogsPage } from "../../features/audit/AuditLogsPage";
 
 export function AppRouter() {
   return (
@@ -24,7 +24,7 @@ export function AppRouter() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
-          <Route path="/audit-logs" element={<ModulePage title="Audit Logs" subtitle="Trace moderation actions and operational changes." />} />
+          <Route path="/audit-logs" element={<AuditLogsPage />} />
         </Route>
       </Route>
 
