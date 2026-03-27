@@ -11,6 +11,7 @@ from app.db.base import Base
 if TYPE_CHECKING:
     from app.models.category import Category
     from app.models.favorite import Favorite
+    from app.models.listing_media import ListingMedia
     from app.models.user import User
 
 
@@ -75,3 +76,8 @@ class Listing(Base):
     owner: Mapped["User"] = relationship("User", back_populates="listings")
     category: Mapped["Category"] = relationship("Category", back_populates="listings")
     favorites: Mapped[list["Favorite"]] = relationship("Favorite", back_populates="listing")
+    media_items: Mapped[list["ListingMedia"]] = relationship(
+        "ListingMedia",
+        back_populates="listing",
+        cascade="all, delete-orphan",
+    )

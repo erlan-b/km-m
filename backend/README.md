@@ -45,6 +45,11 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/health/ready`
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/forgot-password`
+- `POST /api/v1/auth/reset-password`
+- `POST /api/v1/auth/change-password`
 - `GET /api/v1/auth/me`
 - `GET /api/v1/auth/languages`
 - `PATCH /api/v1/auth/me/language`
@@ -64,8 +69,17 @@ uvicorn app.main:app --reload --port 8000
 - `PATCH /api/v1/listings/{listing_id}`
 - `PATCH /api/v1/listings/{listing_id}/status`
 - `PATCH /api/v1/listings/{listing_id}/moderation`
-- `GET /api/v1/listings`
+- `GET /api/v1/listings` (supports `q` for title/description keyword search)
 - `GET /api/v1/listings/{listing_id}`
+- `GET /api/v1/listing-media/listings/{listing_id}`
+- `GET /api/v1/listing-media/listings/{listing_id}/my`
+- `POST /api/v1/listing-media/listings/{listing_id}/upload`
+- `POST /api/v1/listing-media/{media_id}/set-primary`
+- `PATCH /api/v1/listing-media/{media_id}/order`
+- `PUT /api/v1/listing-media/{media_id}/replace`
+- `DELETE /api/v1/listing-media/{media_id}`
+- `GET /api/v1/listing-media/{media_id}/download`
+- `GET /api/v1/listing-media/{media_id}/download/my`
 - `GET /api/v1/notifications`
 - `GET /api/v1/notifications/unread-count`
 - `POST /api/v1/notifications/{notification_id}/read`

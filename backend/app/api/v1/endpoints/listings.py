@@ -2,7 +2,7 @@ from math import ceil
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import asc, desc, func, select
+from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin_or_moderator, user_has_role
@@ -260,6 +260,7 @@ def moderate_listing_status(
 def list_public_listings(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    q: str | None = Query(default=None, min_length=1, max_length=120),
     category_id: int | None = Query(default=None, gt=0),
     city: str | None = Query(default=None, min_length=2, max_length=120),
     transaction_type: TransactionType | None = None,
@@ -267,6 +268,15 @@ def list_public_listings(
     db: Session = Depends(get_db),
 ) -> ListingListResponse:
     filters = [Listing.status == ListingStatus.PUBLISHED]
+    if q is not None:
+        term = q.strip()
+        if term:
+            filters.append(
+                or_(
+                    Listing.title.ilike(f"%{term}%"),
+                    Listing.description.ilike(f"%{term}%"),
+                )
+            )
     if category_id is not None:
         filters.append(Listing.category_id == category_id)
     if city is not None:
