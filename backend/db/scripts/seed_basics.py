@@ -4,8 +4,17 @@ from sqlalchemy import select
 
 from app.core.security import hash_password
 from app.db.session import SessionLocal
+from app.models.category import Category
 from app.models.role import Role
 from app.models.user import AccountStatus, User
+
+DEFAULT_CATEGORIES = [
+    {"name": "Apartments", "slug": "apartments"},
+    {"name": "Houses", "slug": "houses"},
+    {"name": "Commercial", "slug": "commercial"},
+    {"name": "Land", "slug": "land"},
+    {"name": "Rooms", "slug": "rooms"},
+]
 
 
 @dataclass(frozen=True)
@@ -40,6 +49,16 @@ DEMO_USERS: tuple[DemoUserSpec, ...] = (
         roles=("user",),
     ),
 )
+
+
+def seed_categories() -> None:
+    with SessionLocal() as db:
+        for item in DEFAULT_CATEGORIES:
+            existing = db.scalar(select(Category).where(Category.slug == item["slug"]))
+            if existing is None:
+                db.add(Category(**item, is_active=True))
+
+        db.commit()
 
 
 def get_or_create_role(db, role_name: str) -> Role:
@@ -80,7 +99,3 @@ def seed_demo_users() -> None:
         db.commit()
 
     print("Demo users seed complete")
-
-
-if __name__ == "__main__":
-    seed_demo_users()

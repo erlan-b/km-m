@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
+from app.core.i18n import detect_request_language, translate_text
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -115,14 +116,15 @@ def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> Toke
 
 
 @router.post("/logout", response_model=AuthMessageResponse)
-def logout(payload: LogoutRequest, db: Session = Depends(get_db)) -> AuthMessageResponse:
+def logout(payload: LogoutRequest, request: Request, db: Session = Depends(get_db)) -> AuthMessageResponse:
     revoke_refresh_token(db, payload.refresh_token)
     db.commit()
-    return AuthMessageResponse(message="Logged out")
+    language = detect_request_language(request)
+    return AuthMessageResponse(message=translate_text("Logged out", language))
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)) -> ForgotPasswordResponse:
+def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)) -> ForgotPasswordResponse:
     user = get_user_by_email(db, payload.email)
     reset_token: str | None = None
 
@@ -133,14 +135,15 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
             reset_token = raw_token
 
     db.commit()
+    language = detect_request_language(request)
     return ForgotPasswordResponse(
-        message="If an account with that email exists, reset instructions were generated",
+        message=translate_text("If an account with that email exists, reset instructions were generated", language),
         reset_token=reset_token,
     )
 
 
 @router.post("/reset-password", response_model=AuthMessageResponse)
-def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)) -> AuthMessageResponse:
+def reset_password(payload: ResetPasswordRequest, request: Request, db: Session = Depends(get_db)) -> AuthMessageResponse:
     token_row = get_active_password_reset_token(db, payload.reset_token)
     if token_row is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token")
@@ -156,12 +159,14 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     revoke_user_refresh_tokens(db, user.id)
     db.commit()
 
-    return AuthMessageResponse(message="Password has been reset")
+    language = detect_request_language(request)
+    return AuthMessageResponse(message=translate_text("Password has been reset", language))
 
 
 @router.post("/change-password", response_model=AuthMessageResponse)
 def change_password(
     payload: ChangePasswordRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> AuthMessageResponse:
@@ -178,7 +183,8 @@ def change_password(
     db.add(current_user)
     revoke_user_refresh_tokens(db, current_user.id)
     db.commit()
-    return AuthMessageResponse(message="Password changed successfully")
+    language = detect_request_language(request, current_user.preferred_language)
+    return AuthMessageResponse(message=translate_text("Password changed successfully", language))
 
 
 @router.get("/me", response_model=UserMeResponse)

@@ -1,4 +1,4 @@
-from app.db.seed import seed_categories
+from db.scripts.seed_basics import seed_categories
 
 
 if __name__ == "__main__":
