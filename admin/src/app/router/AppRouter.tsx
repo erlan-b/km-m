@@ -6,6 +6,7 @@ import { LoginPage } from "../../features/auth/LoginPage";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { ModulePage } from "../../features/common/ModulePage";
 import { UsersPage } from "../../features/users/UsersPage";
+import { ReportsPage } from "../../features/reports/ReportsPage";
 
 export function AppRouter() {
   return (
@@ -17,7 +18,7 @@ export function AppRouter() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/listings" element={<ModulePage title="Listings Moderation" subtitle="Moderation queue with approve, reject and archive actions." />} />
-          <Route path="/reports" element={<ModulePage title="Reports" subtitle="Review reports, inspect targets and resolve or dismiss." />} />
+          <Route path="/reports" element={<ReportsPage />} />
           <Route path="/categories" element={<ModulePage title="Categories" subtitle="Manage taxonomy, ordering and dynamic attributes." />} />
           <Route path="/payments" element={<ModulePage title="Payments" subtitle="Track provider status, users, listing links and timeline." />} />
           <Route path="/promotions" element={<ModulePage title="Promotions" subtitle="Monitor active and expired promotions, package controls." />} />

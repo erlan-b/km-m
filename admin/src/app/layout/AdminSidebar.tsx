@@ -16,8 +16,7 @@ export function AdminSidebar() {
   return (
     <aside className="admin-sidebar" aria-label="Admin navigation">
       <div className="sidebar-brand">
-        <span>KM</span>
-        <strong>Admin</strong>
+        <strong>KM-M Admin Panel</strong>
       </div>
 
       <nav>
