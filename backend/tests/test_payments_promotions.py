@@ -57,7 +57,7 @@ def create_listing(db_session, owner_id: int, category_id: int, status: ListingS
         longitude=Decimal("74.5698"),
         map_address_label="Bishkek",
         status=status,
-        is_premium=False,
+        is_subscription=False,
     )
     db_session.add(listing)
     db_session.commit()
@@ -67,8 +67,8 @@ def create_listing(db_session, owner_id: int, category_id: int, status: ListingS
 
 def create_package(db_session, *, is_active: bool = True) -> PromotionPackage:
     package = PromotionPackage(
-        title="Premium 7d",
-        description="Weekly premium",
+        title="Subscription 7d",
+        description="Weekly subscription",
         duration_days=7,
         is_active=is_active,
         price=Decimal("500.00"),
@@ -105,9 +105,9 @@ def test_purchase_success_activates_promotion_and_listing(client, db_session, se
     payload = response.json()
     assert payload["payment_status"] == PaymentStatus.SUCCESSFUL.value
     assert payload["promotion_status"] == PromotionStatus.ACTIVE.value
-    assert payload["is_premium"] is True
+    assert payload["is_subscription"] is True
     assert payload["promotion_id"] is not None
-    assert payload["premium_expires_at"] is not None
+    assert payload["subscription_expires_at"] is not None
 
     payment = db_session.scalar(select(Payment).where(Payment.id == payload["payment_id"]))
     assert payment is not None
@@ -119,8 +119,8 @@ def test_purchase_success_activates_promotion_and_listing(client, db_session, se
     assert promotion.status == PromotionStatus.ACTIVE
 
     db_session.refresh(listing)
-    assert listing.is_premium is True
-    assert listing.premium_expires_at is not None
+    assert listing.is_subscription is True
+    assert listing.subscription_expires_at is not None
 
     notifications = db_session.scalars(
         select(Notification.notification_type).where(Notification.user_id == owner.id)
@@ -153,14 +153,14 @@ def test_purchase_failed_payment_does_not_activate_promotion(client, db_session,
     assert payload["payment_status"] == PaymentStatus.FAILED.value
     assert payload["promotion_id"] is None
     assert payload["promotion_status"] is None
-    assert payload["is_premium"] is False
+    assert payload["is_subscription"] is False
 
     promotion_for_listing = db_session.scalar(select(Promotion).where(Promotion.listing_id == listing.id))
     assert promotion_for_listing is None
 
     db_session.refresh(listing)
-    assert listing.is_premium is False
-    assert listing.premium_expires_at is None
+    assert listing.is_subscription is False
+    assert listing.subscription_expires_at is None
 
 
 def test_purchase_requires_owner_and_published_listing_and_active_package(client, db_session, set_current_user):

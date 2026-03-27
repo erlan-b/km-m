@@ -65,7 +65,7 @@ def list_public_user_listings(
     stmt = (
         select(Listing)
         .where(*filters)
-        .order_by(desc(Listing.is_premium), build_owner_listing_order(sort_by))
+        .order_by(desc(Listing.is_subscription), build_owner_listing_order(sort_by))
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

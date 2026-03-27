@@ -411,6 +411,7 @@ export function UsersPage() {
                 <h3>Profile</h3>
                 <p>Name: <strong>{selectedDetail.full_name}</strong></p>
                 <p>Status: <strong>{statusLabel(selectedDetail.account_status)}</strong></p>
+                <p>Subscription: <strong>{selectedDetail.promotion_count > 0 ? "Sub" : "No sub"}</strong></p>
                 <p>Roles: <strong>{selectedDetail.roles.join(", ") || "-"}</strong></p>
                 <p>Language: <strong>{selectedDetail.preferred_language}</strong></p>
               </article>
@@ -424,7 +425,7 @@ export function UsersPage() {
               <article className="dashboard-stat-group">
                 <h3>Commerce</h3>
                 <p>Payments: <strong>{selectedDetail.payment_count}</strong></p>
-                <p>Promotions: <strong>{selectedDetail.promotion_count}</strong></p>
+                <p>Subscriptions: <strong>{selectedDetail.promotion_count}</strong></p>
               </article>
               <article className="dashboard-stat-group">
                 <h3>Timestamps</h3>

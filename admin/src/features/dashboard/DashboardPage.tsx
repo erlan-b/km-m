@@ -97,7 +97,7 @@ export function DashboardPage() {
   const totalUsers = data?.total_users ?? "--";
   const pendingListings = data?.pending_listings ?? "--";
   const totalReports = data?.total_reports ?? "--";
-  const activePromotions = data?.active_promotions ?? "--";
+  const activeSubscriptions = data?.active_promotions ?? "--";
 
   return (
     <section className="module-page">
@@ -127,8 +127,8 @@ export function DashboardPage() {
           <strong>{totalReports}</strong>
         </article>
         <article>
-          <h3>Active Promotions</h3>
-          <strong>{activePromotions}</strong>
+          <h3>Active Subscriptions</h3>
+          <strong>{activeSubscriptions}</strong>
         </article>
       </div>
 
@@ -157,7 +157,7 @@ export function DashboardPage() {
           <article className="dashboard-stat-group">
             <h3>Payments</h3>
             <p>Total payments: <strong>{data?.total_payments ?? "--"}</strong></p>
-            <p>Promo revenue: <strong>{data ? formatRevenue(data.total_revenue_from_promotions) : "--"}</strong></p>
+            <p>Subscription revenue: <strong>{data ? formatRevenue(data.total_revenue_from_promotions) : "--"}</strong></p>
           </article>
         </div>
       </section>

@@ -7,7 +7,7 @@ from app.models.listing import Listing
 from app.models.promotion import Promotion, PromotionStatus
 
 
-def expire_premium_promotions(db: Session, now: datetime | None = None) -> dict[str, int]:
+def expire_subscriptions(db: Session, now: datetime | None = None) -> dict[str, int]:
     run_at = now or datetime.now(timezone.utc).replace(tzinfo=None)
 
     checked = db.scalar(
@@ -44,11 +44,11 @@ def expire_premium_promotions(db: Session, now: datetime | None = None) -> dict[
         if active_count == 0:
             listing = db.scalar(select(Listing).where(Listing.id == listing_id))
             if listing is not None:
-                if listing.is_premium:
+                if listing.is_subscription:
                     updated_listings += 1
-                listing.is_premium = False
-                if listing.premium_expires_at is not None and listing.premium_expires_at <= run_at:
-                    listing.premium_expires_at = None
+                listing.is_subscription = False
+                if listing.subscription_expires_at is not None and listing.subscription_expires_at <= run_at:
+                    listing.subscription_expires_at = None
                 db.add(listing)
 
     db.commit()

@@ -89,8 +89,8 @@ class ListingResponse(BaseModel):
     status: ListingStatus
     view_count: int
     favorite_count: int
-    is_premium: bool
-    premium_expires_at: datetime | None
+    is_subscription: bool
+    subscription_expires_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

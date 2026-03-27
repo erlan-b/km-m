@@ -9,7 +9,7 @@ It implements end-to-end marketplace flows for:
 - listings, media, search, filtering, and owner pages
 - favorites, messaging, attachments, and notifications
 - reports/moderation/audit logs
-- payments and premium promotions
+- payments and subscription promotions
 - localization content management
 - admin operational APIs
 
@@ -48,7 +48,7 @@ Key design points:
 - unique favorite constraint per user/listing
 - role-based and ownership checks on protected operations
 - soft-delete/archival strategy for listings with optional hard-delete for archived records
-- premium activation is tied to successful payment records
+- subscription activation is tied to successful payment records
 
 ## Local Setup
 
@@ -209,7 +209,7 @@ Do not commit real secrets.
 - `POST /api/v1/promotions/purchase`
 - `GET /api/v1/promotions/me`
 - `GET /api/v1/promotions/admin` (filters: status, user, listing, package, target city/category, starts/ends date range)
-- `POST /api/v1/promotions/expire-premium`
+- `POST /api/v1/promotions/expire-subscription`
 - `POST /api/v1/reports`
 - `GET /api/v1/reports/my`
 - `GET /api/v1/reports/admin`
@@ -252,9 +252,9 @@ After running `python db/scripts/seed_demo_users.py`:
 
 - provider integration is mocked via `payment_provider` and `simulate_success`
 - every promotion purchase creates a payment record first
-- promotion and premium flags activate only when payment becomes `successful`
+- promotion and subscription flags activate only when payment becomes `successful`
 - failed payment does not create active promotion state
-- premium duration is package-driven (`duration_days`)
+- subscription duration is package-driven (`duration_days`)
 
 ## Localization Support
 

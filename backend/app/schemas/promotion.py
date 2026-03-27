@@ -52,8 +52,8 @@ class PromotionPurchaseResponse(BaseModel):
     payment_status: PaymentStatus
     promotion_id: int | None = None
     promotion_status: PromotionStatus | None = None
-    is_premium: bool
-    premium_expires_at: datetime | None
+    is_subscription: bool
+    subscription_expires_at: datetime | None
     amount: Decimal
     currency: str
     duration_days: int

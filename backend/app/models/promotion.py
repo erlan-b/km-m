@@ -26,7 +26,7 @@ class Promotion(Base):
         nullable=False,
         index=True,
     )
-    promotion_type: Mapped[str] = mapped_column(String(50), nullable=False, default="premium")
+    promotion_type: Mapped[str] = mapped_column(String(50), nullable=False, default="subscription")
     target_city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     target_category_id: Mapped[int | None] = mapped_column(
         ForeignKey("categories.id", ondelete="SET NULL"),

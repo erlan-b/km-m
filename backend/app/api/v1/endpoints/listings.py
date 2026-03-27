@@ -609,7 +609,7 @@ def list_public_listings(
     stmt = (
         select(Listing)
         .where(*filters)
-        .order_by(desc(Listing.is_premium), build_order_clause(sort_by))
+        .order_by(desc(Listing.is_subscription), build_order_clause(sort_by))
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

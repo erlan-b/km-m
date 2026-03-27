@@ -23,8 +23,6 @@ export function AppRouter() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/payments" element={<ModulePage title="Payments" subtitle="Track provider status, users, listing links and timeline." />} />
-          <Route path="/promotions" element={<ModulePage title="Promotions" subtitle="Monitor active and expired promotions, package controls." />} />
-          <Route path="/localization" element={<ModulePage title="Localization" subtitle="Manage language entries and publication status." />} />
           <Route path="/audit-logs" element={<ModulePage title="Audit Logs" subtitle="Trace moderation actions and operational changes." />} />
         </Route>
       </Route>

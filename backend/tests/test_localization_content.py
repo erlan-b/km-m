@@ -102,12 +102,12 @@ def test_admin_can_manage_localization_entries_and_audit_is_written(client, db_s
     update_response = client.patch(
         f"/api/v1/localization/admin/entries/{entry_id}",
         json={
-            "translations": {"en": "Save", "ru": "Sokhranit izmeneniya", "ky": "Saktap Kaluu"},
+            "translations": {"en": "Save", "ru": "Sokhranit izmeneniya"},
             "description": "Updated label",
         },
     )
     assert update_response.status_code == 200
-    assert update_response.json()["translations"]["ky"] == "Saktap Kaluu"
+    assert update_response.json()["translations"]["ru"] == "Sokhranit izmeneniya"
 
     deactivate_response = client.post(f"/api/v1/localization/admin/entries/{entry_id}/deactivate")
     assert deactivate_response.status_code == 200

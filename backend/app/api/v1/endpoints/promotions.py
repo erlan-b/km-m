@@ -25,7 +25,7 @@ from app.schemas.promotion import (
     PromotionPurchaseResponse,
 )
 from app.services.notification_service import create_notification
-from app.services.promotion_service import expire_premium_promotions as expire_premium_promotions_service
+from app.services.promotion_service import expire_subscriptions
 
 router = APIRouter()
 
@@ -115,8 +115,8 @@ def purchase_promotion(
     if payload.simulate_success:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         effective_start = now
-        if listing.premium_expires_at is not None and listing.premium_expires_at > now:
-            effective_start = listing.premium_expires_at
+        if listing.subscription_expires_at is not None and listing.subscription_expires_at > now:
+            effective_start = listing.subscription_expires_at
 
         effective_end = effective_start + timedelta(days=package.duration_days)
 
@@ -128,7 +128,7 @@ def purchase_promotion(
             listing_id=listing.id,
             user_id=current_user.id,
             promotion_package_id=package.id,
-            promotion_type="premium",
+            promotion_type="subscription",
             target_city=payload.target_city,
             target_category_id=payload.target_category_id,
             starts_at=effective_start,
@@ -139,8 +139,8 @@ def purchase_promotion(
         )
         db.add(promotion)
 
-        listing.is_premium = True
-        listing.premium_expires_at = effective_end
+        listing.is_subscription = True
+        listing.subscription_expires_at = effective_end
         db.add(listing)
 
         create_notification(
@@ -157,7 +157,7 @@ def purchase_promotion(
             user_id=current_user.id,
             notification_type=NotificationType.PROMOTION_ACTIVATED,
             title="Promotion activated",
-            body=f"Your listing is premium for {package.duration_days} day(s).",
+            body=f"Your listing subscription is active for {package.duration_days} day(s).",
             related_entity_type="listing",
             related_entity_id=listing.id,
         )
@@ -176,8 +176,8 @@ def purchase_promotion(
         payment_status=payment.status,
         promotion_id=promotion.id if promotion is not None else None,
         promotion_status=promotion.status if promotion is not None else None,
-        is_premium=listing.is_premium,
-        premium_expires_at=listing.premium_expires_at,
+        is_subscription=listing.is_subscription,
+        subscription_expires_at=listing.subscription_expires_at,
         amount=payment.amount,
         currency=payment.currency,
         duration_days=package.duration_days,
@@ -281,12 +281,12 @@ def list_promotions_admin(
     )
 
 
-@router.post("/expire-premium", response_model=PromotionExpireRunResponse)
-def expire_premium_promotions(
+@router.post("/expire-subscription", response_model=PromotionExpireRunResponse)
+def expire_subscriptions_admin(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin_or_moderator),
 ) -> PromotionExpireRunResponse:
-    stats = expire_premium_promotions_service(db)
+    stats = expire_subscriptions(db)
 
     return PromotionExpireRunResponse(
         checked_promotions=stats["checked_promotions"],

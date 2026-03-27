@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 14
     password_reset_token_expire_minutes: int = 15
     expose_password_reset_token: bool = True
-    supported_languages_csv: str = "en,ru,ky"
+    supported_languages_csv: str = "en,ru"
     media_root: str = "storage"
     message_attachments_subdir: str = "message_attachments"
     message_attachment_max_size_mb: int = 10
