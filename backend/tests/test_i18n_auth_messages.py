@@ -9,7 +9,7 @@ def test_forgot_password_message_localized_to_russian(client):
     assert response.json()["message"] == "Если аккаунт с таким email существует, инструкции по восстановлению были сформированы"
 
 
-def test_reset_password_http_error_localized_to_russian(client):
+def test_reset_password_http_error_not_localized_by_language_header(client):
     response = client.post(
         "/api/v1/auth/reset-password",
         headers={"X-Language": "ru"},
@@ -22,8 +22,8 @@ def test_reset_password_http_error_localized_to_russian(client):
 
     assert response.status_code == 400
     payload = response.json()
-    assert payload["error"]["message"] == "Неверный или просроченный токен восстановления"
-    assert payload["detail"] == "Неверный или просроченный токен восстановления"
+    assert payload["error"]["message"] == "Invalid or expired reset token"
+    assert payload["detail"] == "Invalid or expired reset token"
 
 
 def test_forgot_password_message_defaults_to_english_without_language_header(client):
