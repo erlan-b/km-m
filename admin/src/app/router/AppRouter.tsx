@@ -8,6 +8,7 @@ import { ModulePage } from "../../features/common/ModulePage";
 import { UsersPage } from "../../features/users/UsersPage";
 import { ReportsPage } from "../../features/reports/ReportsPage";
 import { ListingsModerationPage } from "../../features/listings/ListingsModerationPage";
+import { CategoriesPage } from "../../features/categories/CategoriesPage";
 
 export function AppRouter() {
   return (
@@ -20,7 +21,7 @@ export function AppRouter() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/listings" element={<ListingsModerationPage />} />
           <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/categories" element={<ModulePage title="Categories" subtitle="Manage taxonomy, ordering and dynamic attributes." />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/payments" element={<ModulePage title="Payments" subtitle="Track provider status, users, listing links and timeline." />} />
           <Route path="/promotions" element={<ModulePage title="Promotions" subtitle="Monitor active and expired promotions, package controls." />} />
           <Route path="/localization" element={<ModulePage title="Localization" subtitle="Manage language entries and publication status." />} />
