@@ -1,4 +1,5 @@
 from math import ceil
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -263,10 +264,18 @@ def list_public_listings(
     q: str | None = Query(default=None, min_length=1, max_length=120),
     category_id: int | None = Query(default=None, gt=0),
     city: str | None = Query(default=None, min_length=2, max_length=120),
+    min_price: Decimal | None = Query(default=None, ge=0),
+    max_price: Decimal | None = Query(default=None, ge=0),
     transaction_type: TransactionType | None = None,
     sort_by: Literal["newest", "oldest", "price_asc", "price_desc"] = "newest",
     db: Session = Depends(get_db),
 ) -> ListingListResponse:
+    if min_price is not None and max_price is not None and min_price > max_price:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="min_price cannot be greater than max_price",
+        )
+
     filters = [Listing.status == ListingStatus.PUBLISHED]
     if q is not None:
         term = q.strip()
@@ -281,6 +290,10 @@ def list_public_listings(
         filters.append(Listing.category_id == category_id)
     if city is not None:
         filters.append(Listing.city.ilike(f"%{city}%"))
+    if min_price is not None:
+        filters.append(Listing.price >= min_price)
+    if max_price is not None:
+        filters.append(Listing.price <= max_price)
     if transaction_type is not None:
         filters.append(Listing.transaction_type == transaction_type)
 

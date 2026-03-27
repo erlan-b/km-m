@@ -74,7 +74,7 @@ uvicorn app.main:app --reload --port 8000
 - `PATCH /api/v1/listings/{listing_id}`
 - `PATCH /api/v1/listings/{listing_id}/status`
 - `PATCH /api/v1/listings/{listing_id}/moderation`
-- `GET /api/v1/listings` (supports `q` for title/description keyword search)
+- `GET /api/v1/listings` (supports `q` for title/description keyword search and `min_price`/`max_price` range filters)
 - `GET /api/v1/listings/{listing_id}`
 - `GET /api/v1/listing-media/listings/{listing_id}`
 - `GET /api/v1/listing-media/listings/{listing_id}/my`
