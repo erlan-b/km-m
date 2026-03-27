@@ -26,3 +26,39 @@ class AdminUserStatusResponse(BaseModel):
     account_status: AccountStatus
     updated_at: datetime
     message: str
+
+
+class AdminUserListItem(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    preferred_language: str
+    account_status: AccountStatus
+    roles: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+class AdminUserListResponse(BaseModel):
+    items: list[AdminUserListItem]
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+
+
+class AdminUserDetailResponse(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    preferred_language: str
+    account_status: AccountStatus
+    roles: list[str]
+    created_at: datetime
+    updated_at: datetime
+    listing_count: int
+    active_listing_count: int
+    payment_count: int
+    promotion_count: int
+    report_count: int
+    conversation_count: int
