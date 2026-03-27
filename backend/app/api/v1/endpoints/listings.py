@@ -125,6 +125,13 @@ def apply_listing_update_payload(listing: Listing, payload: ListingUpdateRequest
             setattr(listing, field_name, field_value)
 
 
+def require_listing_owner_or_admin_like(*, listing: Listing, current_user: User) -> bool:
+    is_admin_like = user_has_role(current_user, {"admin", "moderator", "superadmin"})
+    if listing.owner_id != current_user.id and not is_admin_like:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+    return is_admin_like
+
+
 @router.post("", response_model=ListingResponse, status_code=status.HTTP_201_CREATED)
 def create_listing(
     payload: ListingCreateRequest,
@@ -207,9 +214,7 @@ def update_listing(
     if listing is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
 
-    is_admin_like = user_has_role(current_user, {"admin", "moderator", "superadmin"})
-    if listing.owner_id != current_user.id and not is_admin_like:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+    is_admin_like = require_listing_owner_or_admin_like(listing=listing, current_user=current_user)
 
     if current_user.account_status != AccountStatus.ACTIVE and not is_admin_like:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
@@ -234,6 +239,78 @@ def update_listing(
     db.commit()
     db.refresh(listing)
     return ListingResponse.model_validate(listing)
+
+
+@router.delete("/{listing_id}", response_model=ListingStatusUpdateResponse)
+def archive_listing(
+    listing_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ListingStatusUpdateResponse:
+    listing = db.scalar(select(Listing).where(Listing.id == listing_id))
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+
+    require_listing_owner_or_admin_like(listing=listing, current_user=current_user)
+
+    if listing.status == ListingStatus.ARCHIVED:
+        return ListingStatusUpdateResponse(listing_id=listing.id, status=listing.status)
+
+    listing.status = ListingStatus.ARCHIVED
+    db.add(listing)
+    db.commit()
+    db.refresh(listing)
+
+    return ListingStatusUpdateResponse(listing_id=listing.id, status=listing.status)
+
+
+@router.post("/{listing_id}/restore", response_model=ListingStatusUpdateResponse)
+def restore_archived_listing(
+    listing_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ListingStatusUpdateResponse:
+    listing = db.scalar(select(Listing).where(Listing.id == listing_id))
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+
+    require_listing_owner_or_admin_like(listing=listing, current_user=current_user)
+
+    if listing.status != ListingStatus.ARCHIVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only archived listings can be restored",
+        )
+
+    # Restored listings go back to moderation queue before becoming public again.
+    listing.status = ListingStatus.PENDING_REVIEW
+    db.add(listing)
+    db.commit()
+    db.refresh(listing)
+
+    return ListingStatusUpdateResponse(listing_id=listing.id, status=listing.status)
+
+
+@router.delete("/{listing_id}/hard", status_code=status.HTTP_204_NO_CONTENT)
+def hard_delete_archived_listing(
+    listing_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    listing = db.scalar(select(Listing).where(Listing.id == listing_id))
+    if listing is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+
+    require_listing_owner_or_admin_like(listing=listing, current_user=current_user)
+
+    if listing.status != ListingStatus.ARCHIVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only archived listings can be permanently deleted",
+        )
+
+    db.delete(listing)
+    db.commit()
 
 
 @router.patch("/{listing_id}/status", response_model=ListingStatusUpdateResponse)
