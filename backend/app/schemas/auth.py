@@ -22,6 +22,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 
@@ -40,3 +41,48 @@ class UpdateLanguageRequest(BaseModel):
 
 class SupportedLanguagesResponse(BaseModel):
     languages: list[str]
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(min_length=20, max_length=4096)
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str = Field(min_length=20, max_length=4096)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    reset_token: str | None = None
+
+
+class ResetPasswordRequest(BaseModel):
+    reset_token: str = Field(min_length=20, max_length=4096)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_matching_passwords(self) -> "ResetPasswordRequest":
+        if self.new_password != self.confirm_password:
+            raise ValueError("new_password and confirm_password must match")
+        return self
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_matching_passwords(self) -> "ChangePasswordRequest":
+        if self.new_password != self.confirm_password:
+            raise ValueError("new_password and confirm_password must match")
+        return self
+
+
+class AuthMessageResponse(BaseModel):
+    message: str
