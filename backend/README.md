@@ -48,6 +48,7 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/auth/me`
 - `GET /api/v1/auth/languages`
 - `PATCH /api/v1/auth/me/language`
+- `GET /api/v1/admin/audit-logs`
 - `GET /api/v1/categories`
 - `GET /api/v1/categories/admin`
 - `POST /api/v1/categories`
@@ -65,6 +66,7 @@ uvicorn app.main:app --reload --port 8000
 - `DELETE /api/v1/favorites/{listing_id}`
 - `GET /api/v1/favorites`
 - `GET /api/v1/payments/me`
+- `GET /api/v1/payments/admin`
 - `GET /api/v1/promotions/packages`
 - `POST /api/v1/promotions/packages`
 - `POST /api/v1/promotions/purchase`

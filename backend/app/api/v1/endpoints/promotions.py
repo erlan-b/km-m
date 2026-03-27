@@ -23,6 +23,7 @@ from app.schemas.promotion import (
     PromotionPurchaseRequest,
     PromotionPurchaseResponse,
 )
+from app.services.promotion_service import expire_premium_promotions as expire_premium_promotions_service
 
 router = APIRouter()
 
@@ -200,52 +201,10 @@ def expire_premium_promotions(
     db: Session = Depends(get_db),
     _: User = Depends(require_admin_or_moderator),
 ) -> PromotionExpireRunResponse:
-    now = datetime.utcnow()
-    checked = db.scalar(
-        select(func.count())
-        .select_from(Promotion)
-        .where(Promotion.status == PromotionStatus.ACTIVE)
-    ) or 0
-
-    to_expire = db.scalars(
-        select(Promotion).where(
-            Promotion.status == PromotionStatus.ACTIVE,
-            Promotion.ends_at <= now,
-        )
-    ).all()
-
-    listing_ids = set[int]()
-    for promotion in to_expire:
-        promotion.status = PromotionStatus.EXPIRED
-        listing_ids.add(promotion.listing_id)
-        db.add(promotion)
-
-    updated_listings = 0
-    for listing_id in listing_ids:
-        active_count = db.scalar(
-            select(func.count())
-            .select_from(Promotion)
-            .where(
-                Promotion.listing_id == listing_id,
-                Promotion.status == PromotionStatus.ACTIVE,
-                Promotion.ends_at > now,
-            )
-        ) or 0
-
-        if active_count == 0:
-            listing = db.scalar(select(Listing).where(Listing.id == listing_id))
-            if listing is not None:
-                if listing.is_premium:
-                    updated_listings += 1
-                listing.is_premium = False
-                if listing.premium_expires_at is not None and listing.premium_expires_at <= now:
-                    listing.premium_expires_at = None
-                db.add(listing)
-
-    db.commit()
+    stats = expire_premium_promotions_service(db)
 
     return PromotionExpireRunResponse(
-        checked_promotions=checked,
-        expired_promotions=len(to_expire),
-        updated_listings=updated_listings,
+        checked_promotions=stats["checked_promotions"],
+        expired_promotions=stats["expired_promotions"],
+        updated_listings=stats["updated_listings"],
     )
