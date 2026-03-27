@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 from typing import TYPE_CHECKING
 
@@ -38,7 +38,7 @@ class Message(Base):
     )
     text_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
-    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

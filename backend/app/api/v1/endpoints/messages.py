@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from math import ceil
 from pathlib import Path
 
@@ -119,7 +119,7 @@ def send_text_message(
     )
     db.add(message)
 
-    conversation.last_message_at = datetime.utcnow()
+    conversation.last_message_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(conversation)
 
     other_participant_id = get_other_participant_id(conversation, current_user.id)
@@ -208,7 +208,7 @@ def send_message_with_optional_attachments(
                 )
             )
 
-        conversation.last_message_at = datetime.utcnow()
+        conversation.last_message_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.add(conversation)
 
         other_participant_id = get_other_participant_id(conversation, current_user.id)

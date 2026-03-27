@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -113,7 +113,7 @@ def purchase_promotion(
 
     promotion: Promotion | None = None
     if payload.simulate_success:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         effective_start = now
         if listing.premium_expires_at is not None and listing.premium_expires_at > now:
             effective_start = listing.premium_expires_at

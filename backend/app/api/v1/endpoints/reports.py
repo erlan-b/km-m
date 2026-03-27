@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -222,7 +222,7 @@ def resolve_report(
     report.status = ReportStatus.RESOLVED if action == "resolve" else ReportStatus.DISMISSED
     report.resolution_note = payload.resolution_note
     report.reviewed_by_admin_id = admin_user.id
-    report.reviewed_at = datetime.utcnow()
+    report.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
     db.add(report)
 
     write_audit_log(

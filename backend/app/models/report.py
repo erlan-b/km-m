@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
@@ -55,5 +55,5 @@ class Report(Base):
         nullable=True,
         index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

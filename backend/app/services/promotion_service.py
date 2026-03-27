@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -8,7 +8,7 @@ from app.models.promotion import Promotion, PromotionStatus
 
 
 def expire_premium_promotions(db: Session, now: datetime | None = None) -> dict[str, int]:
-    run_at = now or datetime.utcnow()
+    run_at = now or datetime.now(timezone.utc).replace(tzinfo=None)
 
     checked = db.scalar(
         select(func.count())

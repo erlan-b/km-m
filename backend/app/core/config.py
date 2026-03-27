@@ -27,6 +27,17 @@ class Settings(BaseSettings):
     listing_media_max_size_mb: int = 10
     listing_media_max_files_per_listing: int = 20
     listing_media_allowed_mime_csv: str = "image/jpeg,image/png,image/webp"
+    cors_allowed_origins_csv: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173"
+    cors_allowed_methods_csv: str = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    cors_allowed_headers_csv: str = "*"
+    cors_allow_credentials: bool = True
+    trusted_hosts_csv: str = "localhost,127.0.0.1,testserver"
+    gzip_minimum_size: int = 500
+    enable_rate_limit: bool = True
+    auth_rate_limit_requests: int = 20
+    auth_rate_limit_window_seconds: int = 60
+    sensitive_rate_limit_requests: int = 60
+    sensitive_rate_limit_window_seconds: int = 60
 
     db_host: str = "127.0.0.1"
     db_port: int = 3306
@@ -43,7 +54,24 @@ class Settings(BaseSettings):
 
     @property
     def supported_languages(self) -> list[str]:
-        return [lang.strip() for lang in self.supported_languages_csv.split(",") if lang.strip()]
+        return self._split_csv(self.supported_languages_csv)
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        return self._split_csv(self.cors_allowed_origins_csv)
+
+    @property
+    def cors_allowed_methods(self) -> list[str]:
+        return self._split_csv(self.cors_allowed_methods_csv)
+
+    @property
+    def cors_allowed_headers(self) -> list[str]:
+        return self._split_csv(self.cors_allowed_headers_csv)
+
+    @property
+    def trusted_hosts(self) -> list[str]:
+        hosts = self._split_csv(self.trusted_hosts_csv)
+        return hosts or ["*"]
 
     @property
     def message_attachment_allowed_mime_types(self) -> list[str]:
@@ -60,6 +88,10 @@ class Settings(BaseSettings):
             for mime_type in self.listing_media_allowed_mime_csv.split(",")
             if mime_type.strip()
         ]
+
+    @staticmethod
+    def _split_csv(raw_value: str) -> list[str]:
+        return [item.strip() for item in raw_value.split(",") if item.strip()]
 
 
 @lru_cache

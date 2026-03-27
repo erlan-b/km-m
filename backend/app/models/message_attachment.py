@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, String
@@ -24,6 +24,6 @@ class MessageAttachment(Base):
     mime_type: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     file_size: Mapped[int] = mapped_column(nullable=False)
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     message: Mapped["Message"] = relationship("Message", back_populates="attachments")

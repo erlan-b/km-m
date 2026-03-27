@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, Boolean, DateTime, String
@@ -19,6 +19,6 @@ class Category(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     display_order: Mapped[int] = mapped_column(default=0, nullable=False)
     attributes_schema: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
 
     listings: Mapped[list["Listing"]] = relationship("Listing", back_populates="category")

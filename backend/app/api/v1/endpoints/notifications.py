@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -78,7 +78,7 @@ def mark_notification_read(
 
     if not notification.is_read:
         notification.is_read = True
-        notification.read_at = datetime.utcnow()
+        notification.read_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.add(notification)
         db.commit()
         db.refresh(notification)

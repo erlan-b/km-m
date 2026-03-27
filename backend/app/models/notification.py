@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text
@@ -36,5 +36,5 @@ class Notification(Base):
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
     related_entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     related_entity_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

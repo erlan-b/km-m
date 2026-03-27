@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
@@ -59,7 +59,7 @@ def get_admin_dashboard(
     ) or 0
 
     return AdminDashboardResponse(
-        generated_at=datetime.utcnow(),
+        generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
         total_users=total_users,
         active_users=active_users,
         blocked_users=blocked_users,
