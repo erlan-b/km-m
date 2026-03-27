@@ -43,6 +43,23 @@ tmp/
 temp/
 backend/storage/
 
+# Admin frontend (Vite/React)
+admin/node_modules/
+admin/.pnpm-store/
+admin/.vite/
+admin/dist/
+admin/dist-ssr/
+admin/coverage/
+admin/*.local
+admin/.env
+admin/.env.*
+!admin/.env.example
+admin/npm-debug.log*
+admin/yarn-debug.log*
+admin/yarn-error.log*
+admin/pnpm-debug.log*
+
 # Project-specific non-runtime assets
 start-t/
 development-stages-and-rules.md
+admin-development-stages-and-rules.md
