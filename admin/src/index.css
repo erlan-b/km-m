@@ -15,6 +15,7 @@
   --bg-page: #f7f7f5;
   --bg-surface: #f5f2eb;
   --bg-muted: #efede8;
+  --bg-soft-hover: #ebe5d9;
   --white-soft: #f3efe6;
   --white-text-soft: #f2ece0;
   --text-main: #111111;
@@ -42,7 +43,7 @@ body {
 }
 
 .btn {
-  border: 1px solid var(--border);
+  border: 1px solid var(--text-main);
   border-radius: var(--radius);
   height: 36px;
   padding: 0 14px;
@@ -54,7 +55,7 @@ body {
   text-decoration: none;
   vertical-align: middle;
   cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .btn:focus-visible,
@@ -72,16 +73,25 @@ textarea:focus-visible {
 }
 
 .btn-primary:hover {
-  background: var(--accent-hover);
+  background: var(--bg-muted);
+  color: var(--text-main);
+  border-color: var(--text-main);
+}
+
+.btn-primary:active {
+  background: var(--bg-muted);
+  color: var(--text-main);
 }
 
 .btn-ghost {
   background: var(--bg-surface);
   color: var(--text-main);
+  border-color: var(--text-main);
 }
 
 .btn-ghost:hover {
   background: var(--bg-muted);
+  border-color: var(--text-main);
 }
 
 .auth-shell {
@@ -201,6 +211,8 @@ textarea:focus-visible {
 }
 
 .sidebar-link-active:hover {
+  background: var(--bg-muted);
+  border-color: var(--border);
   color: var(--text-main);
 }
 
