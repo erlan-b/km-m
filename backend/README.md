@@ -62,6 +62,9 @@ uvicorn app.main:app --reload --port 8000
 - `PATCH /api/v1/listings/{listing_id}/moderation`
 - `GET /api/v1/listings`
 - `GET /api/v1/listings/{listing_id}`
+- `GET /api/v1/notifications`
+- `GET /api/v1/notifications/unread-count`
+- `POST /api/v1/notifications/{notification_id}/read`
 - `POST /api/v1/favorites/{listing_id}`
 - `DELETE /api/v1/favorites/{listing_id}`
 - `GET /api/v1/favorites`

@@ -9,6 +9,7 @@ from app.api.deps import get_current_user, require_admin_or_moderator
 from app.db.session import get_db
 from app.models.category import Category
 from app.models.listing import Listing, ListingStatus
+from app.models.notification import NotificationType
 from app.models.payment import Payment, PaymentStatus
 from app.models.promotion import Promotion, PromotionStatus
 from app.models.promotion_package import PromotionPackage
@@ -23,6 +24,7 @@ from app.schemas.promotion import (
     PromotionPurchaseRequest,
     PromotionPurchaseResponse,
 )
+from app.services.notification_service import create_notification
 from app.services.promotion_service import expire_premium_promotions as expire_premium_promotions_service
 
 router = APIRouter()
@@ -140,6 +142,25 @@ def purchase_promotion(
         listing.is_premium = True
         listing.premium_expires_at = effective_end
         db.add(listing)
+
+        create_notification(
+            db,
+            user_id=current_user.id,
+            notification_type=NotificationType.PAYMENT_SUCCESSFUL,
+            title="Payment successful",
+            body=f"Payment for package '{package.title}' completed successfully.",
+            related_entity_type="payment",
+            related_entity_id=payment.id,
+        )
+        create_notification(
+            db,
+            user_id=current_user.id,
+            notification_type=NotificationType.PROMOTION_ACTIVATED,
+            title="Promotion activated",
+            body=f"Your listing is premium for {package.duration_days} day(s).",
+            related_entity_type="listing",
+            related_entity_id=listing.id,
+        )
     else:
         payment.status = PaymentStatus.FAILED
 

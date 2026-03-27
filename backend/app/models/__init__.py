@@ -2,6 +2,7 @@ from app.models.admin_audit_log import AdminAuditLog
 from app.models.category import Category
 from app.models.favorite import Favorite
 from app.models.listing import Listing, ListingStatus, TransactionType
+from app.models.notification import Notification, NotificationType
 from app.models.payment import Payment, PaymentStatus
 from app.models.promotion import Promotion, PromotionStatus
 from app.models.promotion_package import PromotionPackage
@@ -16,6 +17,8 @@ __all__ = [
 	"Favorite",
 	"Listing",
 	"ListingStatus",
+	"Notification",
+	"NotificationType",
 	"Payment",
 	"PaymentStatus",
 	"Promotion",

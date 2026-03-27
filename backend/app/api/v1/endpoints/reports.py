@@ -9,6 +9,7 @@ from app.api.deps import get_current_user, require_admin_or_moderator
 from app.db.session import get_db
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.listing import Listing, ListingStatus
+from app.models.notification import NotificationType
 from app.models.report import Report, ReportStatus, ReportTargetType
 from app.models.user import AccountStatus, User
 from app.schemas.report import (
@@ -17,6 +18,7 @@ from app.schemas.report import (
     ReportResolveRequest,
     ReportResponse,
 )
+from app.services.notification_service import create_notification
 
 router = APIRouter()
 
@@ -230,6 +232,16 @@ def resolve_report(
         target_type="report",
         target_id=report.id,
         details=payload.resolution_note,
+    )
+
+    create_notification(
+        db,
+        user_id=report.reporter_user_id,
+        notification_type=NotificationType.REPORT_STATUS_CHANGED,
+        title="Report status updated",
+        body=f"Your report #{report.id} is now {report.status.value}.",
+        related_entity_type="report",
+        related_entity_id=report.id,
     )
 
     db.commit()
