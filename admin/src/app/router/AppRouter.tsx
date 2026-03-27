@@ -5,6 +5,7 @@ import { AdminLayout } from "../layout/AdminLayout";
 import { LoginPage } from "../../features/auth/LoginPage";
 import { DashboardPage } from "../../features/dashboard/DashboardPage";
 import { ModulePage } from "../../features/common/ModulePage";
+import { UsersPage } from "../../features/users/UsersPage";
 
 export function AppRouter() {
   return (
@@ -14,7 +15,7 @@ export function AppRouter() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AdminLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/users" element={<ModulePage title="Users" subtitle="Search users, inspect profile, suspend and unsuspend." />} />
+          <Route path="/users" element={<UsersPage />} />
           <Route path="/listings" element={<ModulePage title="Listings Moderation" subtitle="Moderation queue with approve, reject and archive actions." />} />
           <Route path="/reports" element={<ModulePage title="Reports" subtitle="Review reports, inspect targets and resolve or dismiss." />} />
           <Route path="/categories" element={<ModulePage title="Categories" subtitle="Manage taxonomy, ordering and dynamic attributes." />} />

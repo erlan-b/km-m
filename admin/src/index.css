@@ -390,6 +390,117 @@ input:focus-visible {
   font-size: 16px;
 }
 
+.users-table-head {
+  align-items: center;
+}
+
+.users-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.users-table th,
+.users-table td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.users-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+  background: var(--bg-muted);
+}
+
+.users-empty-cell {
+  text-align: center;
+  color: var(--text-subtle);
+  padding: 16px 12px;
+}
+
+.users-name-cell {
+  display: grid;
+  gap: 2px;
+}
+
+.users-name-cell strong {
+  font-size: 14px;
+}
+
+.users-name-cell span {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.users-status-badge {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.users-status-active {
+  background: #eaf8e9;
+  border-color: #a7d7a3;
+}
+
+.users-status-blocked {
+  background: #ffe9e9;
+  border-color: #d6a0a0;
+}
+
+.users-status-pending_verification {
+  background: #fff6df;
+  border-color: #d8c18d;
+}
+
+.users-status-deactivated {
+  background: #efefef;
+  border-color: #c9c9c9;
+}
+
+.users-actions-cell {
+  display: flex;
+  gap: 8px;
+}
+
+.users-filter-select {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  background: #ffffff;
+  color: var(--text-main);
+}
+
+.users-page-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+
+.users-detail-body {
+  padding: 12px;
+}
+
+.users-detail-body > p {
+  margin: 0;
+  color: var(--text-subtle);
+}
+
 .page-center {
   min-height: 100vh;
   display: grid;
