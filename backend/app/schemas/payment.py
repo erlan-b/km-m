@@ -12,7 +12,6 @@ class PaymentHistoryItem(BaseModel):
     id: int
     user_id: int
     listing_id: int | None
-    promotion_package_id: int | None
     amount: Decimal
     currency: str
     status: PaymentStatus

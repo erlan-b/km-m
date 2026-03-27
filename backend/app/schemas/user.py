@@ -59,6 +59,6 @@ class AdminUserDetailResponse(BaseModel):
     listing_count: int
     active_listing_count: int
     payment_count: int
-    promotion_count: int
+    subscription_count: int
     report_count: int
     conversation_count: int

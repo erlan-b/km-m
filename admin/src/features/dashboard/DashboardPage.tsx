@@ -16,8 +16,8 @@ type AdminDashboardResponse = {
   total_messages: number;
   total_reports: number;
   total_payments: number;
-  total_revenue_from_promotions: string | number;
-  active_promotions: number;
+  total_subscription_revenue: string | number;
+  active_subscriptions: number;
 };
 
 function formatRevenue(value: string | number): string {
@@ -97,7 +97,7 @@ export function DashboardPage() {
   const totalUsers = data?.total_users ?? "--";
   const pendingListings = data?.pending_listings ?? "--";
   const totalReports = data?.total_reports ?? "--";
-  const activeSubscriptions = data?.active_promotions ?? "--";
+  const activeSubscriptions = data?.active_subscriptions ?? "--";
 
   return (
     <section className="module-page">
@@ -157,7 +157,7 @@ export function DashboardPage() {
           <article className="dashboard-stat-group">
             <h3>Payments</h3>
             <p>Total payments: <strong>{data?.total_payments ?? "--"}</strong></p>
-            <p>Subscription revenue: <strong>{data ? formatRevenue(data.total_revenue_from_promotions) : "--"}</strong></p>
+            <p>Subscription revenue: <strong>{data ? formatRevenue(data.total_subscription_revenue) : "--"}</strong></p>
           </article>
         </div>
       </section>

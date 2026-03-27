@@ -122,7 +122,6 @@ def build_default_rate_limit_rules(settings: Settings) -> list[RateLimitRule]:
             path_prefixes=(
                 f"{api_prefix}/reports",
                 f"{api_prefix}/messages",
-                f"{api_prefix}/promotions/purchase",
                 f"{api_prefix}/admin",
             ),
             methods=("POST", "PUT", "PATCH", "DELETE"),

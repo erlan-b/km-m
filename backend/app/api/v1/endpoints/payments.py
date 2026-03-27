@@ -54,7 +54,6 @@ def list_payments_admin(
     status_filter: PaymentStatus | None = None,
     user_id: int | None = Query(default=None, gt=0),
     listing_id: int | None = Query(default=None, gt=0),
-    promotion_package_id: int | None = Query(default=None, gt=0),
     payment_provider: str | None = Query(default=None, min_length=2, max_length=50),
     created_from: datetime | None = None,
     created_to: datetime | None = None,
@@ -75,8 +74,6 @@ def list_payments_admin(
         filters.append(Payment.user_id == user_id)
     if listing_id is not None:
         filters.append(Payment.listing_id == listing_id)
-    if promotion_package_id is not None:
-        filters.append(Payment.promotion_package_id == promotion_package_id)
     if payment_provider is not None:
         filters.append(Payment.payment_provider == payment_provider)
     if created_from is not None:

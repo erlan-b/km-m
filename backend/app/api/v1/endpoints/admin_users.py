@@ -10,7 +10,6 @@ from app.db.session import get_db
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.listing import Listing, ListingStatus
 from app.models.payment import Payment
-from app.models.promotion import Promotion
 from app.models.report import Report
 from app.models.role import Role
 from app.models.user import AccountStatus, User
@@ -124,8 +123,10 @@ def get_user_admin_detail(
         .where(Listing.owner_id == target_user.id, Listing.status == ListingStatus.PUBLISHED)
     ) or 0
     payment_count = db.scalar(select(func.count()).select_from(Payment).where(Payment.user_id == target_user.id)) or 0
-    promotion_count = db.scalar(
-        select(func.count()).select_from(Promotion).where(Promotion.user_id == target_user.id)
+    subscription_count = db.scalar(
+        select(func.count())
+        .select_from(Listing)
+        .where(Listing.owner_id == target_user.id, Listing.is_subscription.is_(True))
     ) or 0
     report_count = db.scalar(
         select(func.count()).select_from(Report).where(Report.reporter_user_id == target_user.id)
@@ -153,7 +154,7 @@ def get_user_admin_detail(
         listing_count=listing_count,
         active_listing_count=active_listing_count,
         payment_count=payment_count,
-        promotion_count=promotion_count,
+        subscription_count=subscription_count,
         report_count=report_count,
         conversation_count=conversation_count,
     )
