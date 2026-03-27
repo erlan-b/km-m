@@ -55,6 +55,8 @@ uvicorn app.main:app --reload --port 8000
 - `PATCH /api/v1/auth/me/language`
 - `GET /api/v1/admin/dashboard`
 - `GET /api/v1/admin/audit-logs`
+- `POST /api/v1/admin/users/{user_id}/suspend`
+- `POST /api/v1/admin/users/{user_id}/unsuspend`
 - `GET /api/v1/admin/messages/conversations`
 - `GET /api/v1/admin/messages/conversations/{conversation_id}`
 - `GET /api/v1/admin/messages?conversation_id=...`

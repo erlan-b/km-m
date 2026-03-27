@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import admin_audit_logs
 from app.api.v1.endpoints import admin_dashboard
 from app.api.v1.endpoints import admin_messages
+from app.api.v1.endpoints import admin_users
 from app.api.v1.endpoints import attachments
 from app.api.v1.endpoints import auth
 from app.api.v1.endpoints import categories
@@ -23,6 +24,7 @@ api_router.include_router(health.router, prefix="/health", tags=["Health"])
 api_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
 api_router.include_router(admin_dashboard.router, prefix="/admin/dashboard", tags=["Admin Dashboard"])
 api_router.include_router(admin_audit_logs.router, prefix="/admin/audit-logs", tags=["Admin Audit Logs"])
+api_router.include_router(admin_users.router, prefix="/admin/users", tags=["Admin Users"])
 api_router.include_router(admin_messages.router, prefix="/admin/messages", tags=["Admin Messages"])
 api_router.include_router(categories.router, prefix="/categories", tags=["Categories"])
 api_router.include_router(listings.router, prefix="/listings", tags=["Listings"])
