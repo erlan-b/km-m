@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -39,11 +40,63 @@ type AuthContextValue = {
   isAdminLike: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  authFetch: (path: string, init?: RequestInit) => Promise<Response>;
 };
 
 const STORAGE_KEY = "km_admin_auth";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+type ApiErrorEnvelope = {
+  error?: {
+    code?: string;
+    message?: string;
+  };
+  detail?: unknown;
+};
+
+class ApiHttpError extends Error {
+  status: number;
+  code?: string;
+  detail?: unknown;
+
+  constructor(status: number, message: string, code?: string, detail?: unknown) {
+    super(message);
+    this.name = "ApiHttpError";
+    this.status = status;
+    this.code = code;
+    this.detail = detail;
+  }
+}
+
+function isApiHttpError(error: unknown): error is ApiHttpError {
+  return error instanceof ApiHttpError;
+}
+
+function toApiUrl(path: string): string {
+  const isAbsolute = path.startsWith("http://") || path.startsWith("https://");
+  if (isAbsolute) {
+    return path;
+  }
+
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${API_ROOT}${normalized}`;
+}
+
+async function buildApiError(response: Response, fallback: string): Promise<ApiHttpError> {
+  let payload: ApiErrorEnvelope | null = null;
+
+  try {
+    payload = (await response.json()) as ApiErrorEnvelope;
+  } catch {
+    payload = null;
+  }
+
+  const detailMessage = typeof payload?.detail === "string" ? payload.detail : undefined;
+  const message = payload?.error?.message ?? detailMessage ?? fallback;
+
+  return new ApiHttpError(response.status, message, payload?.error?.code, payload?.detail);
+}
 
 function normalizeRoles(rawRoles: string[]): Role[] {
   const mapped = rawRoles.map((role) => role.toLowerCase()).filter(Boolean);
@@ -81,7 +134,7 @@ function persistState(state: AuthState): void {
 }
 
 async function fetchMe(accessToken: string): Promise<MePayload> {
-  const response = await fetch(`${API_ROOT}/auth/me`, {
+  const response = await fetch(toApiUrl("/auth/me"), {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -89,7 +142,7 @@ async function fetchMe(accessToken: string): Promise<MePayload> {
   });
 
   if (!response.ok) {
-    throw new Error("Failed to load current user");
+    throw await buildApiError(response, "Failed to load current user");
   }
 
   return (await response.json()) as MePayload;
@@ -98,12 +151,63 @@ async function fetchMe(accessToken: string): Promise<MePayload> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>(() => readStoredState());
   const [isLoading, setIsLoading] = useState(true);
+  const refreshInFlightRef = useRef<Promise<AuthState | null> | null>(null);
+
+  const applyState = useCallback((nextState: AuthState) => {
+    setAuthState(nextState);
+    persistState(nextState);
+  }, []);
 
   const clearState = useCallback(() => {
     const emptyState: AuthState = { accessToken: null, refreshToken: null, email: null, roles: [] };
-    setAuthState(emptyState);
-    persistState(emptyState);
-  }, []);
+    applyState(emptyState);
+  }, [applyState]);
+
+  const refreshSession = useCallback(async (): Promise<AuthState | null> => {
+    const current = readStoredState();
+    if (!current.refreshToken) {
+      clearState();
+      return null;
+    }
+
+    if (refreshInFlightRef.current) {
+      return refreshInFlightRef.current;
+    }
+
+    refreshInFlightRef.current = (async () => {
+      try {
+        const refreshResponse = await fetch(toApiUrl("/auth/refresh"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: current.refreshToken }),
+        });
+
+        if (!refreshResponse.ok) {
+          throw await buildApiError(refreshResponse, "Session refresh failed");
+        }
+
+        const refreshedTokens = (await refreshResponse.json()) as LoginPayload;
+        const me = await fetchMe(refreshedTokens.access_token);
+
+        const nextState: AuthState = {
+          accessToken: refreshedTokens.access_token,
+          refreshToken: refreshedTokens.refresh_token,
+          email: me.email,
+          roles: normalizeRoles(me.roles ?? []),
+        };
+
+        applyState(nextState);
+        return nextState;
+      } catch {
+        clearState();
+        return null;
+      } finally {
+        refreshInFlightRef.current = null;
+      }
+    })();
+
+    return refreshInFlightRef.current;
+  }, [applyState, clearState]);
 
   const hydrate = useCallback(async () => {
     const stored = readStoredState();
@@ -119,29 +223,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: me.email,
         roles: normalizeRoles(me.roles ?? []),
       };
-      setAuthState(nextState);
-      persistState(nextState);
-    } catch {
+      applyState(nextState);
+    } catch (error) {
+      if (isApiHttpError(error) && error.status === 401 && stored.refreshToken) {
+        const refreshed = await refreshSession();
+        if (refreshed) {
+          return;
+        }
+      }
       clearState();
     } finally {
       setIsLoading(false);
     }
-  }, [clearState]);
+  }, [applyState, clearState, refreshSession]);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const response = await fetch(`${API_ROOT}/auth/login`, {
+    const response = await fetch(toApiUrl("/auth/login"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
 
     if (!response.ok) {
-      const message = response.status === 401 ? "Invalid credentials" : "Login failed";
-      throw new Error(message);
+      throw await buildApiError(response, response.status === 401 ? "Invalid credentials" : "Login failed");
     }
 
     const payload = (await response.json()) as LoginPayload;
@@ -154,23 +262,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roles: normalizeRoles(me.roles ?? []),
     };
 
-    setAuthState(nextState);
-    persistState(nextState);
-  }, []);
+    applyState(nextState);
+  }, [applyState]);
 
   const logout = useCallback(async () => {
-    if (authState.refreshToken) {
-      await fetch(`${API_ROOT}/auth/logout`, {
+    const current = readStoredState();
+
+    if (current.refreshToken) {
+      await fetch(toApiUrl("/auth/logout"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: authState.refreshToken }),
+        body: JSON.stringify({ refresh_token: current.refreshToken }),
       }).catch(() => {
         return undefined;
       });
     }
 
     clearState();
-  }, [authState.refreshToken, clearState]);
+  }, [clearState]);
+
+  const authFetch = useCallback(
+    async (path: string, init?: RequestInit): Promise<Response> => {
+      const withToken = async (accessToken: string): Promise<Response> => {
+        const headers = new Headers(init?.headers);
+        headers.set("Authorization", `Bearer ${accessToken}`);
+        return fetch(toApiUrl(path), {
+          ...init,
+          headers,
+        });
+      };
+
+      const current = readStoredState();
+      if (!current.accessToken) {
+        throw new Error("Session expired. Please sign in again.");
+      }
+
+      let response = await withToken(current.accessToken);
+      if (response.status !== 401) {
+        return response;
+      }
+
+      const refreshed = await refreshSession();
+      if (!refreshed?.accessToken) {
+        throw new Error("Session expired. Please sign in again.");
+      }
+
+      response = await withToken(refreshed.accessToken);
+      if (response.status === 401) {
+        clearState();
+        throw new Error("Session expired. Please sign in again.");
+      }
+
+      return response;
+    },
+    [clearState, refreshSession],
+  );
 
   const value = useMemo<AuthContextValue>(() => {
     const isAuthenticated = Boolean(authState.accessToken);
@@ -184,8 +330,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdminLike,
       login,
       logout,
+      authFetch,
     };
-  }, [authState.accessToken, authState.email, authState.roles, isLoading, login, logout]);
+  }, [authState.accessToken, authState.email, authState.roles, authFetch, isLoading, login, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
