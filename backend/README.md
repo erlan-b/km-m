@@ -49,6 +49,10 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/auth/languages`
 - `PATCH /api/v1/auth/me/language`
 - `GET /api/v1/admin/audit-logs`
+- `GET /api/v1/admin/messages/conversations`
+- `GET /api/v1/admin/messages/conversations/{conversation_id}`
+- `GET /api/v1/admin/messages?conversation_id=...`
+- `GET /api/v1/admin/messages/attachments/{attachment_id}/download`
 - `GET /api/v1/categories`
 - `GET /api/v1/categories/admin`
 - `POST /api/v1/categories`
