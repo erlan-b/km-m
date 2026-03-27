@@ -9,7 +9,6 @@ type CategoryAttributeDefinition = {
   required: boolean;
   min_value?: number | null;
   max_value?: number | null;
-  min_length?: number | null;
   max_length?: number | null;
   options?: string[] | null;
 };
@@ -34,7 +33,6 @@ type CategoryAttributeDraft = {
   required: boolean;
   min_value: string;
   max_value: string;
-  min_length: string;
   optionsValues: string[];
 };
 
@@ -53,7 +51,6 @@ function buildEmptyAttributeDraft(id: number, existingKey?: string): CategoryAtt
     required: false,
     min_value: "",
     max_value: "",
-    min_length: "",
     optionsValues: [""],
   };
 }
@@ -99,7 +96,6 @@ function toDraftAttributes(source: CategoryAttributeDefinition[] | null): Catego
     required: Boolean(item.required),
     min_value: item.min_value != null ? String(item.min_value) : "",
     max_value: item.max_value != null ? String(item.max_value) : "",
-    min_length: item.min_length != null ? String(item.min_length) : "",
     optionsValues: (() => {
       const base = Array.isArray(item.options) ? item.options.slice(0, 10) : [];
       return base.length < 10 ? [...base, ""] : base;
@@ -123,18 +119,6 @@ function parseOptionalNumber(value: string): number | null {
   return numeric;
 }
 
-function parseOptionalInteger(value: string): number | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const numeric = Number(trimmed);
-  if (!Number.isInteger(numeric) || numeric < 0) {
-    throw new Error("Length boundaries must be non-negative integers");
-  }
-  return numeric;
-}
-
 function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAttributeDefinition[] | null {
   const cleaned: CategoryAttributeDefinition[] = [];
 
@@ -149,7 +133,6 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
 
     const minValue = parseOptionalNumber(draft.min_value);
     const maxValue = parseOptionalNumber(draft.max_value);
-    const minLength = parseOptionalInteger(draft.min_length);
     const options = type === "string"
       ? draft.optionsValues
           .map((part) => part.trim())
@@ -158,9 +141,6 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
 
     if (minValue !== null && maxValue !== null && minValue > maxValue) {
       throw new Error(`Field '${label}': min value cannot be greater than max value`);
-    }
-    if (type === "string" && minLength !== null && minLength > 300) {
-      throw new Error(`Field '${label}': min length cannot be greater than 300`);
     }
 
     const normalized: CategoryAttributeDefinition = {
@@ -175,7 +155,6 @@ function normalizeAttributesSchema(drafts: CategoryAttributeDraft[]): CategoryAt
       normalized.max_value = maxValue;
     }
     if (type === "string") {
-      normalized.min_length = minLength;
       normalized.max_length = 300;
       normalized.options = options.length > 0 ? options : null;
     }
@@ -697,17 +676,6 @@ export function CategoriesPage() {
 
                         {attribute.value_type === "string" ? (
                           <>
-                            <label>
-                              Min length
-                              <input
-                                type="number"
-                                min={0}
-                                step={1}
-                                value={attribute.min_length}
-                                onChange={(event) => updateField(index, { min_length: event.target.value })}
-                              />
-                            </label>
-
                             <label className="categories-options-field">
                               Options (optional, type one option per field, max 10)
                               <div className="categories-options-list">
