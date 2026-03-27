@@ -4,6 +4,7 @@ from app.models.conversation import Conversation
 from app.models.favorite import Favorite
 from app.models.listing import Listing, ListingStatus, TransactionType
 from app.models.listing_media import ListingMedia
+from app.models.localization_entry import LocalizationEntry
 from app.models.message import Message, MessageType
 from app.models.message_attachment import MessageAttachment
 from app.models.notification import Notification, NotificationType
@@ -25,6 +26,7 @@ __all__ = [
 	"Listing",
 	"ListingMedia",
 	"ListingStatus",
+	"LocalizationEntry",
 	"Message",
 	"MessageAttachment",
 	"MessageType",

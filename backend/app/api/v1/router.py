@@ -12,6 +12,7 @@ from app.api.v1.endpoints import favorites
 from app.api.v1.endpoints import health
 from app.api.v1.endpoints import listing_media
 from app.api.v1.endpoints import listings
+from app.api.v1.endpoints import localization
 from app.api.v1.endpoints import messages
 from app.api.v1.endpoints import notifications
 from app.api.v1.endpoints import payments
@@ -28,6 +29,7 @@ api_router.include_router(admin_users.router, prefix="/admin/users", tags=["Admi
 api_router.include_router(admin_messages.router, prefix="/admin/messages", tags=["Admin Messages"])
 api_router.include_router(categories.router, prefix="/categories", tags=["Categories"])
 api_router.include_router(listings.router, prefix="/listings", tags=["Listings"])
+api_router.include_router(localization.router, prefix="/localization", tags=["Localization"])
 api_router.include_router(listing_media.router, prefix="/listing-media", tags=["Listing Media"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 api_router.include_router(conversations.router, prefix="/conversations", tags=["Conversations"])

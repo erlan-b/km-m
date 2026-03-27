@@ -53,6 +53,12 @@ uvicorn app.main:app --reload --port 8000
 - `GET /api/v1/auth/me`
 - `GET /api/v1/auth/languages`
 - `PATCH /api/v1/auth/me/language`
+- `GET /api/v1/localization/content`
+- `GET /api/v1/localization/admin/entries`
+- `POST /api/v1/localization/admin/entries`
+- `PATCH /api/v1/localization/admin/entries/{entry_id}`
+- `POST /api/v1/localization/admin/entries/{entry_id}/activate`
+- `POST /api/v1/localization/admin/entries/{entry_id}/deactivate`
 - `GET /api/v1/admin/dashboard`
 - `GET /api/v1/admin/audit-logs`
 - `GET /api/v1/admin/users`
