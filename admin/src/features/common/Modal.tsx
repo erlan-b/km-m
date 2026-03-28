@@ -1,4 +1,4 @@
-import { type MouseEvent, type ReactNode, useEffect } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useState } from "react";
 
 import { usePageI18n } from "../../app/i18n/I18nContext";
 
@@ -12,9 +12,32 @@ type ModalProps = {
 
 export function Modal({ open, title, subtitle, onClose, children }: ModalProps) {
   const { t } = usePageI18n("common");
+  const [isMounted, setIsMounted] = useState(open);
+  const [isOpenState, setIsOpenState] = useState(false);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setIsMounted(true);
+      const frame = window.requestAnimationFrame(() => {
+        setIsOpenState(true);
+      });
+      return () => {
+        window.cancelAnimationFrame(frame);
+      };
+    }
+
+    setIsOpenState(false);
+    const timer = window.setTimeout(() => {
+      setIsMounted(false);
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!isMounted) {
       return;
     }
 
@@ -24,7 +47,7 @@ export function Modal({ open, title, subtitle, onClose, children }: ModalProps) 
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [open]);
+  }, [isMounted]);
 
   useEffect(() => {
     if (!open) {
@@ -43,7 +66,7 @@ export function Modal({ open, title, subtitle, onClose, children }: ModalProps) 
     };
   }, [open, onClose]);
 
-  if (!open) {
+  if (!isMounted) {
     return null;
   }
 
@@ -56,9 +79,9 @@ export function Modal({ open, title, subtitle, onClose, children }: ModalProps) 
   };
 
   return (
-    <div className="app-modal-backdrop" role="presentation" onClick={onBackdropClick}>
+    <div className={`app-modal-backdrop${isOpenState ? " is-open" : ""}`} role="presentation" onClick={onBackdropClick}>
       <section
-        className="app-modal"
+        className={`app-modal${isOpenState ? " is-open" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

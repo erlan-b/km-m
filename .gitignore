@@ -63,3 +63,5 @@ admin/pnpm-debug.log*
 start-t/
 development-stages-and-rules.md
 admin-development-stages-and-rules.md
+RUN_COMMANDS.md
+admin-functional-blueprint.md

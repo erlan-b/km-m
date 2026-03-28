@@ -179,16 +179,20 @@ export function PaymentsPage() {
       if (payload.items.length === 0) {
         setSelectedPayment(null);
         setIsDetailModalOpen(false);
-      } else if (selectedPayment) {
-        const refreshedSelected = payload.items.find((item) => item.id === selectedPayment.id) ?? null;
-        setSelectedPayment(refreshedSelected);
+      } else {
+        setSelectedPayment((previous) => {
+          if (!previous) {
+            return previous;
+          }
+          return payload.items.find((item) => item.id === previous.id) ?? null;
+        });
       }
     } catch (loadError) {
       setError(extractErrorMessage(loadError));
     } finally {
       setIsLoading(false);
     }
-  }, [appliedFilters, authFetch, page, selectedPayment]);
+  }, [appliedFilters, authFetch, page]);
 
   useEffect(() => {
     void loadPayments();
