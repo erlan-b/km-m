@@ -181,6 +181,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   return <I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useI18n(): I18nContextValue {
   const context = useContext(I18nContext);
   if (!context) {
@@ -189,6 +190,7 @@ export function useI18n(): I18nContextValue {
   return context;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePageI18n(pageKey: string): {
   language: Language;
   t: (key: string, fallback: string) => string;

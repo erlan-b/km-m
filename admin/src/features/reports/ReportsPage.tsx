@@ -177,7 +177,7 @@ export function ReportsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch, page, searchParams, selectedReportId, statusFilter, targetTypeFilter]);
+  }, [authFetch, page, searchParams, selectedReportId, statusFilter, t, targetTypeFilter]);
 
   useEffect(() => {
     void loadReports();

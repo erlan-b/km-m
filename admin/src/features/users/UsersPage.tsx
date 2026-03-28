@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
-import { formatDateTime, formatInteger } from "../../shared/i18n/format";
+import { formatDateTime, formatInteger, localeFromLanguage } from "../../shared/i18n/format";
 import { Modal } from "../common/Modal";
 
 type AccountStatus = "active" | "blocked" | "pending_verification" | "deactivated";
+type SellerType = "owner" | "company";
+type VerificationStatus = "unverified" | "pending" | "verified" | "rejected";
 
 type AdminUserListItem = {
   id: number;
@@ -31,8 +33,18 @@ type AdminUserDetailResponse = {
   id: number;
   full_name: string;
   email: string;
+  phone: string | null;
+  profile_image_url: string | null;
+  bio: string | null;
+  city: string | null;
   preferred_language: string;
   account_status: AccountStatus;
+  seller_type: SellerType;
+  company_name: string | null;
+  verification_status: VerificationStatus;
+  verified_badge: boolean;
+  response_rate: number | null;
+  last_seen_at: string | null;
   roles: string[];
   created_at: string;
   updated_at: string;
@@ -64,6 +76,40 @@ function statusLabel(status: AccountStatus, t: (key: string, fallback: string) =
     return t("status_pending_verification", "Pending verification");
   }
   return t("status_deactivated", "Deactivated");
+}
+
+function sellerTypeLabel(sellerType: SellerType, t: (key: string, fallback: string) => string): string {
+  if (sellerType === "company") {
+    return t("seller_type_company", "Company");
+  }
+  return t("seller_type_owner", "Owner");
+}
+
+function verificationStatusLabel(
+  verificationStatus: VerificationStatus,
+  t: (key: string, fallback: string) => string,
+): string {
+  if (verificationStatus === "verified") {
+    return t("verification_verified", "Verified");
+  }
+  if (verificationStatus === "pending") {
+    return t("verification_pending", "Pending");
+  }
+  if (verificationStatus === "rejected") {
+    return t("verification_rejected", "Rejected");
+  }
+  return t("verification_unverified", "Unverified");
+}
+
+function formatPercent(value: number | null, language: "en" | "ru"): string {
+  if (value === null || !Number.isFinite(value)) {
+    return "-";
+  }
+
+  return `${new Intl.NumberFormat(localeFromLanguage(language), {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(value)}%`;
 }
 
 function extractErrorMessage(error: unknown): string {
@@ -125,7 +171,7 @@ export function UsersPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch, page, roleFilter, searchTerm, statusFilter]);
+  }, [authFetch, page, roleFilter, searchTerm, statusFilter, t]);
 
   useEffect(() => {
     void loadUsers();
@@ -412,15 +458,34 @@ export function UsersPage() {
           {!detailError && !isDetailLoading && !selectedDetail ? <p>{t("select_user_row", "Select a user row and click Details.")}</p> : null}
 
           {selectedDetail ? (
-            <div className="dashboard-stats-grid">
+            <div className="dashboard-stats-grid users-detail-grid">
               <article className="dashboard-stat-group">
                 <h3>{t("profile", "Profile")}</h3>
+                <p>{t("id", "ID")}: <strong>#{formatInteger(selectedDetail.id, language)}</strong></p>
                 <p>{t("name", "Name")}: <strong>{selectedDetail.full_name}</strong></p>
-                <p>{t("status", "Status")}: <strong>{statusLabel(selectedDetail.account_status, t)}</strong></p>
-                <p>{t("subscription", "Subscription")}: <strong>{selectedDetail.subscription_count > 0 ? t("sub", "Sub") : t("no_sub", "No sub")}</strong></p>
+                <p>{t("email", "Email")}: <strong>{selectedDetail.email}</strong></p>
+                <p>{t("phone", "Phone")}: <strong>{selectedDetail.phone ?? "-"}</strong></p>
+                <p>{t("city", "City")}: <strong>{selectedDetail.city ?? "-"}</strong></p>
                 <p>{t("roles", "Roles")}: <strong>{selectedDetail.roles.join(", ") || "-"}</strong></p>
                 <p>{t("language", "Language")}: <strong>{selectedDetail.preferred_language}</strong></p>
               </article>
+
+              <article className="dashboard-stat-group">
+                <h3>{t("verification", "Verification")}</h3>
+                <p>{t("status", "Status")}: <strong>{statusLabel(selectedDetail.account_status, t)}</strong></p>
+                <p>{t("verification_status", "Verification status")}: <strong>{verificationStatusLabel(selectedDetail.verification_status, t)}</strong></p>
+                <p>{t("verified_badge", "Verified badge")}: <strong>{selectedDetail.verified_badge ? t("yes", "Yes") : t("no", "No")}</strong></p>
+                <p>{t("seller_type", "Seller type")}: <strong>{sellerTypeLabel(selectedDetail.seller_type, t)}</strong></p>
+                <p>{t("company_name", "Company name")}: <strong>{selectedDetail.company_name ?? "-"}</strong></p>
+                <p>{t("response_rate", "Response rate")}: <strong>{formatPercent(selectedDetail.response_rate, language)}</strong></p>
+              </article>
+
+              <article className="dashboard-stat-group">
+                <h3>{t("profile_data", "Profile data")}</h3>
+                <p>{t("profile_image_url", "Profile image URL")}: <strong>{selectedDetail.profile_image_url ?? "-"}</strong></p>
+                <p>{t("bio", "Bio")}: <strong>{selectedDetail.bio ?? "-"}</strong></p>
+              </article>
+
               <article className="dashboard-stat-group">
                 <h3>{t("activity", "Activity")}</h3>
                 <p>{t("listings", "Listings")}: <strong>{formatInteger(selectedDetail.listing_count, language)}</strong></p>
@@ -428,26 +493,42 @@ export function UsersPage() {
                 <p>{t("reports", "Reports")}: <strong>{formatInteger(selectedDetail.report_count, language)}</strong></p>
                 <p>{t("conversations", "Conversations")}: <strong>{formatInteger(selectedDetail.conversation_count, language)}</strong></p>
               </article>
+
               <article className="dashboard-stat-group">
                 <h3>{t("commerce", "Commerce")}</h3>
                 <p>{t("payments", "Payments")}: <strong>{formatInteger(selectedDetail.payment_count, language)}</strong></p>
                 <p>{t("subscriptions", "Subscriptions")}: <strong>{formatInteger(selectedDetail.subscription_count, language)}</strong></p>
-                <div className="users-detail-links">
-                  <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/payments")}>
-                    {t("open_payments", "Open payments")}
-                  </button>
-                  <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/promotions")}>
-                    {t("open_promotions", "Open promotions")}
-                  </button>
-                  <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/messages")}>
-                    {t("open_messages", "Open messages")}
-                  </button>
-                </div>
               </article>
+
               <article className="dashboard-stat-group">
                 <h3>{t("timestamps", "Timestamps")}</h3>
+                <p>{t("last_seen", "Last seen")}: <strong>{formatDateTime(selectedDetail.last_seen_at, language)}</strong></p>
                 <p>{t("created", "Created")}: <strong>{formatDateTime(selectedDetail.created_at, language)}</strong></p>
                 <p>{t("updated", "Updated")}: <strong>{formatDateTime(selectedDetail.updated_at, language)}</strong></p>
+              </article>
+
+              <article className="dashboard-stat-group users-related-actions-card">
+                <h3>{t("related_sections", "Related sections")}</h3>
+                <div className="users-related-actions">
+                  <div className="users-related-action-item">
+                    <p>{t("payments_records", "Payments records")}</p>
+                    <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/payments")}>
+                      {t("open_payments", "Open payments")}
+                    </button>
+                  </div>
+                  <div className="users-related-action-item">
+                    <p>{t("promotions_management", "Promotions management")}</p>
+                    <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/promotions")}>
+                      {t("open_promotions", "Open promotions")}
+                    </button>
+                  </div>
+                  <div className="users-related-action-item">
+                    <p>{t("messages_history", "Messages history")}</p>
+                    <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/messages")}>
+                      {t("open_messages", "Open messages")}
+                    </button>
+                  </div>
+                </div>
               </article>
             </div>
           ) : null}

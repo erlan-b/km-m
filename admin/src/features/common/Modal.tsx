@@ -16,23 +16,34 @@ export function Modal({ open, title, subtitle, onClose, children }: ModalProps) 
   const [isOpenState, setIsOpenState] = useState(false);
 
   useEffect(() => {
+    let mountFrame = 0;
+    let openFrame = 0;
+    let closeFrame = 0;
+    let closeTimer = 0;
+
     if (open) {
-      setIsMounted(true);
-      const frame = window.requestAnimationFrame(() => {
-        setIsOpenState(true);
+      mountFrame = window.requestAnimationFrame(() => {
+        setIsMounted(true);
+        openFrame = window.requestAnimationFrame(() => {
+          setIsOpenState(true);
+        });
       });
       return () => {
-        window.cancelAnimationFrame(frame);
+        window.cancelAnimationFrame(mountFrame);
+        window.cancelAnimationFrame(openFrame);
       };
     }
 
-    setIsOpenState(false);
-    const timer = window.setTimeout(() => {
+    closeFrame = window.requestAnimationFrame(() => {
+      setIsOpenState(false);
+    });
+    closeTimer = window.setTimeout(() => {
       setIsMounted(false);
     }, 180);
 
     return () => {
-      window.clearTimeout(timer);
+      window.cancelAnimationFrame(closeFrame);
+      window.clearTimeout(closeTimer);
     };
   }, [open]);
 

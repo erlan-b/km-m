@@ -20,6 +20,7 @@ from app.schemas.user import (
     AdminUserStatusActionRequest,
     AdminUserStatusResponse,
 )
+from app.services.user_metrics_service import calculate_user_response_rate, has_verified_badge
 
 router = APIRouter()
 
@@ -141,13 +142,25 @@ def get_user_admin_detail(
             )
         )
     ) or 0
+    response_rate = calculate_user_response_rate(db=db, user_id=target_user.id)
+    verified_badge = has_verified_badge(target_user)
 
     return AdminUserDetailResponse(
         id=target_user.id,
         full_name=target_user.full_name,
         email=target_user.email,
+        phone=target_user.phone,
+        profile_image_url=target_user.profile_image_url,
+        bio=target_user.bio,
+        city=target_user.city,
         preferred_language=target_user.preferred_language,
         account_status=target_user.account_status,
+        seller_type=target_user.seller_type,
+        company_name=target_user.company_name,
+        verification_status=target_user.verification_status,
+        verified_badge=verified_badge,
+        response_rate=response_rate,
+        last_seen_at=target_user.last_seen_at,
         roles=[role_item.name for role_item in target_user.roles],
         created_at=target_user.created_at,
         updated_at=target_user.updated_at,

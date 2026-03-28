@@ -133,7 +133,7 @@ export function AuditLogsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [appliedFilters, authFetch, page, selectedLog]);
+  }, [appliedFilters, authFetch, page, selectedLog, t]);
 
   useEffect(() => {
     void loadLogs();

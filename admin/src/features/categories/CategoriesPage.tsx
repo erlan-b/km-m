@@ -225,7 +225,7 @@ export function CategoriesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch, showInactive]);
+  }, [authFetch, showInactive, t]);
 
   useEffect(() => {
     void loadCategories();

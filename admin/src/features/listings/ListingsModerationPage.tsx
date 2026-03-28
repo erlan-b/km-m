@@ -214,7 +214,7 @@ export function ListingsModerationPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch, cityFilter, listingIdFilter, page, searchTerm, selectedListingId, sortBy, statusFilter, transactionTypeFilter]);
+  }, [authFetch, cityFilter, listingIdFilter, page, searchTerm, selectedListingId, sortBy, statusFilter, t, transactionTypeFilter]);
 
   useEffect(() => {
     void loadListings();

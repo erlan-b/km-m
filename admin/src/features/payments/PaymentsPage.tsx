@@ -325,7 +325,7 @@ export function PaymentsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [appliedFilters, authFetch, page]);
+  }, [appliedFilters, authFetch, page, t]);
 
   useEffect(() => {
     void loadPayments();

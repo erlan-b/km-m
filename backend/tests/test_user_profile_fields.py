@@ -210,3 +210,62 @@ def test_public_user_response_includes_owner_visibility_fields(client, db_sessio
     assert payload["verified_badge"] is True
     assert payload["response_rate"] == 100.0
     assert payload["listing_count"] == 1
+
+
+def test_admin_user_detail_includes_full_profile_fields_and_metrics(client, db_session, set_current_user):
+    admin_role = create_role(db_session, "admin")
+    user_role = create_role(db_session, "user")
+
+    admin_user = create_user(db_session, "admin-detail@example.com", [admin_role])
+    target_user = create_user(db_session, "target-detail@example.com", [user_role])
+    contact_user = create_user(db_session, "target-contact@example.com", [user_role])
+
+    target_user.phone = "+996700000000"
+    target_user.seller_type = SellerType.COMPANY
+    target_user.company_name = "Detail Realty"
+    target_user.verification_status = VerificationStatus.VERIFIED
+    db_session.add(target_user)
+    db_session.commit()
+    db_session.refresh(target_user)
+
+    category = create_category(db_session)
+    listing = create_listing(db_session, target_user.id, category.id)
+
+    conversation = create_conversation(
+        db_session,
+        listing_id=listing.id,
+        created_by_user_id=contact_user.id,
+        participant_a_id=min(target_user.id, contact_user.id),
+        participant_b_id=max(target_user.id, contact_user.id),
+    )
+    create_message(db_session, conversation.id, contact_user.id, "Is this still available?")
+    create_message(db_session, conversation.id, target_user.id, "Yes, available")
+
+    set_current_user(admin_user)
+    response = client.get(f"/api/v1/admin/users/{target_user.id}")
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["id"] == target_user.id
+    assert payload["full_name"] == target_user.full_name
+    assert payload["email"] == target_user.email
+    assert payload["phone"] == "+996700000000"
+    assert payload["profile_image_url"] == "avatars/sample.png"
+    assert payload["bio"] == "Owner profile bio"
+    assert payload["city"] == "Bishkek"
+    assert payload["preferred_language"] == "ru"
+    assert payload["account_status"] == "active"
+    assert payload["seller_type"] == "company"
+    assert payload["company_name"] == "Detail Realty"
+    assert payload["verification_status"] == "verified"
+    assert payload["verified_badge"] is True
+    assert payload["response_rate"] == 100.0
+    assert payload["last_seen_at"] is not None
+    assert payload["created_at"] is not None
+    assert payload["updated_at"] is not None
+    assert payload["listing_count"] == 1
+    assert payload["active_listing_count"] == 1
+    assert payload["payment_count"] == 0
+    assert payload["subscription_count"] == 0
+    assert payload["report_count"] == 0
+    assert payload["conversation_count"] == 1
