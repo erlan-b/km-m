@@ -10,6 +10,12 @@ export function LoginPage() {
   const { login, isLoading, isAuthenticated } = useAuth();
   const { language, setLanguage } = useI18n();
   const { t } = usePageI18n("auth_login");
+  const nextLanguage = language === "en" ? "RU" : "EN";
+  const currentLanguage = language.toUpperCase();
+
+  const toggleLanguage = () => {
+    setLanguage(language === "en" ? "ru" : "en");
+  };
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,20 +49,16 @@ export function LoginPage() {
       <form className="auth-card" onSubmit={onSubmit}>
         <div className="auth-lang-row">
           <span>{t("language", "Language")}</span>
-          <div className="language-switch" role="group" aria-label={t("language", "Language")}> 
+          <div className="language-switch" role="group" aria-label={t("language", "Language")}>
             <button
               type="button"
-              className={language === "ru" ? "btn btn-primary" : "btn btn-ghost"}
-              onClick={() => setLanguage("ru")}
+              className="btn btn-ghost language-toggle-btn"
+              aria-label={t("language", "Language")}
+              title={t("language", "Language")}
+              onClick={toggleLanguage}
             >
-              RU
-            </button>
-            <button
-              type="button"
-              className={language === "en" ? "btn btn-primary" : "btn btn-ghost"}
-              onClick={() => setLanguage("en")}
-            >
-              EN
+              <span className="lang-current">{currentLanguage}</span>
+              <span className="lang-next" aria-hidden="true">{nextLanguage}</span>
             </button>
           </div>
         </div>

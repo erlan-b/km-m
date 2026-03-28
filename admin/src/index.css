@@ -273,6 +273,31 @@ textarea:focus-visible {
   min-width: 48px;
 }
 
+.language-switch .language-toggle-btn {
+  height: 28px;
+  min-width: 36px;
+  padding: 0 8px;
+  border-radius: 2px;
+}
+
+.language-toggle-btn .lang-next {
+  display: none;
+}
+
+.language-toggle-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent-pressed);
+  color: var(--white-text-soft);
+}
+
+.language-toggle-btn:hover .lang-current {
+  display: none;
+}
+
+.language-toggle-btn:hover .lang-next {
+  display: inline;
+}
+
 .admin-content {
   padding: 16px;
 }

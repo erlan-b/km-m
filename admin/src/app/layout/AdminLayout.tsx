@@ -8,6 +8,12 @@ export function AdminLayout() {
   const { email, logout } = useAuth();
   const { language, setLanguage } = useI18n();
   const { t } = usePageI18n("layout");
+  const nextLanguage = language === "en" ? "RU" : "EN";
+  const currentLanguage = language.toUpperCase();
+
+  const toggleLanguage = () => {
+    setLanguage(language === "en" ? "ru" : "en");
+  };
 
   return (
     <div className="admin-shell">
@@ -19,20 +25,16 @@ export function AdminLayout() {
             <p>{t("workspace_subtitle", "Moderation-first admin workspace")}</p>
           </div>
           <div className="topbar-actions">
-            <div className="language-switch" role="group" aria-label={t("language", "Language")}> 
+            <div className="language-switch" role="group" aria-label={t("language", "Language")}>
               <button
                 type="button"
-                className={language === "ru" ? "btn btn-primary" : "btn btn-ghost"}
-                onClick={() => setLanguage("ru")}
+                className="btn btn-ghost language-toggle-btn"
+                aria-label={t("language", "Language")}
+                title={t("language", "Language")}
+                onClick={toggleLanguage}
               >
-                RU
-              </button>
-              <button
-                type="button"
-                className={language === "en" ? "btn btn-primary" : "btn btn-ghost"}
-                onClick={() => setLanguage("en")}
-              >
-                EN
+                <span className="lang-current">{currentLanguage}</span>
+                <span className="lang-next" aria-hidden="true">{nextLanguage}</span>
               </button>
             </div>
             <span>{email}</span>
