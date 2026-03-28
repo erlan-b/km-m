@@ -1467,3 +1467,136 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Localization page ── */
+
+.l10n-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.l10n-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-subtle);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-standard),
+              color var(--motion-fast) var(--ease-standard);
+}
+
+.l10n-tab:last-child {
+  border-right: none;
+}
+
+.l10n-tab:hover {
+  background: var(--bg-muted);
+  color: var(--text-main);
+}
+
+.l10n-tab-active {
+  background: var(--accent);
+  color: var(--white-text-soft);
+}
+
+.l10n-tab-active:hover {
+  background: var(--accent-hover);
+  color: var(--white-text-soft);
+}
+
+.l10n-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.1);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.l10n-tab-active .l10n-tab-count {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.l10n-table td {
+  vertical-align: middle;
+}
+
+.l10n-input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  background: var(--white-soft);
+  font-size: 13px;
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.l10n-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.l10n-input::placeholder {
+  color: #b0a99a;
+}
+
+.l10n-entity-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+
+.l10n-unsaved-hint {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.l10n-success {
+  border: 1px solid #a7d7a3;
+  background: #eaf8e9;
+  color: #2a5e28;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.l10n-help-card {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.l10n-help-card strong {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+.l10n-help-card p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-subtle);
+  line-height: 1.5;
+}
