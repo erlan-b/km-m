@@ -25,6 +25,11 @@ class AdminUserStatusActionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1000)
 
 
+class AdminUserVerificationActionRequest(BaseModel):
+    verification_status: VerificationStatus
+    reason: str | None = Field(default=None, max_length=1000)
+
+
 class AdminUserStatusResponse(BaseModel):
     id: int
     full_name: str

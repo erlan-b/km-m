@@ -65,6 +65,11 @@ type AdminUserStatusResponse = {
   message: string;
 };
 
+type AdminUserVerificationActionRequest = {
+  verification_status: VerificationStatus;
+  reason: string | null;
+};
+
 function statusLabel(status: AccountStatus, t: (key: string, fallback: string) => string): string {
   if (status === "active") {
     return t("status_active", "Active");
@@ -139,6 +144,8 @@ export function UsersPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [actionBusyUserId, setActionBusyUserId] = useState<number | null>(null);
+  const [verificationStatusDraft, setVerificationStatusDraft] = useState<VerificationStatus>("unverified");
+  const [isVerificationSubmitting, setIsVerificationSubmitting] = useState(false);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -212,6 +219,14 @@ export function UsersPage() {
   const closeDetailModal = () => {
     setIsDetailModalOpen(false);
   };
+
+  useEffect(() => {
+    const nextVerificationStatus = selectedDetail?.verification_status;
+    if (!nextVerificationStatus) {
+      return;
+    }
+    setVerificationStatusDraft(nextVerificationStatus);
+  }, [selectedDetail?.verification_status]);
 
   const openRelatedSection = (path: string) => {
     if (!selectedDetail) {
@@ -290,6 +305,80 @@ export function UsersPage() {
       setError(extractErrorMessage(actionError));
     } finally {
       setActionBusyUserId(null);
+    }
+  };
+
+  const applyVerificationStatus = async () => {
+    if (!selectedDetail) {
+      return;
+    }
+
+    const nextLabel = verificationStatusLabel(verificationStatusDraft, t);
+    const confirmed = window.confirm(
+      `${t("set_verification_status", "Set verification status")} '${nextLabel}' ${t("for_user", "for user")} ${selectedDetail.full_name}?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    const reasonInput = window.prompt(t("reason_optional", "Reason (optional):"), "");
+    const reason = typeof reasonInput === "string" && reasonInput.trim() ? reasonInput.trim() : null;
+
+    setIsVerificationSubmitting(true);
+    setDetailError(null);
+
+    try {
+      const body: AdminUserVerificationActionRequest = {
+        verification_status: verificationStatusDraft,
+        reason,
+      };
+
+      const response = await authFetch(`/admin/users/${selectedDetail.id}/verification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        let message = t("error_update_verification", "Failed to update verification status");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_update_verification", "Failed to update verification status");
+        }
+        throw new Error(message);
+      }
+
+      const payload = (await response.json()) as AdminUserDetailResponse;
+      setSelectedDetail(payload);
+      setVerificationStatusDraft(payload.verification_status);
+
+      setUsers((prev) => {
+        if (!prev) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          items: prev.items.map((item) =>
+            item.id === payload.id
+              ? {
+                  ...item,
+                  updated_at: payload.updated_at,
+                }
+              : item,
+          ),
+        };
+      });
+    } catch (actionError) {
+      setDetailError(extractErrorMessage(actionError));
+    } finally {
+      setIsVerificationSubmitting(false);
     }
   };
 
@@ -478,6 +567,31 @@ export function UsersPage() {
                 <p>{t("seller_type", "Seller type")}: <strong>{sellerTypeLabel(selectedDetail.seller_type, t)}</strong></p>
                 <p>{t("company_name", "Company name")}: <strong>{selectedDetail.company_name ?? "-"}</strong></p>
                 <p>{t("response_rate", "Response rate")}: <strong>{formatPercent(selectedDetail.response_rate, language)}</strong></p>
+
+                <div className="users-verification-controls">
+                  <label>
+                    {t("manage_verification", "Manage verification")}
+                    <select
+                      className="users-filter-select"
+                      value={verificationStatusDraft}
+                      onChange={(event) => setVerificationStatusDraft(event.target.value as VerificationStatus)}
+                    >
+                      <option value="unverified">{t("verification_unverified", "Unverified")}</option>
+                      <option value="pending">{t("verification_pending", "Pending")}</option>
+                      <option value="verified">{t("verification_verified", "Verified")}</option>
+                      <option value="rejected">{t("verification_rejected", "Rejected")}</option>
+                    </select>
+                  </label>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={isVerificationSubmitting || verificationStatusDraft === selectedDetail.verification_status}
+                    onClick={() => void applyVerificationStatus()}
+                  >
+                    {isVerificationSubmitting ? t("applying", "Applying...") : t("apply_verification", "Apply verification")}
+                  </button>
+                </div>
               </article>
 
               <article className="dashboard-stat-group">

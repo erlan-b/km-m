@@ -585,15 +585,6 @@ export function ReportsPage() {
                     <td>{formatDateTime(report.reviewed_at, language)}</td>
                     <td>
                       <div className="users-actions-cell">
-                        {report.target_type === "message" && report.target_conversation_id !== null ? (
-                          <button
-                            type="button"
-                            className="btn btn-ghost"
-                            onClick={() => openReportMessageInMessages(report)}
-                          >
-                            {t("open_in_messages", "Open in messages")}
-                          </button>
-                        ) : null}
                         <button
                           type="button"
                           className="btn btn-ghost"
@@ -681,28 +672,41 @@ export function ReportsPage() {
                   <h3>{t("reason", "Reason")}</h3>
                   <p><strong>{selectedReport.reason_code}</strong></p>
                   <p>{selectedReport.reason_text ?? t("no_reason_text", "No text provided")}</p>
-                  <div className="users-actions-cell reports-context-actions">
+                </article>
+              </div>
+
+              {selectedReport.target_type === "message" && selectedReport.target_conversation_id !== null || getReportListingId(selectedReport) !== null ? (
+                <article className="dashboard-stat-group reports-related-actions-card">
+                  <h3>{t("related_sections", "Related sections")}</h3>
+                  <div className="reports-related-actions">
                     {selectedReport.target_type === "message" && selectedReport.target_conversation_id !== null ? (
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => openReportMessageInMessages(selectedReport)}
-                      >
-                        {t("open_in_messages", "Open in messages")}
-                      </button>
+                      <div className="reports-related-action-item">
+                        <p>{t("messages_history", "Messages history")}</p>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => openReportMessageInMessages(selectedReport)}
+                        >
+                          {t("open_in_messages", "Open in messages")}
+                        </button>
+                      </div>
                     ) : null}
+
                     {getReportListingId(selectedReport) !== null ? (
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => openReportListingInModeration(selectedReport)}
-                      >
-                        {t("open_in_listings", "Open in listings")}
-                      </button>
+                      <div className="reports-related-action-item">
+                        <p>{t("listings_moderation", "Listings moderation")}</p>
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => openReportListingInModeration(selectedReport)}
+                        >
+                          {t("open_in_listings", "Open in listings")}
+                        </button>
+                      </div>
                     ) : null}
                   </div>
                 </article>
-              </div>
+              ) : null}
 
               <article className="dashboard-stat-group reports-evidence-card">
                 <h3>{t("evidence_files", "Evidence files")}</h3>

@@ -1,5 +1,8 @@
 from decimal import Decimal
 
+from sqlalchemy import select
+
+from app.models.admin_audit_log import AdminAuditLog
 from app.models.category import Category
 from app.models.conversation import Conversation
 from app.models.listing import Listing, ListingStatus, TransactionType
@@ -269,3 +272,64 @@ def test_admin_user_detail_includes_full_profile_fields_and_metrics(client, db_s
     assert payload["subscription_count"] == 0
     assert payload["report_count"] == 0
     assert payload["conversation_count"] == 1
+
+
+def test_admin_can_manage_user_verification_status_and_verified_badge(client, db_session, set_current_user):
+    admin_role = create_role(db_session, "admin")
+    user_role = create_role(db_session, "user")
+
+    admin_user = create_user(db_session, "admin-verify@example.com", [admin_role])
+    target_user = create_user(db_session, "target-verify@example.com", [user_role])
+
+    set_current_user(admin_user)
+
+    verify_response = client.post(
+        f"/api/v1/admin/users/{target_user.id}/verification",
+        json={
+            "verification_status": "verified",
+            "reason": "Manual verification completed",
+        },
+    )
+    assert verify_response.status_code == 200
+
+    verify_payload = verify_response.json()
+    assert verify_payload["verification_status"] == "verified"
+    assert verify_payload["verified_badge"] is True
+
+    reject_response = client.post(
+        f"/api/v1/admin/users/{target_user.id}/verification",
+        json={
+            "verification_status": "rejected",
+            "reason": "Documents mismatch",
+        },
+    )
+    assert reject_response.status_code == 200
+
+    reject_payload = reject_response.json()
+    assert reject_payload["verification_status"] == "rejected"
+    assert reject_payload["verified_badge"] is False
+
+    db_session.refresh(target_user)
+    assert target_user.verification_status == VerificationStatus.REJECTED
+
+    verify_audit = db_session.scalar(
+        select(AdminAuditLog)
+        .where(
+            AdminAuditLog.target_type == "user",
+            AdminAuditLog.target_id == target_user.id,
+            AdminAuditLog.action == "user_verification:verified",
+        )
+        .order_by(AdminAuditLog.id.desc())
+    )
+    assert verify_audit is not None
+
+    reject_audit = db_session.scalar(
+        select(AdminAuditLog)
+        .where(
+            AdminAuditLog.target_type == "user",
+            AdminAuditLog.target_id == target_user.id,
+            AdminAuditLog.action == "user_verification:rejected",
+        )
+        .order_by(AdminAuditLog.id.desc())
+    )
+    assert reject_audit is not None

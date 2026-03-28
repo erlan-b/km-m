@@ -19,6 +19,7 @@ from app.schemas.user import (
     AdminUserListResponse,
     AdminUserStatusActionRequest,
     AdminUserStatusResponse,
+    AdminUserVerificationActionRequest,
 )
 from app.services.user_metrics_service import calculate_user_response_rate, has_verified_badge
 
@@ -61,6 +62,63 @@ def build_admin_user_item(user: User) -> AdminUserListItem:
         roles=[role.name for role in user.roles],
         created_at=user.created_at,
         updated_at=user.updated_at,
+    )
+
+
+def build_admin_user_detail_response(db: Session, target_user: User) -> AdminUserDetailResponse:
+    listing_count = db.scalar(select(func.count()).select_from(Listing).where(Listing.owner_id == target_user.id)) or 0
+    active_listing_count = db.scalar(
+        select(func.count())
+        .select_from(Listing)
+        .where(Listing.owner_id == target_user.id, Listing.status == ListingStatus.PUBLISHED)
+    ) or 0
+    payment_count = db.scalar(select(func.count()).select_from(Payment).where(Payment.user_id == target_user.id)) or 0
+    subscription_count = db.scalar(
+        select(func.count())
+        .select_from(Listing)
+        .where(Listing.owner_id == target_user.id, Listing.is_subscription.is_(True))
+    ) or 0
+    report_count = db.scalar(
+        select(func.count()).select_from(Report).where(Report.reporter_user_id == target_user.id)
+    ) or 0
+    conversation_count = db.scalar(
+        select(func.count())
+        .select_from(Conversation)
+        .where(
+            or_(
+                Conversation.participant_a_id == target_user.id,
+                Conversation.participant_b_id == target_user.id,
+            )
+        )
+    ) or 0
+    response_rate = calculate_user_response_rate(db=db, user_id=target_user.id)
+    verified_badge = has_verified_badge(target_user)
+
+    return AdminUserDetailResponse(
+        id=target_user.id,
+        full_name=target_user.full_name,
+        email=target_user.email,
+        phone=target_user.phone,
+        profile_image_url=target_user.profile_image_url,
+        bio=target_user.bio,
+        city=target_user.city,
+        preferred_language=target_user.preferred_language,
+        account_status=target_user.account_status,
+        seller_type=target_user.seller_type,
+        company_name=target_user.company_name,
+        verification_status=target_user.verification_status,
+        verified_badge=verified_badge,
+        response_rate=response_rate,
+        last_seen_at=target_user.last_seen_at,
+        roles=[role_item.name for role_item in target_user.roles],
+        created_at=target_user.created_at,
+        updated_at=target_user.updated_at,
+        listing_count=listing_count,
+        active_listing_count=active_listing_count,
+        payment_count=payment_count,
+        subscription_count=subscription_count,
+        report_count=report_count,
+        conversation_count=conversation_count,
     )
 
 
@@ -116,61 +174,32 @@ def get_user_admin_detail(
     _: User = Depends(require_admin_or_moderator),
 ) -> AdminUserDetailResponse:
     target_user = get_target_user_or_404(db, user_id)
+    return build_admin_user_detail_response(db, target_user)
 
-    listing_count = db.scalar(select(func.count()).select_from(Listing).where(Listing.owner_id == target_user.id)) or 0
-    active_listing_count = db.scalar(
-        select(func.count())
-        .select_from(Listing)
-        .where(Listing.owner_id == target_user.id, Listing.status == ListingStatus.PUBLISHED)
-    ) or 0
-    payment_count = db.scalar(select(func.count()).select_from(Payment).where(Payment.user_id == target_user.id)) or 0
-    subscription_count = db.scalar(
-        select(func.count())
-        .select_from(Listing)
-        .where(Listing.owner_id == target_user.id, Listing.is_subscription.is_(True))
-    ) or 0
-    report_count = db.scalar(
-        select(func.count()).select_from(Report).where(Report.reporter_user_id == target_user.id)
-    ) or 0
-    conversation_count = db.scalar(
-        select(func.count())
-        .select_from(Conversation)
-        .where(
-            or_(
-                Conversation.participant_a_id == target_user.id,
-                Conversation.participant_b_id == target_user.id,
-            )
-        )
-    ) or 0
-    response_rate = calculate_user_response_rate(db=db, user_id=target_user.id)
-    verified_badge = has_verified_badge(target_user)
 
-    return AdminUserDetailResponse(
-        id=target_user.id,
-        full_name=target_user.full_name,
-        email=target_user.email,
-        phone=target_user.phone,
-        profile_image_url=target_user.profile_image_url,
-        bio=target_user.bio,
-        city=target_user.city,
-        preferred_language=target_user.preferred_language,
-        account_status=target_user.account_status,
-        seller_type=target_user.seller_type,
-        company_name=target_user.company_name,
-        verification_status=target_user.verification_status,
-        verified_badge=verified_badge,
-        response_rate=response_rate,
-        last_seen_at=target_user.last_seen_at,
-        roles=[role_item.name for role_item in target_user.roles],
-        created_at=target_user.created_at,
-        updated_at=target_user.updated_at,
-        listing_count=listing_count,
-        active_listing_count=active_listing_count,
-        payment_count=payment_count,
-        subscription_count=subscription_count,
-        report_count=report_count,
-        conversation_count=conversation_count,
+@router.post("/{user_id}/verification", response_model=AdminUserDetailResponse)
+def set_user_verification_status(
+    user_id: int,
+    payload: AdminUserVerificationActionRequest,
+    db: Session = Depends(get_db),
+    admin_user: User = Depends(require_admin_or_moderator),
+) -> AdminUserDetailResponse:
+    target_user = get_target_user_or_404(db, user_id)
+
+    target_user.verification_status = payload.verification_status
+    db.add(target_user)
+
+    write_audit_log(
+        db,
+        admin_user_id=admin_user.id,
+        action=f"user_verification:{payload.verification_status.value}",
+        target_user_id=target_user.id,
+        details=payload.reason,
     )
+
+    db.commit()
+    db.refresh(target_user)
+    return build_admin_user_detail_response(db, target_user)
 
 
 @router.post("/{user_id}/suspend", response_model=AdminUserStatusResponse)
