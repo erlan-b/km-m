@@ -630,8 +630,12 @@ def get_public_listing_detail(listing_id: int, db: Session = Depends(get_db)) ->
     if listing is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
 
-    listing.view_count += 1
-    db.add(listing)
+    db.execute(
+        Listing.__table__.update()
+        .where(Listing.id == listing.id)
+        .values(view_count=Listing.view_count + 1)
+    )
     db.commit()
     db.refresh(listing)
     return ListingResponse.model_validate(listing)
+

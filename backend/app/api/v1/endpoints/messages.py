@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from math import ceil
 from pathlib import Path
 
@@ -8,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
+from app.core.utils import utc_now
 from app.db.session import get_db
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageType
@@ -119,7 +119,7 @@ def send_text_message(
     )
     db.add(message)
 
-    conversation.last_message_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    conversation.last_message_at = utc_now()
     db.add(conversation)
 
     other_participant_id = get_other_participant_id(conversation, current_user.id)
@@ -208,7 +208,7 @@ def send_message_with_optional_attachments(
                 )
             )
 
-        conversation.last_message_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        conversation.last_message_at = utc_now()
         db.add(conversation)
 
         other_participant_id = get_other_participant_id(conversation, current_user.id)

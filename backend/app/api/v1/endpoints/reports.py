@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -7,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin_or_moderator
 from app.db.session import get_db
+from app.core.utils import utc_now
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.listing import Listing, ListingStatus
 from app.models.notification import NotificationType
@@ -222,7 +222,7 @@ def resolve_report(
     report.status = ReportStatus.RESOLVED if action == "resolve" else ReportStatus.DISMISSED
     report.resolution_note = payload.resolution_note
     report.reviewed_by_admin_id = admin_user.id
-    report.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    report.reviewed_at = utc_now()
     db.add(report)
 
     write_audit_log(

@@ -6,10 +6,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin_or_moderator
+from app.core.utils import utc_now
 from app.db.session import get_db
+from app.models.listing import Listing
 from app.models.payment import Payment, PaymentStatus
-from app.models.user import User
-from app.schemas.payment import PaymentHistoryItem, PaymentHistoryResponse
+from app.models.promotion import Promotion, PromotionStatus
+from app.models.user import AccountStatus, User
+from app.schemas.payment import (
+    PaymentConfirmRequest,
+    PaymentCreateRequest,
+    PaymentHistoryItem,
+    PaymentHistoryResponse,
+)
 
 router = APIRouter()
 
@@ -106,3 +114,76 @@ def list_payments_admin(
         total_items=total_items,
         total_pages=total_pages,
     )
+
+
+@router.post("", response_model=PaymentHistoryItem, status_code=status.HTTP_201_CREATED)
+def create_payment(
+    payload: PaymentCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PaymentHistoryItem:
+    if current_user.account_status != AccountStatus.ACTIVE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
+
+    if payload.listing_id is not None:
+        listing = db.scalar(select(Listing).where(Listing.id == payload.listing_id))
+        if listing is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
+
+    payment = Payment(
+        user_id=current_user.id,
+        listing_id=payload.listing_id,
+        amount=payload.amount,
+        currency=payload.currency,
+        status=PaymentStatus.PENDING,
+        payment_provider=payload.payment_provider,
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+    return PaymentHistoryItem.model_validate(payment)
+
+
+@router.post("/{payment_id}/confirm", response_model=PaymentHistoryItem)
+def confirm_payment(
+    payment_id: int,
+    payload: PaymentConfirmRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> PaymentHistoryItem:
+    payment = db.scalar(select(Payment).where(Payment.id == payment_id))
+    if payment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
+    if payment.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+    if payment.status != PaymentStatus.PENDING:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment is not in pending state")
+
+    payment.status = PaymentStatus.SUCCESSFUL
+    payment.paid_at = utc_now()
+    payment.provider_reference = payload.provider_reference
+    db.add(payment)
+
+    # Activate pending promotion linked to same listing and user
+    if payment.listing_id is not None:
+        pending_promotion = db.scalar(
+            select(Promotion).where(
+                Promotion.listing_id == payment.listing_id,
+                Promotion.user_id == payment.user_id,
+                Promotion.status == PromotionStatus.PENDING,
+            )
+        )
+        if pending_promotion is not None:
+            pending_promotion.status = PromotionStatus.ACTIVE
+            db.add(pending_promotion)
+
+            # Also set listing subscription flag
+            listing = db.scalar(select(Listing).where(Listing.id == payment.listing_id))
+            if listing is not None:
+                listing.is_subscription = True
+                listing.subscription_expires_at = pending_promotion.ends_at
+                db.add(listing)
+
+    db.commit()
+    db.refresh(payment)
+    return PaymentHistoryItem.model_validate(payment)

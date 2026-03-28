@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime
 import enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Table, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.utils import utc_now
 from app.db.base import Base
 
 if TYPE_CHECKING:
@@ -37,6 +38,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     preferred_language: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    profile_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    bio: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     account_status: Mapped[AccountStatus] = mapped_column(
         Enum(
             AccountStatus,
@@ -46,9 +51,9 @@ class User(Base):
         default=AccountStatus.PENDING_VERIFICATION,
         nullable=False,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False
+        DateTime, default=utc_now, onupdate=utc_now, nullable=False
     )
 
     roles: Mapped[list["Role"]] = relationship("Role", secondary=user_roles, lazy="joined")

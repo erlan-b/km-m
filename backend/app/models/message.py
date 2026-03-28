@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime
 import enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.utils import utc_now
 from app.db.base import Base
 
 if TYPE_CHECKING:
@@ -38,7 +39,7 @@ class Message(Base):
     )
     text_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
-    sent_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False, index=True)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

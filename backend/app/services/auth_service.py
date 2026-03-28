@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import hash_opaque_token, hash_password, verify_password
+from app.core.utils import utc_now
 from app.models.password_reset_token import PasswordResetToken
 from app.models.refresh_token import RefreshToken
 from app.models.role import Role
@@ -105,7 +106,7 @@ def revoke_refresh_token(db: Session, raw_refresh_token: str) -> bool:
         return False
 
     if token_row.revoked_at is None:
-        token_row.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        token_row.revoked_at = utc_now()
         db.add(token_row)
         db.flush()
     return True
@@ -115,7 +116,7 @@ def revoke_user_refresh_tokens(db: Session, user_id: int) -> None:
     db.execute(
         update(RefreshToken)
         .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
-        .values(revoked_at=datetime.now(timezone.utc).replace(tzinfo=None))
+        .values(revoked_at=utc_now())
     )
 
 
@@ -126,13 +127,13 @@ def create_password_reset_token(db: Session, user_id: int, raw_token: str) -> Pa
             PasswordResetToken.user_id == user_id,
             PasswordResetToken.used_at.is_(None),
         )
-        .values(used_at=datetime.now(timezone.utc).replace(tzinfo=None))
+        .values(used_at=utc_now())
     )
 
     token_row = PasswordResetToken(
         user_id=user_id,
         token_hash=hash_opaque_token(raw_token),
-        expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=settings.password_reset_token_expire_minutes),
+        expires_at=utc_now() + timedelta(minutes=settings.password_reset_token_expire_minutes),
     )
     db.add(token_row)
     db.flush()
@@ -145,6 +146,6 @@ def get_active_password_reset_token(db: Session, raw_token: str) -> PasswordRese
         select(PasswordResetToken).where(
             PasswordResetToken.token_hash == token_hash,
             PasswordResetToken.used_at.is_(None),
-            PasswordResetToken.expires_at > datetime.now(timezone.utc).replace(tzinfo=None),
+            PasswordResetToken.expires_at > utc_now(),
         )
     )

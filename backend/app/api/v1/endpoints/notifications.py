@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -6,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.utils import utc_now
 from app.db.session import get_db
 from app.models.notification import Notification
 from app.models.user import User
@@ -78,7 +78,7 @@ def mark_notification_read(
 
     if not notification.is_read:
         notification.is_read = True
-        notification.read_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        notification.read_at = utc_now()
         db.add(notification)
         db.commit()
         db.refresh(notification)

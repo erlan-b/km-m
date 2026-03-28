@@ -30,6 +30,10 @@ class UserMeResponse(BaseModel):
     id: int
     full_name: str
     email: EmailStr
+    phone: str | None = None
+    profile_image_url: str | None = None
+    bio: str | None = None
+    city: str | None = None
     preferred_language: str
     account_status: str
     roles: list[str]

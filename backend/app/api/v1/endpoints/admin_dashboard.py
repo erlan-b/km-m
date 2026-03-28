@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
@@ -7,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_admin_or_moderator
 from app.db.session import get_db
+from app.core.utils import utc_now
 from app.models.conversation import Conversation
 from app.models.listing import Listing, ListingStatus
 from app.models.message import Message
@@ -57,7 +57,7 @@ def get_admin_dashboard(
     ) or 0
 
     return AdminDashboardResponse(
-        generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        generated_at=utc_now(),
         total_users=total_users,
         active_users=active_users,
         blocked_users=blocked_users,

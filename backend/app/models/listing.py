@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 import enum
 from typing import TYPE_CHECKING
@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.utils import utc_now
 from app.db.base import Base
 
 if TYPE_CHECKING:
@@ -69,9 +70,9 @@ class Listing(Base):
     favorite_count: Mapped[int] = mapped_column(default=0, nullable=False)
     is_subscription: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False
+        DateTime, default=utc_now, onupdate=utc_now, nullable=False
     )
 
     owner: Mapped["User"] = relationship("User", back_populates="listings")

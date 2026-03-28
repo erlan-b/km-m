@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
 import enum
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.utils import utc_now
 from app.db.base import Base
 
 
@@ -36,11 +37,11 @@ class Payment(Base):
     )
     payment_provider: Mapped[str] = mapped_column(String(50), nullable=False, default="mock")
     provider_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        default=utc_now,
+        onupdate=utc_now,
         nullable=False,
     )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

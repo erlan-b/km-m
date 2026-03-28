@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.core.i18n import detect_request_language, translate_text
+from app.core.utils import utc_now
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -47,19 +46,27 @@ from app.services.auth_service import (
 router = APIRouter()
 
 
+def build_user_me_response(user: User) -> UserMeResponse:
+    return UserMeResponse(
+        id=user.id,
+        full_name=user.full_name,
+        email=user.email,
+        phone=user.phone,
+        profile_image_url=user.profile_image_url,
+        bio=user.bio,
+        city=user.city,
+        preferred_language=user.preferred_language,
+        account_status=user.account_status.value,
+        roles=[role.name for role in user.roles],
+    )
+
+
 @router.post("/register", response_model=UserMeResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserMeResponse:
     user = create_user(db, payload)
     db.commit()
     db.refresh(user)
-    return UserMeResponse(
-        id=user.id,
-        full_name=user.full_name,
-        email=user.email,
-        preferred_language=user.preferred_language,
-        account_status=user.account_status.value,
-        roles=[role.name for role in user.roles],
-    )
+    return build_user_me_response(user)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -95,10 +102,10 @@ def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> Toke
     if token_row is None or token_row.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
-    if token_row.revoked_at is not None or token_row.expires_at <= datetime.now(timezone.utc).replace(tzinfo=None):
+    if token_row.revoked_at is not None or token_row.expires_at <= utc_now():
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token is expired or revoked")
 
-    token_row.revoked_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    token_row.revoked_at = utc_now()
     db.add(token_row)
 
     access_token = create_access_token(subject=user.email)
@@ -153,7 +160,7 @@ def reset_password(payload: ResetPasswordRequest, request: Request, db: Session 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     user.password_hash = hash_password(payload.new_password)
-    token_row.used_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    token_row.used_at = utc_now()
     db.add(user)
     db.add(token_row)
     revoke_user_refresh_tokens(db, user.id)
@@ -189,14 +196,7 @@ def change_password(
 
 @router.get("/me", response_model=UserMeResponse)
 def me(current_user: User = Depends(get_current_user)) -> UserMeResponse:
-    return UserMeResponse(
-        id=current_user.id,
-        full_name=current_user.full_name,
-        email=current_user.email,
-        preferred_language=current_user.preferred_language,
-        account_status=current_user.account_status.value,
-        roles=[role.name for role in current_user.roles],
-    )
+    return build_user_me_response(current_user)
 
 
 @router.get("/languages", response_model=SupportedLanguagesResponse)
@@ -222,11 +222,4 @@ def update_my_language(
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
-    return UserMeResponse(
-        id=current_user.id,
-        full_name=current_user.full_name,
-        email=current_user.email,
-        preferred_language=current_user.preferred_language,
-        account_status=current_user.account_status.value,
-        roles=[role.name for role in current_user.roles],
-    )
+    return build_user_me_response(current_user)

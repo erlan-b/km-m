@@ -1,9 +1,21 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.payment import PaymentStatus
+
+
+class PaymentCreateRequest(BaseModel):
+    listing_id: int | None = Field(default=None, gt=0)
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    currency: str = Field(default="KGS", min_length=3, max_length=10)
+    payment_provider: str = Field(default="mock", min_length=2, max_length=50)
+    description: str | None = Field(default=None, max_length=500)
+
+
+class PaymentConfirmRequest(BaseModel):
+    provider_reference: str | None = Field(default=None, max_length=100)
 
 
 class PaymentHistoryItem(BaseModel):
@@ -20,6 +32,7 @@ class PaymentHistoryItem(BaseModel):
     created_at: datetime
     updated_at: datetime
     paid_at: datetime | None
+
 
 
 class PaymentHistoryResponse(BaseModel):
