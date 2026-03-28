@@ -9,6 +9,8 @@ const navItems = [
   { to: "/reports", translationKey: "nav_reports", fallback: "Reports" },
   { to: "/categories", translationKey: "nav_categories", fallback: "Categories" },
   { to: "/payments", translationKey: "nav_payments", fallback: "Payments" },
+  { to: "/promotions", translationKey: "nav_promotions", fallback: "Promotions" },
+  { to: "/messages", translationKey: "nav_messages", fallback: "Messages" },
   { to: "/audit-logs", translationKey: "nav_audit_logs", fallback: "Audit Logs" },
 ];
 

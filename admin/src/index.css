@@ -941,7 +941,7 @@ textarea:focus-visible {
 }
 
 .payments-search-strip {
-  grid-template-columns: repeat(4, minmax(120px, 1fr)) repeat(4, minmax(180px, 1fr)) auto auto;
+  grid-template-columns: repeat(6, minmax(120px, 1fr)) repeat(4, minmax(180px, 1fr)) auto auto;
   align-items: end;
 }
 
@@ -992,6 +992,128 @@ textarea:focus-visible {
   letter-spacing: 0.03em;
   color: var(--text-subtle);
   background: var(--bg-muted);
+}
+
+.messages-search-strip {
+  grid-template-columns: repeat(2, minmax(160px, 1fr)) auto auto;
+}
+
+.messages-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.messages-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 980px;
+}
+
+.messages-table th,
+.messages-table td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.messages-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+  background: var(--bg-muted);
+}
+
+.messages-detail-table {
+  min-width: 1080px;
+}
+
+.messages-attachments-list {
+  display: grid;
+  gap: 6px;
+}
+
+.messages-attachment-btn {
+  justify-content: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.2;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  height: auto;
+}
+
+.promotions-search-strip {
+  grid-template-columns: repeat(4, minmax(120px, 1fr)) auto auto;
+}
+
+.promotions-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.promotions-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1180px;
+}
+
+.promotions-table th,
+.promotions-table td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.promotions-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+  background: var(--bg-muted);
+}
+
+.promotions-form {
+  display: grid;
+  gap: 12px;
+}
+
+.promotions-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.promotions-form-grid label,
+.promotions-textarea-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.promotions-form-grid input {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 10px;
+  background: var(--white-soft);
+  color: var(--text-main);
+}
+
+.promotions-textarea-field textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  background: var(--white-soft);
+  color: var(--text-main);
+  font-family: inherit;
 }
 
 .audit-search-strip {
@@ -1074,6 +1196,14 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .messages-search-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .promotions-search-strip {
+    grid-template-columns: 1fr;
+  }
+
   .audit-search-strip {
     grid-template-columns: 1fr;
   }
@@ -1087,6 +1217,10 @@ textarea:focus-visible {
   }
 
   .categories-option-row {
+    grid-template-columns: 1fr;
+  }
+
+  .promotions-form-grid {
     grid-template-columns: 1fr;
   }
 

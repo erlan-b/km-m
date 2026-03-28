@@ -13,6 +13,7 @@ from app.models.listing import Listing, ListingStatus
 from app.models.promotion import Promotion, PromotionPackage, PromotionStatus
 from app.models.user import AccountStatus, User
 from app.schemas.promotion import (
+    PromotionDeactivateRequest,
     PromotionListResponse,
     PromotionPackageCreateRequest,
     PromotionPackageListResponse,
@@ -205,6 +206,7 @@ def list_promotions_admin(
     status_filter: PromotionStatus | None = None,
     listing_id: int | None = Query(default=None, gt=0),
     user_id: int | None = Query(default=None, gt=0),
+    promotion_package_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
     _: User = Depends(require_admin_or_moderator),
 ) -> PromotionListResponse:
@@ -215,6 +217,8 @@ def list_promotions_admin(
         filters.append(Promotion.listing_id == listing_id)
     if user_id is not None:
         filters.append(Promotion.user_id == user_id)
+    if promotion_package_id is not None:
+        filters.append(Promotion.promotion_package_id == promotion_package_id)
 
     total_items = db.scalar(select(func.count()).select_from(Promotion).where(*filters)) or 0
     total_pages = ceil(total_items / page_size) if total_items else 0
@@ -234,3 +238,51 @@ def list_promotions_admin(
         total_items=total_items,
         total_pages=total_pages,
     )
+
+
+@router.patch("/admin/{promotion_id}/deactivate", response_model=PromotionResponse)
+def deactivate_promotion_admin(
+    promotion_id: int,
+    payload: PromotionDeactivateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin_or_moderator),
+) -> PromotionResponse:
+    promotion = db.scalar(select(Promotion).where(Promotion.id == promotion_id))
+    if promotion is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promotion not found")
+
+    if promotion.status in {PromotionStatus.CANCELLED, PromotionStatus.EXPIRED}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Promotion is not active")
+
+    # Keep payload consumed for future audit enrichment without changing API contract now.
+    _ = payload.reason
+
+    promotion.status = PromotionStatus.CANCELLED
+    db.add(promotion)
+
+    listing = db.scalar(select(Listing).where(Listing.id == promotion.listing_id))
+    if listing is not None:
+        now = utc_now()
+        next_active_promotion = db.scalar(
+            select(Promotion)
+            .where(
+                Promotion.listing_id == listing.id,
+                Promotion.id != promotion.id,
+                Promotion.status == PromotionStatus.ACTIVE,
+                Promotion.ends_at > now,
+            )
+            .order_by(Promotion.ends_at.desc())
+            .limit(1)
+        )
+
+        if next_active_promotion is None:
+            listing.is_subscription = False
+            listing.subscription_expires_at = None
+        else:
+            listing.is_subscription = True
+            listing.subscription_expires_at = next_active_promotion.ends_at
+        db.add(listing)
+
+    db.commit()
+    db.refresh(promotion)
+    return PromotionResponse.model_validate(promotion)

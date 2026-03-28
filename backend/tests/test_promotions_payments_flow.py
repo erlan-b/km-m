@@ -4,16 +4,26 @@ from decimal import Decimal
 from app.models.category import Category
 from app.models.listing import Listing, ListingStatus, TransactionType
 from app.models.promotion import Promotion, PromotionPackage, PromotionStatus
+from app.models.role import Role
 from app.models.user import AccountStatus, User
 
 
-def create_user(db_session, email: str) -> User:
+def create_role(db_session, name: str) -> Role:
+    role = Role(name=name)
+    db_session.add(role)
+    db_session.commit()
+    db_session.refresh(role)
+    return role
+
+
+def create_user(db_session, email: str, roles: list[Role] | None = None) -> User:
     user = User(
         full_name=email.split("@")[0],
         email=email,
         password_hash="test-hash",
         preferred_language="ru",
         account_status=AccountStatus.ACTIVE,
+        roles=roles or [],
     )
     db_session.add(user)
     db_session.commit()
@@ -190,3 +200,61 @@ def test_create_payment_rejects_mismatched_promotion_amount(client, db_session, 
 
     assert payment_response.status_code == 400
     assert payment_response.json()["detail"] == "Payment amount does not match promotion price"
+
+
+def test_admin_can_deactivate_promotion_and_reset_subscription(client, db_session, set_current_user):
+    admin_role = create_role(db_session, "admin")
+    owner = create_user(db_session, "promo-owner@example.com")
+    admin_user = create_user(db_session, "promo-admin@example.com", roles=[admin_role])
+
+    category = create_category(
+        db_session,
+        name="Deactivate Category",
+        slug="deactivate-category",
+    )
+    listing = create_listing(db_session, owner_id=owner.id, category_id=category.id)
+    package = create_package(db_session, title="Deactivate Pack", duration_days=10, price="200.00")
+
+    set_current_user(owner)
+
+    purchase_response = client.post(
+        "/api/v1/promotions/purchase",
+        json={
+            "listing_id": listing.id,
+            "promotion_package_id": package.id,
+            "target_city": "Bishkek",
+        },
+    )
+    assert purchase_response.status_code == 201
+    promotion_id = purchase_response.json()["id"]
+
+    payment_create_response = client.post(
+        "/api/v1/payments",
+        json={
+            "promotion_id": promotion_id,
+            "amount": "200.00",
+            "currency": "KGS",
+            "payment_provider": "mock",
+        },
+    )
+    assert payment_create_response.status_code == 201
+    payment_id = payment_create_response.json()["id"]
+
+    confirm_response = client.post(
+        f"/api/v1/payments/{payment_id}/confirm",
+        json={"provider_reference": "mock-txn-deactivate"},
+    )
+    assert confirm_response.status_code == 200
+
+    set_current_user(admin_user)
+
+    deactivate_response = client.patch(
+        f"/api/v1/promotions/admin/{promotion_id}/deactivate",
+        json={"reason": "policy violation"},
+    )
+    assert deactivate_response.status_code == 200
+    assert deactivate_response.json()["status"] == PromotionStatus.CANCELLED.value
+
+    db_session.refresh(listing)
+    assert listing.is_subscription is False
+    assert listing.subscription_expires_at is None

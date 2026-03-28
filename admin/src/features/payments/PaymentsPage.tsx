@@ -11,11 +11,14 @@ type PaymentHistoryItem = {
   id: number;
   user_id: number;
   listing_id: number | null;
+  promotion_id: number | null;
+  promotion_package_id: number | null;
   amount: string | number;
   currency: string;
   status: PaymentStatus;
   payment_provider: string;
   provider_reference: string | null;
+  description: string | null;
   created_at: string;
   updated_at: string;
   paid_at: string | null;
@@ -33,6 +36,8 @@ type PaymentFilters = {
   status_filter: PaymentStatus | "";
   user_id: string;
   listing_id: string;
+  promotion_id: string;
+  promotion_package_id: string;
   payment_provider: string;
   created_from: string;
   created_to: string;
@@ -44,6 +49,8 @@ const initialFilters: PaymentFilters = {
   status_filter: "",
   user_id: "",
   listing_id: "",
+  promotion_id: "",
+  promotion_package_id: "",
   payment_provider: "",
   created_from: "",
   created_to: "",
@@ -137,6 +144,16 @@ export function PaymentsPage() {
       const listingId = parsePositiveInt(appliedFilters.listing_id);
       if (listingId !== null) {
         params.set("listing_id", String(listingId));
+      }
+
+      const promotionId = parsePositiveInt(appliedFilters.promotion_id);
+      if (promotionId !== null) {
+        params.set("promotion_id", String(promotionId));
+      }
+
+      const promotionPackageId = parsePositiveInt(appliedFilters.promotion_package_id);
+      if (promotionPackageId !== null) {
+        params.set("promotion_package_id", String(promotionPackageId));
       }
 
       const provider = appliedFilters.payment_provider.trim();
@@ -277,6 +294,20 @@ export function PaymentsPage() {
         />
 
         <input
+          placeholder={t("promotion_id", "Promotion ID")}
+          value={draftFilters.promotion_id}
+          onChange={(event) => setDraftFilters((prev) => ({ ...prev, promotion_id: event.target.value }))}
+          inputMode="numeric"
+        />
+
+        <input
+          placeholder={t("promotion_package_id", "Package ID")}
+          value={draftFilters.promotion_package_id}
+          onChange={(event) => setDraftFilters((prev) => ({ ...prev, promotion_package_id: event.target.value }))}
+          inputMode="numeric"
+        />
+
+        <input
           placeholder={t("provider", "Provider")}
           value={draftFilters.payment_provider}
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, payment_provider: event.target.value }))}
@@ -339,6 +370,7 @@ export function PaymentsPage() {
                 <th>ID</th>
                 <th>{t("user", "User")}</th>
                 <th>{t("listing", "Listing")}</th>
+                <th>{t("promotion", "Promotion")}</th>
                 <th>{t("amount", "Amount")}</th>
                 <th>{t("status", "Status")}</th>
                 <th>{t("provider", "Provider")}</th>
@@ -350,7 +382,7 @@ export function PaymentsPage() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="users-empty-cell">
+                  <td colSpan={10} className="users-empty-cell">
                     {isLoading ? t("loading_payments", "Loading payments...") : t("no_payments_found", "No payments found")}
                   </td>
                 </tr>
@@ -360,6 +392,12 @@ export function PaymentsPage() {
                     <td>#{formatInteger(item.id, language)}</td>
                     <td>{formatInteger(item.user_id, language)}</td>
                     <td>{item.listing_id == null ? "-" : formatInteger(item.listing_id, language)}</td>
+                    <td>
+                      <div className="users-name-cell">
+                        <strong>{item.promotion_id == null ? "-" : formatInteger(item.promotion_id, language)}</strong>
+                        <span>{item.promotion_package_id == null ? "-" : `${t("package_id", "Package")} #${formatInteger(item.promotion_package_id, language)}`}</span>
+                      </div>
+                    </td>
                     <td>
                       <strong>{formatCurrency(item.amount, item.currency, language)}</strong>
                     </td>
@@ -440,12 +478,15 @@ export function PaymentsPage() {
                 <h3>{t("links", "Links")}</h3>
                 <p>{t("user_id", "User ID")}: <strong>{formatInteger(selectedPayment.user_id, language)}</strong></p>
                 <p>{t("listing_id", "Listing ID")}: <strong>{selectedPayment.listing_id == null ? "-" : formatInteger(selectedPayment.listing_id, language)}</strong></p>
+                <p>{t("promotion_id", "Promotion ID")}: <strong>{selectedPayment.promotion_id == null ? "-" : formatInteger(selectedPayment.promotion_id, language)}</strong></p>
+                <p>{t("promotion_package_id", "Promotion package ID")}: <strong>{selectedPayment.promotion_package_id == null ? "-" : formatInteger(selectedPayment.promotion_package_id, language)}</strong></p>
                 <p>{t("provider", "Provider")}: <strong>{selectedPayment.payment_provider}</strong></p>
               </article>
 
               <article className="dashboard-stat-group">
                 <h3>{t("provider_reference", "Provider Reference")}</h3>
                 <p><strong>{selectedPayment.provider_reference ?? t("no_provider_reference", "No provider reference")}</strong></p>
+                <p>{t("description", "Description")}: <strong>{selectedPayment.description ?? "-"}</strong></p>
               </article>
 
               <article className="dashboard-stat-group">

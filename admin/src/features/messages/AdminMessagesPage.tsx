@@ -1,0 +1,573 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { useAuth } from "../../app/auth/AuthContext";
+import { usePageI18n } from "../../app/i18n/I18nContext";
+import { formatDateTime, formatInteger } from "../../shared/i18n/format";
+
+type ConversationItem = {
+  id: number;
+  listing_id: number;
+  created_by_user_id: number;
+  participant_a_id: number;
+  participant_b_id: number;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+  last_message_preview: string | null;
+  unread_count: number;
+};
+
+type ConversationListResponse = {
+  items: ConversationItem[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+};
+
+type MessageAttachmentItem = {
+  id: number;
+  message_id: number;
+  file_name: string;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  file_path: string;
+  created_at: string;
+};
+
+type MessageItem = {
+  id: number;
+  conversation_id: number;
+  sender_id: number;
+  message_type: string;
+  text_body: string | null;
+  is_read: boolean;
+  sent_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+  attachments: MessageAttachmentItem[];
+};
+
+type MessageListResponse = {
+  items: MessageItem[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+};
+
+type ConversationFilters = {
+  user_id: string;
+  listing_id: string;
+};
+
+const initialFilters: ConversationFilters = {
+  user_id: "",
+  listing_id: "",
+};
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
+function parsePositiveInt(raw: string): number | null {
+  const value = raw.trim();
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function formatFileSize(bytes: number, language: "en" | "ru"): string {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return "-";
+  }
+
+  if (bytes < 1024) {
+    return `${formatInteger(bytes, language)} B`;
+  }
+
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return `${kb.toFixed(1)} KB`;
+  }
+
+  const mb = kb / 1024;
+  return `${mb.toFixed(2)} MB`;
+}
+
+export function AdminMessagesPage() {
+  const { authFetch } = useAuth();
+  const { t, language } = usePageI18n("messages");
+
+  const [draftFilters, setDraftFilters] = useState<ConversationFilters>(initialFilters);
+  const [appliedFilters, setAppliedFilters] = useState<ConversationFilters>(initialFilters);
+  const [hasSubmittedFilters, setHasSubmittedFilters] = useState(false);
+
+  const [conversationPage, setConversationPage] = useState(1);
+  const [conversations, setConversations] = useState<ConversationListResponse | null>(null);
+  const [isConversationsLoading, setIsConversationsLoading] = useState(false);
+  const [conversationsError, setConversationsError] = useState<string | null>(null);
+
+  const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
+
+  const [messagesPage, setMessagesPage] = useState(1);
+  const [messages, setMessages] = useState<MessageListResponse | null>(null);
+  const [isMessagesLoading, setIsMessagesLoading] = useState(false);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<number | null>(null);
+
+  const appliedUserId = useMemo(() => parsePositiveInt(appliedFilters.user_id), [appliedFilters.user_id]);
+  const appliedListingId = useMemo(() => parsePositiveInt(appliedFilters.listing_id), [appliedFilters.listing_id]);
+
+  const selectedConversation = useMemo(() => {
+    if (!conversations || selectedConversationId === null) {
+      return null;
+    }
+    return conversations.items.find((item) => item.id === selectedConversationId) ?? null;
+  }, [conversations, selectedConversationId]);
+
+  const loadConversations = useCallback(async () => {
+    if (!hasSubmittedFilters) {
+      return;
+    }
+
+    if (appliedUserId === null) {
+      setConversations(null);
+      setSelectedConversationId(null);
+      setConversationsError(t("user_required", "User ID is required for conversation oversight"));
+      return;
+    }
+
+    setIsConversationsLoading(true);
+    setConversationsError(null);
+
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(conversationPage));
+      params.set("page_size", "20");
+      params.set("user_id", String(appliedUserId));
+
+      if (appliedListingId !== null) {
+        params.set("listing_id", String(appliedListingId));
+      }
+
+      const response = await authFetch(`/admin/messages/conversations?${params.toString()}`);
+      if (!response.ok) {
+        let message = t("error_load_conversations", "Failed to load conversations");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_load_conversations", "Failed to load conversations");
+        }
+        throw new Error(message);
+      }
+
+      const payload = (await response.json()) as ConversationListResponse;
+      setConversations(payload);
+
+      setSelectedConversationId((current) => {
+        if (payload.items.length === 0) {
+          return null;
+        }
+        if (current !== null && payload.items.some((item) => item.id === current)) {
+          return current;
+        }
+        return payload.items[0].id;
+      });
+    } catch (error) {
+      setConversationsError(extractErrorMessage(error, t("error_load_conversations", "Failed to load conversations")));
+    } finally {
+      setIsConversationsLoading(false);
+    }
+  }, [appliedListingId, appliedUserId, authFetch, conversationPage, hasSubmittedFilters, t]);
+
+  useEffect(() => {
+    void loadConversations();
+  }, [loadConversations]);
+
+  const loadMessages = useCallback(async () => {
+    if (selectedConversationId === null) {
+      setMessages(null);
+      setMessagesError(null);
+      return;
+    }
+
+    setIsMessagesLoading(true);
+    setMessagesError(null);
+
+    try {
+      const params = new URLSearchParams();
+      params.set("conversation_id", String(selectedConversationId));
+      params.set("page", String(messagesPage));
+      params.set("page_size", "30");
+
+      const response = await authFetch(`/admin/messages?${params.toString()}`);
+      if (!response.ok) {
+        let message = t("error_load_messages", "Failed to load messages");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_load_messages", "Failed to load messages");
+        }
+        throw new Error(message);
+      }
+
+      const payload = (await response.json()) as MessageListResponse;
+      setMessages(payload);
+    } catch (error) {
+      setMessagesError(extractErrorMessage(error, t("error_load_messages", "Failed to load messages")));
+    } finally {
+      setIsMessagesLoading(false);
+    }
+  }, [authFetch, messagesPage, selectedConversationId, t]);
+
+  useEffect(() => {
+    void loadMessages();
+  }, [loadMessages]);
+
+  const onApplyFilters = () => {
+    setHasSubmittedFilters(true);
+    setConversationPage(1);
+    setMessagesPage(1);
+    setAppliedFilters({
+      user_id: draftFilters.user_id.trim(),
+      listing_id: draftFilters.listing_id.trim(),
+    });
+  };
+
+  const onResetFilters = () => {
+    setDraftFilters(initialFilters);
+    setAppliedFilters(initialFilters);
+    setHasSubmittedFilters(false);
+    setConversationPage(1);
+    setMessagesPage(1);
+    setSelectedConversationId(null);
+    setConversations(null);
+    setMessages(null);
+    setConversationsError(null);
+    setMessagesError(null);
+  };
+
+  const downloadAttachment = async (attachment: MessageAttachmentItem) => {
+    setDownloadingAttachmentId(attachment.id);
+
+    try {
+      const response = await authFetch(`/admin/messages/attachments/${attachment.id}/download`);
+      if (!response.ok) {
+        let message = t("error_download_attachment", "Failed to download attachment");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_download_attachment", "Failed to download attachment");
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = attachment.original_name || attachment.file_name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      setMessagesError(extractErrorMessage(error, t("error_download_attachment", "Failed to download attachment")));
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  };
+
+  const conversationRows = conversations?.items ?? [];
+  const messageRows = messages?.items ?? [];
+
+  const conversationTotalPages = conversations?.total_pages ?? 0;
+  const canConversationPrev = conversationPage > 1;
+  const canConversationNext = conversationTotalPages > 0 && conversationPage < conversationTotalPages;
+
+  const messageTotalPages = messages?.total_pages ?? 0;
+  const canMessagePrev = messagesPage > 1;
+  const canMessageNext = messageTotalPages > 0 && messagesPage < messageTotalPages;
+
+  const conversationSummary = useMemo(() => {
+    if (!hasSubmittedFilters) {
+      return t("set_filters_prompt", "Set filters and click Apply filters");
+    }
+
+    if (!conversations) {
+      return "-";
+    }
+
+    if (conversations.total_items === 0) {
+      return t("no_conversations_found", "No conversations found");
+    }
+
+    const from = (conversations.page - 1) * conversations.page_size + 1;
+    const to = Math.min(conversations.page * conversations.page_size, conversations.total_items);
+    return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(conversations.total_items, language)}`;
+  }, [conversations, hasSubmittedFilters, language, t]);
+
+  const messageSummary = useMemo(() => {
+    if (!selectedConversation) {
+      return t("select_conversation", "Select a conversation to inspect messages");
+    }
+
+    if (!messages) {
+      return "-";
+    }
+
+    if (messages.total_items === 0) {
+      return t("no_messages_found", "No messages found");
+    }
+
+    const from = (messages.page - 1) * messages.page_size + 1;
+    const to = Math.min(messages.page * messages.page_size, messages.total_items);
+    return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(messages.total_items, language)}`;
+  }, [language, messages, selectedConversation, t]);
+
+  return (
+    <section className="module-page">
+      <header className="module-header">
+        <div>
+          <h1>{t("title", "Messaging oversight")}</h1>
+          <p>{t("subtitle", "Inspect conversations for abuse review with auditable access.")}</p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => {
+            void loadConversations();
+            void loadMessages();
+          }}
+          disabled={isConversationsLoading || isMessagesLoading}
+        >
+          {isConversationsLoading || isMessagesLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
+        </button>
+      </header>
+
+      {conversationsError ? <div className="dashboard-error">{conversationsError}</div> : null}
+      {messagesError ? <div className="dashboard-error">{messagesError}</div> : null}
+
+      <section className="search-strip messages-search-strip" aria-label={t("filters", "Filters") }>
+        <input
+          placeholder={t("user_id", "User ID")}
+          value={draftFilters.user_id}
+          onChange={(event) => setDraftFilters((prev) => ({ ...prev, user_id: event.target.value }))}
+          inputMode="numeric"
+        />
+        <input
+          placeholder={t("listing_id", "Listing ID (optional)")}
+          value={draftFilters.listing_id}
+          onChange={(event) => setDraftFilters((prev) => ({ ...prev, listing_id: event.target.value }))}
+          inputMode="numeric"
+        />
+        <button type="button" className="btn btn-ghost" onClick={onResetFilters}>
+          {t("reset", "Reset")}
+        </button>
+        <button type="button" className="btn btn-primary" onClick={onApplyFilters}>
+          {t("apply_filters", "Apply filters")}
+        </button>
+      </section>
+
+      <section className="table-card" aria-label={t("conversations_table", "Conversations table") }>
+        <div className="table-head users-table-head">
+          <strong>{t("conversations", "Conversations")}</strong>
+          <span>{conversationSummary}</span>
+        </div>
+
+        <div className="messages-table-wrap">
+          <table className="messages-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>{t("listing", "Listing")}</th>
+                <th>{t("participants", "Participants")}</th>
+                <th>{t("last_message", "Last message")}</th>
+                <th>{t("last_activity", "Last activity")}</th>
+                <th>{t("created", "Created")}</th>
+                <th>{t("actions", "Actions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {conversationRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="users-empty-cell">
+                    {isConversationsLoading
+                      ? t("loading_conversations", "Loading conversations...")
+                      : t("no_conversations_found", "No conversations found")}
+                  </td>
+                </tr>
+              ) : (
+                conversationRows.map((conversation) => (
+                  <tr key={conversation.id}>
+                    <td>#{formatInteger(conversation.id, language)}</td>
+                    <td>{formatInteger(conversation.listing_id, language)}</td>
+                    <td>
+                      <div className="users-name-cell">
+                        <strong>A: {formatInteger(conversation.participant_a_id, language)}</strong>
+                        <span>B: {formatInteger(conversation.participant_b_id, language)}</span>
+                      </div>
+                    </td>
+                    <td>{conversation.last_message_preview ?? "-"}</td>
+                    <td>{formatDateTime(conversation.last_message_at, language)}</td>
+                    <td>{formatDateTime(conversation.created_at, language)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => {
+                          setSelectedConversationId(conversation.id);
+                          setMessagesPage(1);
+                        }}
+                      >
+                        {selectedConversationId === conversation.id ? t("selected", "Selected") : t("inspect", "Inspect")}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="table-footer">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={!canConversationPrev}
+            onClick={() => setConversationPage((prev) => Math.max(1, prev - 1))}
+          >
+            {t("previous", "Previous")}
+          </button>
+          <span className="users-page-indicator">
+            {t("page", "Page")} {formatInteger(conversations?.page ?? conversationPage, language)}{conversationTotalPages ? ` / ${formatInteger(conversationTotalPages, language)}` : ""}
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={!canConversationNext}
+            onClick={() => setConversationPage((prev) => prev + 1)}
+          >
+            {t("next", "Next")}
+          </button>
+        </div>
+      </section>
+
+      <section className="table-card" aria-label={t("messages_table", "Messages table") }>
+        <div className="table-head users-table-head">
+          <strong>{t("messages", "Messages")}</strong>
+          <span>{messageSummary}</span>
+        </div>
+
+        <div className="messages-table-wrap">
+          <table className="messages-table messages-detail-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>{t("sender", "Sender")}</th>
+                <th>{t("type", "Type")}</th>
+                <th>{t("content", "Content")}</th>
+                <th>{t("attachments", "Attachments")}</th>
+                <th>{t("sent_at", "Sent")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {messageRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="users-empty-cell">
+                    {selectedConversation === null
+                      ? t("select_conversation", "Select a conversation to inspect messages")
+                      : isMessagesLoading
+                        ? t("loading_messages", "Loading messages...")
+                        : t("no_messages_found", "No messages found")}
+                  </td>
+                </tr>
+              ) : (
+                messageRows.map((message) => (
+                  <tr key={message.id}>
+                    <td>#{formatInteger(message.id, language)}</td>
+                    <td>{formatInteger(message.sender_id, language)}</td>
+                    <td>{message.message_type}</td>
+                    <td>{message.text_body?.trim() || "-"}</td>
+                    <td>
+                      {message.attachments.length === 0 ? (
+                        "-"
+                      ) : (
+                        <div className="messages-attachments-list">
+                          {message.attachments.map((attachment) => (
+                            <button
+                              key={attachment.id}
+                              type="button"
+                              className="btn btn-ghost messages-attachment-btn"
+                              disabled={downloadingAttachmentId === attachment.id}
+                              onClick={() => void downloadAttachment(attachment)}
+                            >
+                              {downloadingAttachmentId === attachment.id
+                                ? t("downloading", "Downloading...")
+                                : `${attachment.original_name} (${formatFileSize(attachment.file_size, language)})`}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td>{formatDateTime(message.sent_at, language)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="table-footer">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={!canMessagePrev || selectedConversation === null}
+            onClick={() => setMessagesPage((prev) => Math.max(1, prev - 1))}
+          >
+            {t("previous", "Previous")}
+          </button>
+          <span className="users-page-indicator">
+            {t("page", "Page")} {formatInteger(messages?.page ?? messagesPage, language)}{messageTotalPages ? ` / ${formatInteger(messageTotalPages, language)}` : ""}
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={!canMessageNext || selectedConversation === null}
+            onClick={() => setMessagesPage((prev) => prev + 1)}
+          >
+            {t("next", "Next")}
+          </button>
+        </div>
+      </section>
+    </section>
+  );
+}

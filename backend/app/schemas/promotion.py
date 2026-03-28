@@ -47,6 +47,10 @@ class PromotionPurchaseRequest(BaseModel):
     target_category_id: int | None = Field(default=None, gt=0)
 
 
+class PromotionDeactivateRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class PromotionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

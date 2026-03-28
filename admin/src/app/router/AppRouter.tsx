@@ -10,6 +10,8 @@ import { ListingsModerationPage } from "../../features/listings/ListingsModerati
 import { CategoriesPage } from "../../features/categories/CategoriesPage";
 import { PaymentsPage } from "../../features/payments/PaymentsPage";
 import { AuditLogsPage } from "../../features/audit/AuditLogsPage";
+import { AdminMessagesPage } from "../../features/messages/AdminMessagesPage";
+import { PromotionsPage } from "../../features/promotions/PromotionsPage";
 
 export function AppRouter() {
   return (
@@ -24,6 +26,8 @@ export function AppRouter() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
+          <Route path="/messages" element={<AdminMessagesPage />} />
+          <Route path="/promotions" element={<PromotionsPage />} />
           <Route path="/audit-logs" element={<AuditLogsPage />} />
         </Route>
       </Route>
