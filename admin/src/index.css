@@ -99,6 +99,18 @@ textarea:focus-visible {
   display: grid;
   place-items: center;
   padding: 16px;
+  position: relative;
+}
+
+.auth-top-right-language {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+}
+
+.auth-top-right-language .auth-language-toggle {
+  min-width: 40px;
 }
 
 .auth-card {

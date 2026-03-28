@@ -66,7 +66,7 @@ PAGE_TRANSLATIONS: dict[str, dict[str, dict[str, str]]] = {
         },
         "ru": {
             "language": "Язык",
-            "title": "Вход в админку",
+            "title": "Вход в админ пан.",
             "subtitle": "Войдите в рабочее пространство модерации и операций.",
             "email": "Email",
             "password": "Пароль",

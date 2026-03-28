@@ -46,25 +46,21 @@ export function LoginPage() {
 
   return (
     <div className="auth-shell">
-      <form className="auth-card" onSubmit={onSubmit}>
-        <div className="auth-lang-row">
-          <span>{t("language", "Language")}</span>
-          <div className="language-switch" role="group" aria-label={t("language", "Language")}>
-            <button
-              type="button"
-              className="btn btn-ghost language-toggle-btn"
-              aria-label={t("language", "Language")}
-              title={t("language", "Language")}
-              onClick={toggleLanguage}
-            >
-              <span className="lang-current">{currentLanguage}</span>
-              <span className="lang-next" aria-hidden="true">{nextLanguage}</span>
-            </button>
-          </div>
-        </div>
+      <div className="auth-top-right-language language-switch" role="group" aria-label={t("language", "Language")}>
+        <button
+          type="button"
+          className="btn btn-ghost language-toggle-btn auth-language-toggle"
+          aria-label={t("language", "Language")}
+          title={t("language", "Language")}
+          onClick={toggleLanguage}
+        >
+          <span className="lang-current">{currentLanguage}</span>
+          <span className="lang-next" aria-hidden="true">{nextLanguage}</span>
+        </button>
+      </div>
 
+      <form className="auth-card" onSubmit={onSubmit}>
         <h1>{t("title", "Admin Login")}</h1>
-        <p>{t("subtitle", "Sign in to moderation and operations workspace.")}</p>
 
         {error ? <div className="auth-error">{error}</div> : null}
 
