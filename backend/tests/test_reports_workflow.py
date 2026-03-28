@@ -265,6 +265,7 @@ def test_create_message_report_sets_conversation_context(client, db_session, set
     assert payload["target_type"] == "message"
     assert payload["target_id"] == message.id
     assert payload["target_conversation_id"] == conversation.id
+    assert payload["target_listing_id"] == listing.id
 
     set_current_user(admin_user)
     admin_list_response = client.get(
@@ -273,7 +274,71 @@ def test_create_message_report_sets_conversation_context(client, db_session, set
     )
     assert admin_list_response.status_code == 200
     items = admin_list_response.json()["items"]
-    assert any(item["id"] == payload["id"] and item["target_conversation_id"] == conversation.id for item in items)
+    assert any(
+        item["id"] == payload["id"]
+        and item["target_conversation_id"] == conversation.id
+        and item.get("target_listing_id") == listing.id
+        for item in items
+    )
+
+
+def test_admin_resolve_message_report_can_moderate_sender(client, db_session, set_current_user):
+    user_role = create_role(db_session, "user")
+    admin_role = create_role(db_session, "admin")
+
+    reporter = create_user(db_session, "reporter-message-mod@example.com", [user_role])
+    sender = create_user(db_session, "sender-message-mod@example.com", [user_role])
+    admin_user = create_user(db_session, "admin-message-mod@example.com", [admin_role])
+
+    category = create_category(db_session)
+    listing = create_listing(db_session, sender.id, category.id)
+    conversation = create_conversation(
+        db_session,
+        listing_id=listing.id,
+        created_by_user_id=reporter.id,
+        participant_a_id=min(reporter.id, sender.id),
+        participant_b_id=max(reporter.id, sender.id),
+    )
+    message = create_message(db_session, conversation.id, sender.id, "Harassment in chat")
+
+    set_current_user(reporter)
+    create_response = client.post(
+        "/api/v1/reports",
+        json={
+            "target_type": "message",
+            "target_id": message.id,
+            "reason_code": "abuse",
+            "reason_text": "Please block sender",
+        },
+    )
+    assert create_response.status_code == 201
+    report_id = create_response.json()["id"]
+
+    set_current_user(admin_user)
+    resolve_response = client.patch(
+        f"/api/v1/reports/{report_id}/resolve",
+        json={
+            "action": "resolve",
+            "resolution_note": "Blocked sender due to abusive behavior",
+            "moderation_action": "block",
+        },
+    )
+    assert resolve_response.status_code == 200
+    assert resolve_response.json()["status"] == ReportStatus.RESOLVED.value
+
+    db_session.refresh(sender)
+    assert sender.account_status == AccountStatus.BLOCKED
+
+    sender_audit = db_session.scalar(
+        select(AdminAuditLog)
+        .where(
+            AdminAuditLog.target_type == "user",
+            AdminAuditLog.target_id == sender.id,
+            AdminAuditLog.action == "message_sender_moderation:block",
+        )
+        .order_by(AdminAuditLog.id.desc())
+    )
+    assert sender_audit is not None
 
 
 def test_create_message_report_requires_conversation_participation(client, db_session, set_current_user):
@@ -338,10 +403,37 @@ def test_create_report_with_evidence_and_admin_download(client, db_session, set_
         saved_file_path = Path(settings.media_root) / payload["attachments"][0]["file_path"]
 
         set_current_user(admin_user)
+        preview_response = client.get(f"/api/v1/reports/attachments/{attachment_id}/preview")
+        assert preview_response.status_code == 200
+        assert preview_response.content == b"fake-image-content"
+        assert preview_response.headers.get("content-type", "").startswith("image/")
+
+        preview_audit = db_session.scalar(
+            select(AdminAuditLog)
+            .where(
+                AdminAuditLog.target_type == "report_attachment",
+                AdminAuditLog.target_id == attachment_id,
+                AdminAuditLog.action == "report_attachment_download",
+            )
+            .order_by(AdminAuditLog.id.desc())
+        )
+        assert preview_audit is None
+
         download_response = client.get(f"/api/v1/reports/attachments/{attachment_id}/download")
         assert download_response.status_code == 200
         assert download_response.content == b"fake-image-content"
         assert "attachment" in download_response.headers.get("content-disposition", "").lower()
+
+        download_audit = db_session.scalar(
+            select(AdminAuditLog)
+            .where(
+                AdminAuditLog.target_type == "report_attachment",
+                AdminAuditLog.target_id == attachment_id,
+                AdminAuditLog.action == "report_attachment_download",
+            )
+            .order_by(AdminAuditLog.id.desc())
+        )
+        assert download_audit is not None
     finally:
         if saved_file_path is not None:
             saved_file_path.unlink(missing_ok=True)

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
@@ -27,6 +27,7 @@ type ReportItem = {
   target_type: ReportTargetType;
   target_id: number;
   target_conversation_id: number | null;
+  target_listing_id: number | null;
   reason_code: string;
   reason_text: string | null;
   attachments: ReportAttachmentItem[];
@@ -78,10 +79,37 @@ function targetTypeLabel(targetType: ReportTargetType, t: (key: string, fallback
   return t("target_message", "Message");
 }
 
+function formatFileSize(bytes: number, language: "en" | "ru"): string {
+  if (!Number.isFinite(bytes) || bytes < 1024) {
+    return `${Math.max(0, Math.floor(bytes || 0))} B`;
+  }
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(kb)} KB`;
+  }
+  const mb = kb / 1024;
+  return `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(mb)} MB`;
+}
+
+function isImageAttachment(attachment: ReportAttachmentItem): boolean {
+  return attachment.mime_type.toLowerCase().startsWith("image/");
+}
+
+function getReportListingId(report: ReportItem): number | null {
+  if (report.target_listing_id !== null) {
+    return report.target_listing_id;
+  }
+  if (report.target_type === "listing") {
+    return report.target_id;
+  }
+  return null;
+}
+
 export function ReportsPage() {
   const { authFetch } = useAuth();
   const { t, language } = usePageI18n("reports");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [reports, setReports] = useState<ReportListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,6 +126,10 @@ export function ReportsPage() {
   const [resolutionNote, setResolutionNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<number | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<Record<number, string>>({});
+  const [previewLoadingIds, setPreviewLoadingIds] = useState<number[]>([]);
+  const [previewFailedIds, setPreviewFailedIds] = useState<number[]>([]);
+  const previewUrlsRef = useRef<Record<number, string>>({});
 
   const loadReports = useCallback(async () => {
     setIsLoading(true);
@@ -123,9 +155,16 @@ export function ReportsPage() {
       const payload = (await response.json()) as ReportListResponse;
       setReports(payload);
 
+      const reportIdFromQuery = Number(searchParams.get("report_id"));
+      const preferredReportId = Number.isInteger(reportIdFromQuery) && reportIdFromQuery > 0 ? reportIdFromQuery : null;
+
       if (payload.items.length > 0) {
         const selectedIsVisible = selectedReportId !== null && payload.items.some((item) => item.id === selectedReportId);
-        if (!selectedIsVisible) {
+        const preferredVisible = preferredReportId !== null && payload.items.some((item) => item.id === preferredReportId);
+
+        if (preferredVisible) {
+          setSelectedReportId(preferredReportId);
+        } else if (!selectedIsVisible) {
           setSelectedReportId(payload.items[0].id);
         }
       }
@@ -138,7 +177,7 @@ export function ReportsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch, page, selectedReportId, statusFilter, targetTypeFilter]);
+  }, [authFetch, page, searchParams, selectedReportId, statusFilter, targetTypeFilter]);
 
   useEffect(() => {
     void loadReports();
@@ -156,6 +195,71 @@ export function ReportsPage() {
     setModerationAction("");
     setResolutionNote(selectedReport?.resolution_note ?? "");
   }, [selectedReport?.id, selectedReport?.resolution_note]);
+
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
+
+  useEffect(() => {
+    return () => {
+      for (const previewUrl of Object.values(previewUrlsRef.current)) {
+        window.URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    setPreviewUrls((previous) => {
+      for (const previewUrl of Object.values(previous)) {
+        window.URL.revokeObjectURL(previewUrl);
+      }
+      return {};
+    });
+    setPreviewLoadingIds([]);
+    setPreviewFailedIds([]);
+  }, [selectedReport?.id]);
+
+  const loadAttachmentPreview = useCallback(
+    async (attachment: ReportAttachmentItem) => {
+      if (!isImageAttachment(attachment)) {
+        return;
+      }
+
+      if (previewUrls[attachment.id] || previewLoadingIds.includes(attachment.id)) {
+        return;
+      }
+
+      setPreviewLoadingIds((previous) => (previous.includes(attachment.id) ? previous : [...previous, attachment.id]));
+
+      try {
+        const response = await authFetch(`/reports/attachments/${attachment.id}/preview`);
+        if (!response.ok) {
+          throw new Error("Failed to load preview");
+        }
+
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        setPreviewUrls((previous) => ({ ...previous, [attachment.id]: objectUrl }));
+        setPreviewFailedIds((previous) => previous.filter((value) => value !== attachment.id));
+      } catch {
+        setPreviewFailedIds((previous) => (previous.includes(attachment.id) ? previous : [...previous, attachment.id]));
+      } finally {
+        setPreviewLoadingIds((previous) => previous.filter((value) => value !== attachment.id));
+      }
+    },
+    [authFetch, previewLoadingIds, previewUrls],
+  );
+
+  useEffect(() => {
+    if (!isReviewModalOpen || !selectedReport) {
+      return;
+    }
+
+    const imageAttachments = selectedReport.attachments.filter((attachment) => isImageAttachment(attachment));
+    for (const attachment of imageAttachments) {
+      void loadAttachmentPreview(attachment);
+    }
+  }, [isReviewModalOpen, loadAttachmentPreview, selectedReport]);
 
   const onApplyFilters = () => {
     if (page !== 1) {
@@ -270,6 +374,17 @@ export function ReportsPage() {
     navigate(`/messages?${params.toString()}`);
   };
 
+  const openReportListingInModeration = (report: ReportItem) => {
+    const listingId = getReportListingId(report);
+    if (listingId === null) {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set("listing_id", String(listingId));
+    navigate(`/listings?${params.toString()}`);
+  };
+
   const moderationOptions = useMemo(() => {
     if (!selectedReport) {
       return [] as Array<{ value: string; label: string }>;
@@ -284,10 +399,6 @@ export function ReportsPage() {
       ];
     }
 
-    if (selectedReport.target_type === "message") {
-      return [] as Array<{ value: string; label: string }>;
-    }
-
     return [
       { value: "block", label: t("moderation_block_user", "Block user") },
       { value: "unblock", label: t("moderation_unblock_user", "Unblock user") },
@@ -295,6 +406,53 @@ export function ReportsPage() {
       { value: "deactivate", label: t("moderation_deactivate_user", "Deactivate user") },
     ];
   }, [selectedReport, t]);
+
+  const chatAbusePresets = useMemo(() => {
+    if (!selectedReport || selectedReport.target_type !== "message") {
+      return [] as Array<{ id: string; label: string; action: ResolveAction; moderationAction: string; note: string }>;
+    }
+
+    return [
+      {
+        id: "chat-warning",
+        label: t("preset_chat_warning", "Warning note"),
+        action: "resolve" as ResolveAction,
+        moderationAction: "",
+        note: t("preset_note_chat_warning", "Message violates chat policy. Warning issued."),
+      },
+      {
+        id: "chat-block",
+        label: t("preset_chat_block_sender", "Block sender"),
+        action: "resolve" as ResolveAction,
+        moderationAction: "block",
+        note: t("preset_note_chat_block_sender", "Sender blocked due to abusive chat behavior."),
+      },
+      {
+        id: "chat-deactivate",
+        label: t("preset_chat_deactivate_sender", "Deactivate sender"),
+        action: "resolve" as ResolveAction,
+        moderationAction: "deactivate",
+        note: t("preset_note_chat_deactivate_sender", "Sender account deactivated after severe abuse in chat."),
+      },
+      {
+        id: "chat-dismiss",
+        label: t("preset_chat_false_positive", "Dismiss as false positive"),
+        action: "dismiss" as ResolveAction,
+        moderationAction: "",
+        note: t("preset_note_chat_false_positive", "No policy violation detected in the reported message."),
+      },
+    ];
+  }, [selectedReport, t]);
+
+  const applyChatPreset = (preset: {
+    action: ResolveAction;
+    moderationAction: string;
+    note: string;
+  }) => {
+    setResolveAction(preset.action);
+    setModerationAction(preset.moderationAction);
+    setResolutionNote(preset.note);
+  };
 
   const totalPages = reports?.total_pages ?? 0;
   const canPrev = page > 1;
@@ -388,6 +546,11 @@ export function ReportsPage() {
                         <strong>{targetTypeLabel(report.target_type, t)}</strong>
                         <span>{t("reporter", "Reporter")} #{formatInteger(report.reporter_user_id, language)}</span>
                         <span>{t("target", "target")} #{formatInteger(report.target_id, language)}</span>
+                        {getReportListingId(report) !== null ? (
+                          <span>
+                            {t("listing_context", "Listing")} #{formatInteger(getReportListingId(report) ?? 0, language)}
+                          </span>
+                        ) : null}
                       </div>
                     </td>
                     <td>
@@ -486,66 +649,197 @@ export function ReportsPage() {
           {!selectedReport ? <p>{t("select_report", "Select a report and click Review.")}</p> : null}
 
           {selectedReport ? (
-            <form className="reports-form" onSubmit={onResolveSubmit}>
-              <div className="reports-form-grid">
-                <label>
-                  {t("action", "Action")}
-                  <select
-                    className="users-filter-select"
-                    value={resolveAction}
-                    onChange={(event) => setResolveAction(event.target.value as ResolveAction)}
-                  >
-                    <option value="resolve">{t("resolve", "Resolve")}</option>
-                    <option value="dismiss">{t("dismiss", "Dismiss")}</option>
-                  </select>
-                </label>
+            <div className="reports-detail-stack">
+              <div className="dashboard-stats-grid reports-details-grid">
+                <article className="dashboard-stat-group">
+                  <h3>{t("report_details", "Report details")}</h3>
+                  <p>
+                    {t("status", "Status")}: <strong>{statusLabel(selectedReport.status, t)}</strong>
+                  </p>
+                  <p>
+                    {t("reporter", "Reporter")}: <strong>#{formatInteger(selectedReport.reporter_user_id, language)}</strong>
+                  </p>
+                  <p>
+                    {t("target", "Target")}: <strong>{targetTypeLabel(selectedReport.target_type, t)} #{formatInteger(selectedReport.target_id, language)}</strong>
+                  </p>
+                  {selectedReport.target_conversation_id !== null ? (
+                    <p>
+                      {t("conversation", "Conversation")}: <strong>#{formatInteger(selectedReport.target_conversation_id, language)}</strong>
+                    </p>
+                  ) : null}
+                  {getReportListingId(selectedReport) !== null ? (
+                    <p>
+                      {t("listing_context", "Listing")}: <strong>#{formatInteger(getReportListingId(selectedReport) ?? 0, language)}</strong>
+                    </p>
+                  ) : null}
+                  <p>
+                    {t("created", "Created")}: <strong>{formatDateTime(selectedReport.created_at, language)}</strong>
+                  </p>
+                </article>
 
-                <label>
-                  {t("moderation_action_optional", "Moderation action (optional)")}
-                  <select
-                    className="users-filter-select"
-                    value={moderationAction}
-                    onChange={(event) => setModerationAction(event.target.value)}
-                    disabled={moderationOptions.length === 0}
-                  >
-                    <option value="">{t("no_moderation_action", "No moderation action")}</option>
-                    {moderationOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
+                <article className="dashboard-stat-group">
+                  <h3>{t("reason", "Reason")}</h3>
+                  <p><strong>{selectedReport.reason_code}</strong></p>
+                  <p>{selectedReport.reason_text ?? t("no_reason_text", "No text provided")}</p>
+                  <div className="users-actions-cell reports-context-actions">
+                    {selectedReport.target_type === "message" && selectedReport.target_conversation_id !== null ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => openReportMessageInMessages(selectedReport)}
+                      >
+                        {t("open_in_messages", "Open in messages")}
+                      </button>
+                    ) : null}
+                    {getReportListingId(selectedReport) !== null ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => openReportListingInModeration(selectedReport)}
+                      >
+                        {t("open_in_listings", "Open in listings")}
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              </div>
+
+              <article className="dashboard-stat-group reports-evidence-card">
+                <h3>{t("evidence_files", "Evidence files")}</h3>
+                {selectedReport.attachments.length === 0 ? (
+                  <p className="reports-no-evidence">{t("no_evidence", "No evidence files attached")}</p>
+                ) : (
+                  <div className="reports-evidence-grid">
+                    {selectedReport.attachments.map((attachment) => {
+                      const previewUrl = previewUrls[attachment.id];
+                      const previewLoading = previewLoadingIds.includes(attachment.id);
+                      const previewFailed = previewFailedIds.includes(attachment.id);
+
+                      return (
+                        <article key={attachment.id} className="reports-evidence-item">
+                          <div className="reports-evidence-preview">
+                            {isImageAttachment(attachment) ? (
+                              previewUrl ? (
+                                <img src={previewUrl} alt={attachment.original_name} loading="lazy" />
+                              ) : previewLoading ? (
+                                <span>{t("loading_preview", "Loading preview...")}</span>
+                              ) : previewFailed ? (
+                                <span>{t("preview_unavailable", "Preview unavailable")}</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  onClick={() => void loadAttachmentPreview(attachment)}
+                                >
+                                  {t("load_preview", "Load preview")}
+                                </button>
+                              )
+                            ) : (
+                              <span>{attachment.mime_type}</span>
+                            )}
+                          </div>
+
+                          <div className="reports-evidence-meta">
+                            <strong>{attachment.original_name}</strong>
+                            <span>{t("mime_type", "MIME")}: {attachment.mime_type}</span>
+                            <span>{t("size", "Size")}: {formatFileSize(attachment.file_size, language)}</span>
+                            <span>{t("uploaded", "Uploaded")}: {formatDateTime(attachment.created_at, language)}</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            className="btn btn-ghost messages-attachment-btn"
+                            disabled={downloadingAttachmentId === attachment.id}
+                            onClick={() => void downloadAttachment(attachment)}
+                          >
+                            {downloadingAttachmentId === attachment.id ? t("downloading", "Downloading...") : t("download", "Download")}
+                          </button>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </article>
+
+              {chatAbusePresets.length > 0 ? (
+                <article className="dashboard-stat-group reports-presets-card">
+                  <h3>{t("quick_presets", "Quick presets")}</h3>
+                  <div className="users-actions-cell reports-presets-row">
+                    {chatAbusePresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => applyChatPreset(preset)}
+                      >
+                        {preset.label}
+                      </button>
                     ))}
-                  </select>
+                  </div>
+                </article>
+              ) : null}
+
+              <form className="reports-form" onSubmit={onResolveSubmit}>
+                <div className="reports-form-grid">
+                  <label>
+                    {t("action", "Action")}
+                    <select
+                      className="users-filter-select"
+                      value={resolveAction}
+                      onChange={(event) => setResolveAction(event.target.value as ResolveAction)}
+                    >
+                      <option value="resolve">{t("resolve", "Resolve")}</option>
+                      <option value="dismiss">{t("dismiss", "Dismiss")}</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    {t("moderation_action_optional", "Moderation action (optional)")}
+                    <select
+                      className="users-filter-select"
+                      value={moderationAction}
+                      onChange={(event) => setModerationAction(event.target.value)}
+                      disabled={moderationOptions.length === 0}
+                    >
+                      <option value="">{t("no_moderation_action", "No moderation action")}</option>
+                      {moderationOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <label className="reports-note-label">
+                  {t("resolution_note_optional", "Resolution note (optional)")}
+                  <textarea
+                    className="reports-note-input"
+                    value={resolutionNote}
+                    onChange={(event) => setResolutionNote(event.target.value)}
+                    placeholder={t("resolution_note_placeholder", "Provide moderation context for audit and reporter notifications")}
+                    maxLength={2000}
+                  />
                 </label>
-              </div>
 
-              <label className="reports-note-label">
-                {t("resolution_note_optional", "Resolution note (optional)")}
-                <textarea
-                  className="reports-note-input"
-                  value={resolutionNote}
-                  onChange={(event) => setResolutionNote(event.target.value)}
-                  placeholder={t("resolution_note_placeholder", "Provide moderation context for audit and reporter notifications")}
-                  maxLength={2000}
-                />
-              </label>
-
-              <div className="users-actions-cell">
-                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-                  {isSubmitting ? t("applying", "Applying...") : t("apply_action", "Apply action")}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => {
-                    setResolveAction("resolve");
-                    setModerationAction("");
-                    setResolutionNote(selectedReport.resolution_note ?? "");
-                  }}
-                >
-                  {t("reset_form", "Reset form")}
-                </button>
-              </div>
-            </form>
+                <div className="users-actions-cell">
+                  <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                    {isSubmitting ? t("applying", "Applying...") : t("apply_action", "Apply action")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setResolveAction("resolve");
+                      setModerationAction("");
+                      setResolutionNote(selectedReport.resolution_note ?? "");
+                    }}
+                  >
+                    {t("reset_form", "Reset form")}
+                  </button>
+                </div>
+              </form>
+            </div>
           ) : null}
         </div>
       </Modal>

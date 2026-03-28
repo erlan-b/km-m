@@ -42,11 +42,12 @@ from app.services.auth_service import (
     revoke_user_refresh_tokens,
     save_refresh_token,
 )
+from app.services.user_metrics_service import calculate_user_response_rate, has_verified_badge
 
 router = APIRouter()
 
 
-def build_user_me_response(user: User) -> UserMeResponse:
+def build_user_me_response(*, db: Session, user: User) -> UserMeResponse:
     return UserMeResponse(
         id=user.id,
         full_name=user.full_name,
@@ -57,6 +58,14 @@ def build_user_me_response(user: User) -> UserMeResponse:
         city=user.city,
         preferred_language=user.preferred_language,
         account_status=user.account_status.value,
+        seller_type=user.seller_type,
+        company_name=user.company_name,
+        verification_status=user.verification_status,
+        verified_badge=has_verified_badge(user),
+        response_rate=calculate_user_response_rate(db=db, user_id=user.id),
+        last_seen_at=user.last_seen_at,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
         roles=[role.name for role in user.roles],
     )
 
@@ -66,12 +75,14 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserMeR
     user = create_user(db, payload)
     db.commit()
     db.refresh(user)
-    return build_user_me_response(user)
+    return build_user_me_response(db=db, user=user)
 
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = authenticate_user(db, payload.email, payload.password)
+    user.last_seen_at = utc_now()
+    db.add(user)
     access_token = create_access_token(subject=user.email)
     refresh_token, refresh_expires_at, refresh_jti = create_refresh_token(subject=user.email)
     save_refresh_token(
@@ -195,8 +206,11 @@ def change_password(
 
 
 @router.get("/me", response_model=UserMeResponse)
-def me(current_user: User = Depends(get_current_user)) -> UserMeResponse:
-    return build_user_me_response(current_user)
+def me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserMeResponse:
+    return build_user_me_response(db=db, user=current_user)
 
 
 @router.get("/languages", response_model=SupportedLanguagesResponse)
@@ -222,4 +236,4 @@ def update_my_language(
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
-    return build_user_me_response(current_user)
+    return build_user_me_response(db=db, user=current_user)

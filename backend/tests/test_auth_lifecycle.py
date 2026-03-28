@@ -43,7 +43,14 @@ def test_auth_register_login_refresh_logout_and_profile_language_flow(client):
 
     me_response = client.get("/api/v1/auth/me", headers=auth_headers(access_token))
     assert me_response.status_code == 200
-    assert me_response.json()["email"] == email
+    me_payload = me_response.json()
+    assert me_payload["email"] == email
+    assert me_payload["seller_type"] == "owner"
+    assert me_payload["verification_status"] == "unverified"
+    assert me_payload["verified_badge"] is False
+    assert "created_at" in me_payload
+    assert "updated_at" in me_payload
+    assert "response_rate" in me_payload
 
     languages_response = client.get("/api/v1/auth/languages")
     assert languages_response.status_code == 200

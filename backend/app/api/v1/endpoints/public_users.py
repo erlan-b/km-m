@@ -10,6 +10,7 @@ from app.models.listing import Listing, ListingStatus
 from app.models.user import AccountStatus, User
 from app.schemas.listing import ListingListResponse, ListingResponse
 from app.schemas.user import PublicUserResponse
+from app.services.user_metrics_service import calculate_user_response_rate, has_verified_badge
 
 router = APIRouter()
 
@@ -40,7 +41,13 @@ def get_public_user(user_id: int, db: Session = Depends(get_db)) -> PublicUserRe
     return PublicUserResponse(
         id=user.id,
         full_name=user.full_name,
+        profile_image_url=user.profile_image_url,
+        city=user.city,
         preferred_language=user.preferred_language,
+        seller_type=user.seller_type,
+        company_name=user.company_name,
+        verified_badge=has_verified_badge(user),
+        response_rate=calculate_user_response_rate(db=db, user_id=user.id),
         created_at=user.created_at,
         listing_count=listing_count,
     )

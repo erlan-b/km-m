@@ -6,14 +6,25 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import SellerType, User
 from app.schemas.profile import ProfileResponse, ProfileUpdateRequest
 from app.services.attachment_service import save_upload_file
+from app.services.user_metrics_service import calculate_user_response_rate, has_verified_badge
 
 router = APIRouter()
 
 
-def build_profile_response(user: User) -> ProfileResponse:
+def normalize_company_name(company_name: str | None) -> str | None:
+    if company_name is None:
+        return None
+
+    normalized = company_name.strip()
+    if not normalized:
+        return None
+    return normalized
+
+
+def build_profile_response(*, db: Session, user: User) -> ProfileResponse:
     return ProfileResponse(
         id=user.id,
         full_name=user.full_name,
@@ -24,13 +35,24 @@ def build_profile_response(user: User) -> ProfileResponse:
         city=user.city,
         preferred_language=user.preferred_language,
         account_status=user.account_status.value,
+        seller_type=user.seller_type,
+        company_name=user.company_name,
+        verification_status=user.verification_status,
+        verified_badge=has_verified_badge(user),
+        response_rate=calculate_user_response_rate(db=db, user_id=user.id),
+        last_seen_at=user.last_seen_at,
+        created_at=user.created_at,
+        updated_at=user.updated_at,
         roles=[role.name for role in user.roles],
     )
 
 
 @router.get("", response_model=ProfileResponse)
-def get_my_profile(current_user: User = Depends(get_current_user)) -> ProfileResponse:
-    return build_profile_response(current_user)
+def get_my_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProfileResponse:
+    return build_profile_response(db=db, user=current_user)
 
 
 @router.patch("", response_model=ProfileResponse)
@@ -48,13 +70,27 @@ def update_my_profile(
     if not update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields provided for update")
 
+    if "company_name" in update_data:
+        update_data["company_name"] = normalize_company_name(update_data.get("company_name"))
+
+    next_seller_type = update_data.get("seller_type", current_user.seller_type)
+    next_company_name = update_data.get("company_name", current_user.company_name)
+
+    if next_seller_type == SellerType.COMPANY and not next_company_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="company_name is required for company seller type",
+        )
+    if next_seller_type == SellerType.OWNER:
+        update_data["company_name"] = None
+
     for field_name, field_value in update_data.items():
         setattr(current_user, field_name, field_value)
 
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
-    return build_profile_response(current_user)
+    return build_profile_response(db=db, user=current_user)
 
 
 @router.post("/avatar", response_model=ProfileResponse)
@@ -87,4 +123,4 @@ def upload_avatar(
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
-    return build_profile_response(current_user)
+    return build_profile_response(db=db, user=current_user)

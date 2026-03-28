@@ -2,7 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.user import AccountStatus
+from app.models.user import AccountStatus, SellerType
 
 
 class PublicUserResponse(BaseModel):
@@ -10,7 +10,13 @@ class PublicUserResponse(BaseModel):
 
     id: int
     full_name: str
+    profile_image_url: str | None
+    city: str | None
     preferred_language: str
+    seller_type: SellerType
+    company_name: str | None
+    verified_badge: bool
+    response_rate: float | None
     created_at: datetime
     listing_count: int
 

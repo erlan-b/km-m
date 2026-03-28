@@ -21,6 +21,18 @@ class AccountStatus(str, enum.Enum):
     DEACTIVATED = "deactivated"
 
 
+class SellerType(str, enum.Enum):
+    OWNER = "owner"
+    COMPANY = "company"
+
+
+class VerificationStatus(str, enum.Enum):
+    UNVERIFIED = "unverified"
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
 user_roles = Table(
     "user_roles",
     Base.metadata,
@@ -42,6 +54,26 @@ class User(Base):
     profile_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     bio: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, default=utc_now, nullable=True, index=True)
+    seller_type: Mapped[SellerType] = mapped_column(
+        Enum(
+            SellerType,
+            values_callable=lambda enum_cls: [status.value for status in enum_cls],
+            native_enum=False,
+        ),
+        default=SellerType.OWNER,
+        nullable=False,
+    )
+    company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    verification_status: Mapped[VerificationStatus] = mapped_column(
+        Enum(
+            VerificationStatus,
+            values_callable=lambda enum_cls: [status.value for status in enum_cls],
+            native_enum=False,
+        ),
+        default=VerificationStatus.UNVERIFIED,
+        nullable=False,
+    )
     account_status: Mapped[AccountStatus] = mapped_column(
         Enum(
             AccountStatus,

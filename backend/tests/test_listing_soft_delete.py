@@ -261,6 +261,28 @@ def test_admin_moderation_endpoint_requires_admin_role(client, db_session, set_c
     assert response.json()["detail"] == "Admin or moderator role required"
 
 
+def test_admin_moderation_supports_listing_id_filter(client, db_session, set_current_user):
+    user_role = create_role(db_session, "user")
+    admin_role = create_role(db_session, "admin")
+    owner = create_user(db_session, "owner9a@example.com", [user_role])
+    admin = create_user(db_session, "admin9a@example.com", [admin_role])
+    category = create_category(db_session)
+    target_listing = create_listing(db_session, owner.id, category.id, ListingStatus.PENDING_REVIEW)
+    create_listing(db_session, owner.id, category.id, ListingStatus.PUBLISHED)
+
+    set_current_user(admin)
+
+    response = client.get(
+        "/api/v1/listings/admin/moderation",
+        params={"listing_id": target_listing.id},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_items"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["id"] == target_listing.id
+
+
 def test_admin_can_moderate_listing_and_action_is_audited(client, db_session, set_current_user):
     user_role = create_role(db_session, "user")
     admin_role = create_role(db_session, "admin")

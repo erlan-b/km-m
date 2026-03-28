@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
@@ -133,6 +134,19 @@ function statusBadgeClass(status: ListingStatus): string {
 export function ListingsModerationPage() {
   const { authFetch } = useAuth();
   const { t, language } = usePageI18n("listings");
+  const [searchParams] = useSearchParams();
+
+  const initialListingIdFilter = useMemo(() => {
+    const raw = searchParams.get("listing_id");
+    if (!raw) {
+      return "";
+    }
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return "";
+    }
+    return String(parsed);
+  }, [searchParams]);
 
   const [listings, setListings] = useState<ListingListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -140,7 +154,8 @@ export function ListingsModerationPage() {
 
   const [queryInput, setQueryInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ListingStatus | "">("pending_review");
+  const [listingIdFilter, setListingIdFilter] = useState(initialListingIdFilter);
+  const [statusFilter, setStatusFilter] = useState<ListingStatus | "">(initialListingIdFilter ? "" : "pending_review");
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<TransactionType | "">("");
   const [cityFilter, setCityFilter] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "price_asc" | "price_desc">("newest");
@@ -164,6 +179,9 @@ export function ListingsModerationPage() {
 
       if (searchTerm.trim()) {
         params.set("q", searchTerm.trim());
+      }
+      if (listingIdFilter.trim()) {
+        params.set("listing_id", listingIdFilter.trim());
       }
       if (statusFilter) {
         params.set("status_filter", statusFilter);
@@ -196,7 +214,7 @@ export function ListingsModerationPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [authFetch, cityFilter, page, searchTerm, selectedListingId, sortBy, statusFilter, transactionTypeFilter]);
+  }, [authFetch, cityFilter, listingIdFilter, page, searchTerm, selectedListingId, sortBy, statusFilter, transactionTypeFilter]);
 
   useEffect(() => {
     void loadListings();
@@ -342,6 +360,14 @@ export function ListingsModerationPage() {
           aria-label={t("search_listings", "Search listings")}
           value={queryInput}
           onChange={(event) => setQueryInput(event.target.value)}
+        />
+        <input
+          placeholder={t("listing_id", "Listing ID")}
+          aria-label={t("listing_id", "Listing ID")}
+          value={listingIdFilter}
+          inputMode="numeric"
+          pattern="[0-9]*"
+          onChange={(event) => setListingIdFilter(event.target.value.replace(/[^0-9]/g, ""))}
         />
         <select
           className="users-filter-select"

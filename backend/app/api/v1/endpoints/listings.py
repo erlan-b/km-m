@@ -512,6 +512,7 @@ def list_listings_for_moderation(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     q: str | None = Query(default=None, min_length=1, max_length=120),
+    listing_id: int | None = Query(default=None, gt=0),
     status_filter: ListingStatus | None = None,
     owner_id: int | None = Query(default=None, gt=0),
     category_id: int | None = Query(default=None, gt=0),
@@ -532,6 +533,8 @@ def list_listings_for_moderation(
                     Listing.description.ilike(f"%{term}%"),
                 )
             )
+    if listing_id is not None:
+        filters.append(Listing.id == listing_id)
     if status_filter is not None:
         filters.append(Listing.status == status_filter)
     if owner_id is not None:

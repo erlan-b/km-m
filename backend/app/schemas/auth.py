@@ -1,4 +1,8 @@
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field, model_validator
+
+from app.models.user import SellerType, VerificationStatus
 
 
 class RegisterRequest(BaseModel):
@@ -36,6 +40,14 @@ class UserMeResponse(BaseModel):
     city: str | None = None
     preferred_language: str
     account_status: str
+    seller_type: SellerType
+    company_name: str | None = None
+    verification_status: VerificationStatus
+    verified_badge: bool
+    response_rate: float | None = None
+    last_seen_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
     roles: list[str]
 
 

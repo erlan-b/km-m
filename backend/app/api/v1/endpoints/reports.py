@@ -98,6 +98,39 @@ def ensure_report_target_exists(
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported report target type")
 
 
+def build_report_listing_id_map(db: Session, reports: list[Report]) -> dict[int, int | None]:
+    listing_id_map: dict[int, int | None] = {}
+    conversation_ids: set[int] = set()
+
+    for report in reports:
+        if report.target_type == ReportTargetType.LISTING:
+            listing_id_map[report.id] = report.target_id
+            continue
+
+        if report.target_type == ReportTargetType.MESSAGE and report.target_conversation_id is not None:
+            conversation_ids.add(report.target_conversation_id)
+
+        listing_id_map[report.id] = None
+
+    if conversation_ids:
+        conversations = db.scalars(
+            select(Conversation).where(Conversation.id.in_(conversation_ids))
+        ).all()
+        conversation_listing_map = {conversation.id: conversation.listing_id for conversation in conversations}
+
+        for report in reports:
+            if report.target_type == ReportTargetType.MESSAGE and report.target_conversation_id is not None:
+                listing_id_map[report.id] = conversation_listing_map.get(report.target_conversation_id)
+
+    return listing_id_map
+
+
+def enrich_reports_with_listing_context(db: Session, reports: list[Report]) -> None:
+    listing_id_map = build_report_listing_id_map(db, reports)
+    for report in reports:
+        setattr(report, "target_listing_id", listing_id_map.get(report.id))
+
+
 def build_report_response(db: Session, report_id: int) -> ReportResponse:
     report = db.scalar(
         select(Report)
@@ -106,6 +139,8 @@ def build_report_response(db: Session, report_id: int) -> ReportResponse:
     )
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    enrich_reports_with_listing_context(db, [report])
 
     return ReportResponse.model_validate(report)
 
@@ -191,6 +226,43 @@ def write_audit_log(
             details=details,
         )
     )
+
+
+def get_report_attachment_for_user(
+    *,
+    db: Session,
+    attachment_id: int,
+    current_user: User,
+) -> tuple[ReportAttachment, bool]:
+    attachment = db.scalar(
+        select(ReportAttachment)
+        .where(ReportAttachment.id == attachment_id)
+        .options(joinedload(ReportAttachment.report))
+    )
+    if attachment is None or attachment.report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    is_admin_or_moderator = user_has_role(current_user, {"admin", "moderator", "superadmin"})
+    if not is_admin_or_moderator and attachment.report.reporter_user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+
+    return attachment, is_admin_or_moderator
+
+
+def resolve_report_attachment_path(attachment: ReportAttachment) -> Path:
+    settings = get_settings()
+    base_dir = Path(settings.media_root).resolve()
+    absolute_path = (base_dir / attachment.file_path).resolve()
+
+    try:
+        absolute_path.relative_to(base_dir)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid attachment path") from exc
+
+    if not absolute_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file is missing")
+
+    return absolute_path
 
 
 @router.post("", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
@@ -288,6 +360,7 @@ def list_my_reports(
         .limit(page_size)
     )
     reports = db.scalars(stmt).unique().all()
+    enrich_reports_with_listing_context(db, reports)
 
     return ReportListResponse(
         items=[ReportResponse.model_validate(item) for item in reports],
@@ -325,6 +398,7 @@ def list_reports_admin_queue(
         .limit(page_size)
     )
     reports = db.scalars(stmt).unique().all()
+    enrich_reports_with_listing_context(db, reports)
 
     return ReportListResponse(
         items=[ReportResponse.model_validate(item) for item in reports],
@@ -408,9 +482,33 @@ def resolve_report(
                 details=payload.resolution_note,
             )
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Moderation action is not supported for message reports",
+            target_message = db.scalar(select(Message).where(Message.id == report.target_id))
+            if target_message is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target message not found")
+
+            sender_user = db.scalar(select(User).where(User.id == target_message.sender_id))
+            if sender_user is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message sender not found")
+
+            user_map = {
+                "block": AccountStatus.BLOCKED,
+                "unblock": AccountStatus.ACTIVE,
+                "activate": AccountStatus.ACTIVE,
+                "deactivate": AccountStatus.DEACTIVATED,
+            }
+            next_status = user_map.get(moderation_action)
+            if next_status is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid message moderation action")
+
+            sender_user.account_status = next_status
+            db.add(sender_user)
+            write_audit_log(
+                db,
+                admin_user.id,
+                action=f"message_sender_moderation:{moderation_action}",
+                target_type="user",
+                target_id=sender_user.id,
+                details=f"report_id={report.id};message_id={target_message.id};{payload.resolution_note or ''}",
             )
 
     report.status = ReportStatus.RESOLVED if action == "resolve" else ReportStatus.DISMISSED
@@ -448,29 +546,12 @@ def download_report_attachment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FileResponse:
-    attachment = db.scalar(
-        select(ReportAttachment)
-        .where(ReportAttachment.id == attachment_id)
-        .options(joinedload(ReportAttachment.report))
+    attachment, is_admin_or_moderator = get_report_attachment_for_user(
+        db=db,
+        attachment_id=attachment_id,
+        current_user=current_user,
     )
-    if attachment is None or attachment.report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
-
-    is_admin_or_moderator = user_has_role(current_user, {"admin", "moderator", "superadmin"})
-    if not is_admin_or_moderator and attachment.report.reporter_user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
-
-    settings = get_settings()
-    base_dir = Path(settings.media_root).resolve()
-    absolute_path = (base_dir / attachment.file_path).resolve()
-
-    try:
-        absolute_path.relative_to(base_dir)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid attachment path") from exc
-
-    if not absolute_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file is missing")
+    absolute_path = resolve_report_attachment_path(attachment)
 
     if is_admin_or_moderator:
         write_audit_log(
@@ -487,4 +568,26 @@ def download_report_attachment(
         path=absolute_path,
         media_type=attachment.mime_type,
         filename=attachment.original_name,
+    )
+
+
+@router.get("/attachments/{attachment_id}/preview")
+def preview_report_attachment(
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    attachment, _ = get_report_attachment_for_user(
+        db=db,
+        attachment_id=attachment_id,
+        current_user=current_user,
+    )
+
+    if not attachment.mime_type.lower().startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Preview is supported only for image attachments")
+
+    absolute_path = resolve_report_attachment_path(attachment)
+    return FileResponse(
+        path=absolute_path,
+        media_type=attachment.mime_type,
     )

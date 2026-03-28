@@ -39,6 +39,7 @@ class ReportResponse(BaseModel):
     target_type: ReportTargetType
     target_id: int
     target_conversation_id: int | None
+    target_listing_id: int | None = None
     reason_code: str
     reason_text: str | None
     attachments: list[ReportAttachmentItem]

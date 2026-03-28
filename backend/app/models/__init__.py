@@ -14,7 +14,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.report import Report, ReportStatus, ReportTargetType
 from app.models.report_attachment import ReportAttachment
 from app.models.role import Role
-from app.models.user import AccountStatus, User, user_roles
+from app.models.user import AccountStatus, SellerType, User, VerificationStatus, user_roles
 
 __all__ = [
 	"AccountStatus",
@@ -42,7 +42,9 @@ __all__ = [
 	"ReportStatus",
 	"ReportTargetType",
 	"Role",
+	"SellerType",
 	"TransactionType",
 	"User",
+	"VerificationStatus",
 	"user_roles",
 ]
