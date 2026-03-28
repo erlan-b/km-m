@@ -9,6 +9,7 @@ from app.models.message_attachment import MessageAttachment
 from app.models.notification import Notification, NotificationType
 from app.models.password_reset_token import PasswordResetToken
 from app.models.payment import Payment, PaymentStatus
+from app.models.promotion import Promotion, PromotionPackage, PromotionStatus
 from app.models.refresh_token import RefreshToken
 from app.models.report import Report, ReportStatus, ReportTargetType
 from app.models.role import Role
@@ -31,6 +32,9 @@ __all__ = [
 	"PasswordResetToken",
 	"Payment",
 	"PaymentStatus",
+	"Promotion",
+	"PromotionPackage",
+	"PromotionStatus",
 	"RefreshToken",
 	"Report",
 	"ReportStatus",

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_admin_or_moderator
 from app.core.utils import utc_now
 from app.db.session import get_db
+from app.models.category import Category
 from app.models.listing import Listing, ListingStatus
 from app.models.promotion import Promotion, PromotionPackage, PromotionStatus
 from app.models.user import AccountStatus, User
@@ -127,6 +128,16 @@ def purchase_promotion(
     if package is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promotion package not found or inactive")
 
+    if payload.target_category_id is not None:
+        target_category = db.scalar(
+            select(Category).where(
+                Category.id == payload.target_category_id,
+                Category.is_active.is_(True),
+            )
+        )
+        if target_category is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or inactive target category")
+
     now = utc_now()
     promotion = Promotion(
         listing_id=listing.id,
@@ -134,8 +145,9 @@ def purchase_promotion(
         promotion_package_id=package.id,
         target_city=payload.target_city,
         target_category_id=payload.target_category_id,
+        # Pending promotion gets an activation window only after successful payment.
         starts_at=now,
-        ends_at=now + timedelta(days=package.duration_days),
+        ends_at=now,
         status=PromotionStatus.PENDING,
         purchased_price=package.price,
         currency=package.currency,
