@@ -639,6 +639,16 @@ textarea:focus-visible {
   color: var(--text-subtle);
 }
 
+.users-detail-links {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.users-detail-links .btn {
+  justify-content: flex-start;
+}
+
 .app-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -940,6 +950,12 @@ textarea:focus-visible {
   font-family: inherit;
 }
 
+.reports-attachments-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .payments-search-strip {
   grid-template-columns: repeat(6, minmax(120px, 1fr)) repeat(4, minmax(180px, 1fr)) auto auto;
   align-items: end;
@@ -995,7 +1011,7 @@ textarea:focus-visible {
 }
 
 .messages-search-strip {
-  grid-template-columns: repeat(2, minmax(160px, 1fr)) auto auto;
+  grid-template-columns: repeat(3, minmax(160px, 1fr)) auto auto;
 }
 
 .messages-table-wrap {
@@ -1027,6 +1043,10 @@ textarea:focus-visible {
 
 .messages-detail-table {
   min-width: 1080px;
+}
+
+.messages-row-highlight {
+  background: #fff6df;
 }
 
 .messages-attachments-list {

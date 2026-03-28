@@ -1,8 +1,12 @@
 from decimal import Decimal
+from pathlib import Path
 
+from app.core.config import get_settings
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.category import Category
+from app.models.conversation import Conversation
 from app.models.listing import Listing, ListingStatus, TransactionType
+from app.models.message import Message, MessageType
 from app.models.notification import Notification, NotificationType
 from app.models.report import Report, ReportStatus
 from app.models.role import Role
@@ -61,6 +65,33 @@ def create_listing(db_session, owner_id: int, category_id: int) -> Listing:
     db_session.commit()
     db_session.refresh(listing)
     return listing
+
+
+def create_conversation(db_session, listing_id: int, created_by_user_id: int, participant_a_id: int, participant_b_id: int) -> Conversation:
+    conversation = Conversation(
+        listing_id=listing_id,
+        created_by_user_id=created_by_user_id,
+        participant_a_id=participant_a_id,
+        participant_b_id=participant_b_id,
+    )
+    db_session.add(conversation)
+    db_session.commit()
+    db_session.refresh(conversation)
+    return conversation
+
+
+def create_message(db_session, conversation_id: int, sender_id: int, text_body: str) -> Message:
+    message = Message(
+        conversation_id=conversation_id,
+        sender_id=sender_id,
+        message_type=MessageType.TEXT,
+        text_body=text_body,
+        is_read=False,
+    )
+    db_session.add(message)
+    db_session.commit()
+    db_session.refresh(message)
+    return message
 
 
 def test_non_admin_cannot_access_report_admin_endpoints(client, db_session, set_current_user):
@@ -197,3 +228,120 @@ def test_admin_resolve_user_report_can_block_target_user(client, db_session, set
         .order_by(AdminAuditLog.id.desc())
     )
     assert user_audit is not None
+
+
+def test_create_message_report_sets_conversation_context(client, db_session, set_current_user):
+    user_role = create_role(db_session, "user")
+    admin_role = create_role(db_session, "admin")
+
+    reporter = create_user(db_session, "reporter-message@example.com", [user_role])
+    other_participant = create_user(db_session, "other-message@example.com", [user_role])
+    admin_user = create_user(db_session, "admin-message@example.com", [admin_role])
+
+    category = create_category(db_session)
+    listing = create_listing(db_session, other_participant.id, category.id)
+    conversation = create_conversation(
+        db_session,
+        listing_id=listing.id,
+        created_by_user_id=reporter.id,
+        participant_a_id=min(reporter.id, other_participant.id),
+        participant_b_id=max(reporter.id, other_participant.id),
+    )
+    message = create_message(db_session, conversation.id, other_participant.id, "Abusive message")
+
+    set_current_user(reporter)
+    create_response = client.post(
+        "/api/v1/reports",
+        json={
+            "target_type": "message",
+            "target_id": message.id,
+            "reason_code": "abuse",
+            "reason_text": "This message is abusive",
+        },
+    )
+    assert create_response.status_code == 201
+
+    payload = create_response.json()
+    assert payload["target_type"] == "message"
+    assert payload["target_id"] == message.id
+    assert payload["target_conversation_id"] == conversation.id
+
+    set_current_user(admin_user)
+    admin_list_response = client.get(
+        "/api/v1/reports/admin",
+        params={"target_type_filter": "message"},
+    )
+    assert admin_list_response.status_code == 200
+    items = admin_list_response.json()["items"]
+    assert any(item["id"] == payload["id"] and item["target_conversation_id"] == conversation.id for item in items)
+
+
+def test_create_message_report_requires_conversation_participation(client, db_session, set_current_user):
+    user_role = create_role(db_session, "user")
+
+    reporter = create_user(db_session, "outsider@example.com", [user_role])
+    owner = create_user(db_session, "owner-message@example.com", [user_role])
+    second_participant = create_user(db_session, "second-message@example.com", [user_role])
+
+    category = create_category(db_session)
+    listing = create_listing(db_session, owner.id, category.id)
+    conversation = create_conversation(
+        db_session,
+        listing_id=listing.id,
+        created_by_user_id=owner.id,
+        participant_a_id=min(owner.id, second_participant.id),
+        participant_b_id=max(owner.id, second_participant.id),
+    )
+    message = create_message(db_session, conversation.id, owner.id, "Private message")
+
+    set_current_user(reporter)
+    create_response = client.post(
+        "/api/v1/reports",
+        json={
+            "target_type": "message",
+            "target_id": message.id,
+            "reason_code": "abuse",
+            "reason_text": "Outsider should not report",
+        },
+    )
+    assert create_response.status_code == 403
+
+
+def test_create_report_with_evidence_and_admin_download(client, db_session, set_current_user):
+    user_role = create_role(db_session, "user")
+    admin_role = create_role(db_session, "admin")
+
+    reporter = create_user(db_session, "reporter-evidence@example.com", [user_role])
+    target_user = create_user(db_session, "target-evidence@example.com", [user_role])
+    admin_user = create_user(db_session, "admin-evidence@example.com", [admin_role])
+
+    settings = get_settings()
+    saved_file_path: Path | None = None
+
+    try:
+        set_current_user(reporter)
+        create_response = client.post(
+            "/api/v1/reports/with-evidence",
+            data={
+                "target_type": "user",
+                "target_id": str(target_user.id),
+                "reason_code": "scam",
+                "reason_text": "Evidence attached",
+            },
+            files=[("files", ("evidence.png", b"fake-image-content", "image/png"))],
+        )
+        assert create_response.status_code == 201
+        payload = create_response.json()
+        assert len(payload["attachments"]) == 1
+
+        attachment_id = payload["attachments"][0]["id"]
+        saved_file_path = Path(settings.media_root) / payload["attachments"][0]["file_path"]
+
+        set_current_user(admin_user)
+        download_response = client.get(f"/api/v1/reports/attachments/{attachment_id}/download")
+        assert download_response.status_code == 200
+        assert download_response.content == b"fake-image-content"
+        assert "attachment" in download_response.headers.get("content-disposition", "").lower()
+    finally:
+        if saved_file_path is not None:
+            saved_file_path.unlink(missing_ok=True)

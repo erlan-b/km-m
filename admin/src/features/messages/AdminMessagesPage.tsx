@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
@@ -60,11 +61,13 @@ type MessageListResponse = {
 type ConversationFilters = {
   user_id: string;
   listing_id: string;
+  conversation_id: string;
 };
 
 const initialFilters: ConversationFilters = {
   user_id: "",
   listing_id: "",
+  conversation_id: "",
 };
 
 function extractErrorMessage(error: unknown, fallback: string): string {
@@ -88,6 +91,74 @@ function parsePositiveInt(raw: string): number | null {
   return parsed;
 }
 
+function readPageParam(value: string | null): number {
+  if (value === null) {
+    return 1;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+function readConversationFiltersFromSearchParams(searchParams: URLSearchParams): ConversationFilters {
+  return {
+    user_id: searchParams.get("user_id") ?? "",
+    listing_id: searchParams.get("listing_id") ?? "",
+    conversation_id: searchParams.get("conversation_id") ?? "",
+  };
+}
+
+function areConversationFiltersEqual(left: ConversationFilters, right: ConversationFilters): boolean {
+  return (
+    left.user_id === right.user_id &&
+    left.listing_id === right.listing_id &&
+    left.conversation_id === right.conversation_id
+  );
+}
+
+function buildMessagesSearchParams(
+  filters: ConversationFilters,
+  conversationPage: number,
+  messagesPage: number,
+  selectedConversationId: number | null,
+  messageId: number | null,
+): URLSearchParams {
+  const params = new URLSearchParams();
+
+  const userId = parsePositiveInt(filters.user_id);
+  if (userId !== null) {
+    params.set("user_id", String(userId));
+  }
+
+  const listingId = parsePositiveInt(filters.listing_id);
+  if (listingId !== null) {
+    params.set("listing_id", String(listingId));
+  }
+
+  const conversationId = selectedConversationId ?? parsePositiveInt(filters.conversation_id);
+  if (conversationId !== null) {
+    params.set("conversation_id", String(conversationId));
+  }
+
+  if (messageId !== null) {
+    params.set("message_id", String(messageId));
+  }
+
+  if (conversationPage > 1) {
+    params.set("page", String(conversationPage));
+  }
+
+  if (messagesPage > 1) {
+    params.set("messages_page", String(messagesPage));
+  }
+
+  return params;
+}
+
 function formatFileSize(bytes: number, language: "en" | "ru"): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
     return "-";
@@ -109,27 +180,37 @@ function formatFileSize(bytes: number, language: "en" | "ru"): string {
 export function AdminMessagesPage() {
   const { authFetch } = useAuth();
   const { t, language } = usePageI18n("messages");
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [draftFilters, setDraftFilters] = useState<ConversationFilters>(initialFilters);
-  const [appliedFilters, setAppliedFilters] = useState<ConversationFilters>(initialFilters);
-  const [hasSubmittedFilters, setHasSubmittedFilters] = useState(false);
+  const [draftFilters, setDraftFilters] = useState<ConversationFilters>(() => readConversationFiltersFromSearchParams(searchParams));
+  const [appliedFilters, setAppliedFilters] = useState<ConversationFilters>(() => readConversationFiltersFromSearchParams(searchParams));
+  const [hasSubmittedFilters, setHasSubmittedFilters] = useState(
+    () => (
+      parsePositiveInt(searchParams.get("user_id") ?? "") !== null ||
+      parsePositiveInt(searchParams.get("conversation_id") ?? "") !== null
+    ),
+  );
 
-  const [conversationPage, setConversationPage] = useState(1);
+  const [conversationPage, setConversationPage] = useState(() => readPageParam(searchParams.get("page")));
   const [conversations, setConversations] = useState<ConversationListResponse | null>(null);
   const [isConversationsLoading, setIsConversationsLoading] = useState(false);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
 
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
 
-  const [messagesPage, setMessagesPage] = useState(1);
+  const [messagesPage, setMessagesPage] = useState(() => readPageParam(searchParams.get("messages_page")));
   const [messages, setMessages] = useState<MessageListResponse | null>(null);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
 
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<number | null>(null);
+  const [pendingMessageId, setPendingMessageId] = useState<number | null>(() => parsePositiveInt(searchParams.get("message_id") ?? ""));
+  const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(() => parsePositiveInt(searchParams.get("message_id") ?? ""));
+  const lastQueryFilterKey = useRef("");
 
   const appliedUserId = useMemo(() => parsePositiveInt(appliedFilters.user_id), [appliedFilters.user_id]);
   const appliedListingId = useMemo(() => parsePositiveInt(appliedFilters.listing_id), [appliedFilters.listing_id]);
+  const appliedConversationId = useMemo(() => parsePositiveInt(appliedFilters.conversation_id), [appliedFilters.conversation_id]);
 
   const selectedConversation = useMemo(() => {
     if (!conversations || selectedConversationId === null) {
@@ -138,15 +219,85 @@ export function AdminMessagesPage() {
     return conversations.items.find((item) => item.id === selectedConversationId) ?? null;
   }, [conversations, selectedConversationId]);
 
+  useEffect(() => {
+    const queryFilters = readConversationFiltersFromSearchParams(searchParams);
+    const shouldSubmitFilters = (
+      parsePositiveInt(queryFilters.user_id) !== null ||
+      parsePositiveInt(queryFilters.conversation_id) !== null
+    );
+    const queryConversationPage = readPageParam(searchParams.get("page"));
+    const queryMessagesPage = readPageParam(searchParams.get("messages_page"));
+    const queryMessageId = parsePositiveInt(searchParams.get("message_id") ?? "");
+    const filterKey = `${queryFilters.user_id}|${queryFilters.listing_id}|${queryFilters.conversation_id}`;
+    const filtersChanged = lastQueryFilterKey.current !== filterKey;
+
+    lastQueryFilterKey.current = filterKey;
+
+    setDraftFilters((previous) => (areConversationFiltersEqual(previous, queryFilters) ? previous : queryFilters));
+    setAppliedFilters((previous) => (areConversationFiltersEqual(previous, queryFilters) ? previous : queryFilters));
+    setHasSubmittedFilters((previous) => (previous === shouldSubmitFilters ? previous : shouldSubmitFilters));
+    setConversationPage((previous) => (previous === queryConversationPage ? previous : queryConversationPage));
+    setMessagesPage((previous) => (previous === queryMessagesPage ? previous : queryMessagesPage));
+    setPendingMessageId((previous) => (previous === queryMessageId ? previous : queryMessageId));
+    setHighlightedMessageId((previous) => (previous === queryMessageId ? previous : queryMessageId));
+
+    if (filtersChanged) {
+      setSelectedConversationId(null);
+      setConversations(null);
+      setMessages(null);
+      setConversationsError(null);
+      setMessagesError(null);
+    }
+  }, [searchParams]);
+
   const loadConversations = useCallback(async () => {
     if (!hasSubmittedFilters) {
+      return;
+    }
+
+    if (appliedConversationId !== null) {
+      setIsConversationsLoading(true);
+      setConversationsError(null);
+
+      try {
+        const response = await authFetch(`/admin/messages/conversations/${appliedConversationId}`);
+        if (!response.ok) {
+          let message = t("error_load_conversations", "Failed to load conversations");
+          try {
+            const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+            if (typeof payload?.error?.message === "string") {
+              message = payload.error.message;
+            } else if (typeof payload?.detail === "string") {
+              message = payload.detail;
+            }
+          } catch {
+            message = t("error_load_conversations", "Failed to load conversations");
+          }
+          throw new Error(message);
+        }
+
+        const conversation = (await response.json()) as ConversationItem;
+        setConversations({
+          items: [conversation],
+          page: 1,
+          page_size: 1,
+          total_items: 1,
+          total_pages: 1,
+        });
+        setSelectedConversationId(conversation.id);
+        setConversationPage(1);
+      } catch (error) {
+        setConversationsError(extractErrorMessage(error, t("error_load_conversations", "Failed to load conversations")));
+      } finally {
+        setIsConversationsLoading(false);
+      }
       return;
     }
 
     if (appliedUserId === null) {
       setConversations(null);
       setSelectedConversationId(null);
-      setConversationsError(t("user_required", "User ID is required for conversation oversight"));
+      setConversationsError(t("user_or_conversation_required", "User ID or conversation ID is required for conversation oversight"));
       return;
     }
 
@@ -196,7 +347,7 @@ export function AdminMessagesPage() {
     } finally {
       setIsConversationsLoading(false);
     }
-  }, [appliedListingId, appliedUserId, authFetch, conversationPage, hasSubmittedFilters, t]);
+  }, [appliedConversationId, appliedListingId, appliedUserId, authFetch, conversationPage, hasSubmittedFilters, t]);
 
   useEffect(() => {
     void loadConversations();
@@ -217,6 +368,9 @@ export function AdminMessagesPage() {
       params.set("conversation_id", String(selectedConversationId));
       params.set("page", String(messagesPage));
       params.set("page_size", "30");
+      if (pendingMessageId !== null) {
+        params.set("message_id", String(pendingMessageId));
+      }
 
       const response = await authFetch(`/admin/messages?${params.toString()}`);
       if (!response.ok) {
@@ -236,25 +390,42 @@ export function AdminMessagesPage() {
 
       const payload = (await response.json()) as MessageListResponse;
       setMessages(payload);
+      if (payload.page !== messagesPage) {
+        setMessagesPage(payload.page);
+      }
+
+      if (pendingMessageId !== null) {
+        setHighlightedMessageId(pendingMessageId);
+        setPendingMessageId(null);
+      }
     } catch (error) {
       setMessagesError(extractErrorMessage(error, t("error_load_messages", "Failed to load messages")));
     } finally {
       setIsMessagesLoading(false);
     }
-  }, [authFetch, messagesPage, selectedConversationId, t]);
+  }, [authFetch, messagesPage, pendingMessageId, selectedConversationId, t]);
 
   useEffect(() => {
     void loadMessages();
   }, [loadMessages]);
 
   const onApplyFilters = () => {
+    const nextFilters: ConversationFilters = {
+      user_id: draftFilters.user_id.trim(),
+      listing_id: draftFilters.listing_id.trim(),
+      conversation_id: draftFilters.conversation_id.trim(),
+    };
+
+    const parsedConversationId = parsePositiveInt(nextFilters.conversation_id);
+
     setHasSubmittedFilters(true);
     setConversationPage(1);
     setMessagesPage(1);
-    setAppliedFilters({
-      user_id: draftFilters.user_id.trim(),
-      listing_id: draftFilters.listing_id.trim(),
-    });
+    setSelectedConversationId(parsedConversationId);
+    setAppliedFilters(nextFilters);
+    setPendingMessageId(null);
+    setHighlightedMessageId(null);
+    setSearchParams(buildMessagesSearchParams(nextFilters, 1, 1, parsedConversationId, null), { replace: true });
   };
 
   const onResetFilters = () => {
@@ -268,6 +439,9 @@ export function AdminMessagesPage() {
     setMessages(null);
     setConversationsError(null);
     setMessagesError(null);
+    setPendingMessageId(null);
+    setHighlightedMessageId(null);
+    setSearchParams(new URLSearchParams(), { replace: true });
   };
 
   const downloadAttachment = async (attachment: MessageAttachmentItem) => {
@@ -389,6 +563,12 @@ export function AdminMessagesPage() {
           onChange={(event) => setDraftFilters((prev) => ({ ...prev, listing_id: event.target.value }))}
           inputMode="numeric"
         />
+        <input
+          placeholder={t("conversation_id", "Conversation ID (optional)")}
+          value={draftFilters.conversation_id}
+          onChange={(event) => setDraftFilters((prev) => ({ ...prev, conversation_id: event.target.value }))}
+          inputMode="numeric"
+        />
         <button type="button" className="btn btn-ghost" onClick={onResetFilters}>
           {t("reset", "Reset")}
         </button>
@@ -446,6 +626,12 @@ export function AdminMessagesPage() {
                         onClick={() => {
                           setSelectedConversationId(conversation.id);
                           setMessagesPage(1);
+                          setPendingMessageId(null);
+                          setHighlightedMessageId(null);
+                          setSearchParams(
+                            buildMessagesSearchParams(appliedFilters, conversationPage, 1, appliedConversationId, null),
+                            { replace: true },
+                          );
                         }}
                       >
                         {selectedConversationId === conversation.id ? t("selected", "Selected") : t("inspect", "Inspect")}
@@ -463,7 +649,14 @@ export function AdminMessagesPage() {
             type="button"
             className="btn btn-ghost"
             disabled={!canConversationPrev}
-            onClick={() => setConversationPage((prev) => Math.max(1, prev - 1))}
+            onClick={() => {
+              const nextPage = Math.max(1, conversationPage - 1);
+              setConversationPage(nextPage);
+              setSearchParams(
+                buildMessagesSearchParams(appliedFilters, nextPage, messagesPage, appliedConversationId, null),
+                { replace: true },
+              );
+            }}
           >
             {t("previous", "Previous")}
           </button>
@@ -474,7 +667,14 @@ export function AdminMessagesPage() {
             type="button"
             className="btn btn-ghost"
             disabled={!canConversationNext}
-            onClick={() => setConversationPage((prev) => prev + 1)}
+            onClick={() => {
+              const nextPage = conversationPage + 1;
+              setConversationPage(nextPage);
+              setSearchParams(
+                buildMessagesSearchParams(appliedFilters, nextPage, messagesPage, appliedConversationId, null),
+                { replace: true },
+              );
+            }}
           >
             {t("next", "Next")}
           </button>
@@ -512,7 +712,7 @@ export function AdminMessagesPage() {
                 </tr>
               ) : (
                 messageRows.map((message) => (
-                  <tr key={message.id}>
+                  <tr key={message.id} className={highlightedMessageId === message.id ? "messages-row-highlight" : undefined}>
                     <td>#{formatInteger(message.id, language)}</td>
                     <td>{formatInteger(message.sender_id, language)}</td>
                     <td>{message.message_type}</td>
@@ -551,7 +751,14 @@ export function AdminMessagesPage() {
             type="button"
             className="btn btn-ghost"
             disabled={!canMessagePrev || selectedConversation === null}
-            onClick={() => setMessagesPage((prev) => Math.max(1, prev - 1))}
+            onClick={() => {
+              const nextPage = Math.max(1, messagesPage - 1);
+              setMessagesPage(nextPage);
+              setSearchParams(
+                buildMessagesSearchParams(appliedFilters, conversationPage, nextPage, appliedConversationId, null),
+                { replace: true },
+              );
+            }}
           >
             {t("previous", "Previous")}
           </button>
@@ -562,7 +769,14 @@ export function AdminMessagesPage() {
             type="button"
             className="btn btn-ghost"
             disabled={!canMessageNext || selectedConversation === null}
-            onClick={() => setMessagesPage((prev) => prev + 1)}
+            onClick={() => {
+              const nextPage = messagesPage + 1;
+              setMessagesPage(nextPage);
+              setSearchParams(
+                buildMessagesSearchParams(appliedFilters, conversationPage, nextPage, appliedConversationId, null),
+                { replace: true },
+              );
+            }}
           >
             {t("next", "Next")}
           </button>

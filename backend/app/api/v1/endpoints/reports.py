@@ -1,16 +1,22 @@
 from math import ceil
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_current_user, require_admin_or_moderator
+from app.api.deps import get_current_user, require_admin_or_moderator, user_has_role
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.core.utils import utc_now
 from app.models.admin_audit_log import AdminAuditLog
+from app.models.conversation import Conversation
 from app.models.listing import Listing, ListingStatus
+from app.models.message import Message
 from app.models.notification import NotificationType
 from app.models.report import Report, ReportStatus, ReportTargetType
+from app.models.report_attachment import ReportAttachment
 from app.models.user import AccountStatus, User
 from app.schemas.report import (
     ReportCreateRequest,
@@ -18,25 +24,154 @@ from app.schemas.report import (
     ReportResolveRequest,
     ReportResponse,
 )
+from app.services.attachment_service import save_upload_file
 from app.services.notification_service import create_notification
 
 router = APIRouter()
 
 
-def ensure_report_target_exists(db: Session, target_type: ReportTargetType, target_id: int) -> None:
+def normalize_reason_text(reason_text: str | None) -> str | None:
+    if reason_text is None:
+        return None
+
+    normalized = reason_text.strip()
+    if not normalized:
+        return None
+
+    return normalized
+
+
+def validate_reason_code(reason_code: str) -> str:
+    normalized = reason_code.strip().lower()
+    if len(normalized) < 2:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reason_code must be at least 2 characters")
+    if len(normalized) > 50:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reason_code must be at most 50 characters")
+    return normalized
+
+
+def ensure_report_has_text_or_attachments(reason_text: str | None, attachment_count: int) -> None:
+    if reason_text is None and attachment_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Report must include reason text or at least one attachment",
+        )
+
+
+def ensure_report_target_exists(
+    db: Session,
+    *,
+    target_type: ReportTargetType,
+    target_id: int,
+    reporter_user_id: int,
+) -> int | None:
     if target_type == ReportTargetType.LISTING:
         listing = db.scalar(select(Listing).where(Listing.id == target_id))
         if listing is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
-        return
+        return None
 
     if target_type == ReportTargetType.USER:
         user = db.scalar(select(User).where(User.id == target_id))
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        return
+        return None
+
+    if target_type == ReportTargetType.MESSAGE:
+        message = db.scalar(select(Message).where(Message.id == target_id))
+        if message is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
+
+        conversation = db.scalar(select(Conversation).where(Conversation.id == message.conversation_id))
+        if conversation is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+
+        is_participant = reporter_user_id in {conversation.participant_a_id, conversation.participant_b_id}
+        if not is_participant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only report messages from your own conversations",
+            )
+
+        return conversation.id
 
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported report target type")
+
+
+def build_report_response(db: Session, report_id: int) -> ReportResponse:
+    report = db.scalar(
+        select(Report)
+        .where(Report.id == report_id)
+        .options(joinedload(Report.attachments))
+    )
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    return ReportResponse.model_validate(report)
+
+
+def create_report_record(
+    db: Session,
+    *,
+    reporter_user_id: int,
+    target_type: ReportTargetType,
+    target_id: int,
+    reason_code: str,
+    reason_text: str | None,
+) -> Report:
+    target_conversation_id = ensure_report_target_exists(
+        db,
+        target_type=target_type,
+        target_id=target_id,
+        reporter_user_id=reporter_user_id,
+    )
+
+    report = Report(
+        reporter_user_id=reporter_user_id,
+        target_type=target_type,
+        target_id=target_id,
+        target_conversation_id=target_conversation_id,
+        reason_code=validate_reason_code(reason_code),
+        reason_text=reason_text,
+        status=ReportStatus.OPEN,
+    )
+
+    db.add(report)
+    db.flush()
+    return report
+
+
+def save_report_attachments(
+    db: Session,
+    *,
+    report_id: int,
+    files: list[UploadFile],
+) -> list[Path]:
+    settings = get_settings()
+    base_dir = Path(settings.media_root)
+    saved_absolute_paths: list[Path] = []
+
+    for upload_file in files:
+        saved_file = save_upload_file(
+            upload_file,
+            base_dir=base_dir,
+            sub_dir=settings.report_attachments_subdir,
+            max_size_bytes=settings.report_attachment_max_size_mb * 1024 * 1024,
+            allowed_mime_types=set(settings.report_attachment_allowed_mime_types),
+        )
+        saved_absolute_paths.append(saved_file.absolute_path)
+        db.add(
+            ReportAttachment(
+                report_id=report_id,
+                file_name=saved_file.stored_name,
+                original_name=saved_file.original_name,
+                mime_type=saved_file.mime_type,
+                file_size=saved_file.file_size,
+                file_path=saved_file.relative_path,
+            )
+        )
+
+    return saved_absolute_paths
 
 
 def write_audit_log(
@@ -67,21 +202,69 @@ def create_report(
     if current_user.account_status != AccountStatus.ACTIVE:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
-    ensure_report_target_exists(db, payload.target_type, payload.target_id)
+    normalized_reason_text = normalize_reason_text(payload.reason_text)
+    ensure_report_has_text_or_attachments(normalized_reason_text, attachment_count=0)
 
-    report = Report(
+    report = create_report_record(
+        db,
         reporter_user_id=current_user.id,
         target_type=payload.target_type,
         target_id=payload.target_id,
-        reason_code=payload.reason_code.lower(),
-        reason_text=payload.reason_text,
-        status=ReportStatus.OPEN,
+        reason_code=payload.reason_code,
+        reason_text=normalized_reason_text,
     )
 
-    db.add(report)
     db.commit()
-    db.refresh(report)
-    return ReportResponse.model_validate(report)
+    return build_report_response(db, report.id)
+
+
+@router.post("/with-evidence", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
+def create_report_with_evidence(
+    target_type: ReportTargetType = Form(...),
+    target_id: int = Form(..., gt=0),
+    reason_code: str = Form(...),
+    reason_text: str | None = Form(default=None),
+    files: list[UploadFile] | None = File(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReportResponse:
+    if current_user.account_status != AccountStatus.ACTIVE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
+
+    attachments = files or []
+    settings = get_settings()
+    if len(attachments) > settings.report_attachment_max_files_per_report:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Too many attachments for one report. "
+                f"Max: {settings.report_attachment_max_files_per_report}"
+            ),
+        )
+
+    normalized_reason_text = normalize_reason_text(reason_text)
+    ensure_report_has_text_or_attachments(normalized_reason_text, attachment_count=len(attachments))
+
+    report = create_report_record(
+        db,
+        reporter_user_id=current_user.id,
+        target_type=target_type,
+        target_id=target_id,
+        reason_code=reason_code,
+        reason_text=normalized_reason_text,
+    )
+
+    saved_paths: list[Path] = []
+    try:
+        saved_paths = save_report_attachments(db, report_id=report.id, files=attachments)
+        db.commit()
+    except Exception:
+        db.rollback()
+        for saved_path in saved_paths:
+            saved_path.unlink(missing_ok=True)
+        raise
+
+    return build_report_response(db, report.id)
 
 
 @router.get("/my", response_model=ReportListResponse)
@@ -98,12 +281,13 @@ def list_my_reports(
 
     stmt = (
         select(Report)
+        .options(joinedload(Report.attachments))
         .where(*filters)
         .order_by(Report.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    reports = db.scalars(stmt).all()
+    reports = db.scalars(stmt).unique().all()
 
     return ReportListResponse(
         items=[ReportResponse.model_validate(item) for item in reports],
@@ -134,12 +318,13 @@ def list_reports_admin_queue(
 
     stmt = (
         select(Report)
+        .options(joinedload(Report.attachments))
         .where(*filters)
         .order_by(Report.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    reports = db.scalars(stmt).all()
+    reports = db.scalars(stmt).unique().all()
 
     return ReportListResponse(
         items=[ReportResponse.model_validate(item) for item in reports],
@@ -157,7 +342,11 @@ def resolve_report(
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_or_moderator),
 ) -> ReportResponse:
-    report = db.scalar(select(Report).where(Report.id == report_id))
+    report = db.scalar(
+        select(Report)
+        .where(Report.id == report_id)
+        .options(joinedload(Report.attachments))
+    )
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
@@ -218,6 +407,11 @@ def resolve_report(
                 target_id=target_user.id,
                 details=payload.resolution_note,
             )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Moderation action is not supported for message reports",
+            )
 
     report.status = ReportStatus.RESOLVED if action == "resolve" else ReportStatus.DISMISSED
     report.resolution_note = payload.resolution_note
@@ -245,5 +439,52 @@ def resolve_report(
     )
 
     db.commit()
-    db.refresh(report)
-    return ReportResponse.model_validate(report)
+    return build_report_response(db, report.id)
+
+
+@router.get("/attachments/{attachment_id}/download")
+def download_report_attachment(
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    attachment = db.scalar(
+        select(ReportAttachment)
+        .where(ReportAttachment.id == attachment_id)
+        .options(joinedload(ReportAttachment.report))
+    )
+    if attachment is None or attachment.report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    is_admin_or_moderator = user_has_role(current_user, {"admin", "moderator", "superadmin"})
+    if not is_admin_or_moderator and attachment.report.reporter_user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+
+    settings = get_settings()
+    base_dir = Path(settings.media_root).resolve()
+    absolute_path = (base_dir / attachment.file_path).resolve()
+
+    try:
+        absolute_path.relative_to(base_dir)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid attachment path") from exc
+
+    if not absolute_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file is missing")
+
+    if is_admin_or_moderator:
+        write_audit_log(
+            db,
+            admin_user_id=current_user.id,
+            action="report_attachment_download",
+            target_type="report_attachment",
+            target_id=attachment.id,
+            details=f"report_id={attachment.report_id}",
+        )
+        db.commit()
+
+    return FileResponse(
+        path=absolute_path,
+        media_type=attachment.mime_type,
+        filename=attachment.original_name,
+    )

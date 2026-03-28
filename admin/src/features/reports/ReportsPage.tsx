@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
@@ -6,16 +7,29 @@ import { formatDateTime, formatInteger } from "../../shared/i18n/format";
 import { Modal } from "../common/Modal";
 
 type ReportStatus = "open" | "resolved" | "dismissed";
-type ReportTargetType = "listing" | "user";
+type ReportTargetType = "listing" | "user" | "message";
 type ResolveAction = "resolve" | "dismiss";
+
+type ReportAttachmentItem = {
+  id: number;
+  report_id: number;
+  file_name: string;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  file_path: string;
+  created_at: string;
+};
 
 type ReportItem = {
   id: number;
   reporter_user_id: number;
   target_type: ReportTargetType;
   target_id: number;
+  target_conversation_id: number | null;
   reason_code: string;
   reason_text: string | null;
+  attachments: ReportAttachmentItem[];
   status: ReportStatus;
   resolution_note: string | null;
   reviewed_by_admin_id: number | null;
@@ -54,9 +68,20 @@ function extractErrorMessage(error: unknown): string {
   return "Request failed";
 }
 
+function targetTypeLabel(targetType: ReportTargetType, t: (key: string, fallback: string) => string): string {
+  if (targetType === "listing") {
+    return t("target_listing", "Listing");
+  }
+  if (targetType === "user") {
+    return t("target_user", "User");
+  }
+  return t("target_message", "Message");
+}
+
 export function ReportsPage() {
   const { authFetch } = useAuth();
   const { t, language } = usePageI18n("reports");
+  const navigate = useNavigate();
 
   const [reports, setReports] = useState<ReportListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,6 +97,7 @@ export function ReportsPage() {
   const [moderationAction, setModerationAction] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<number | null>(null);
 
   const loadReports = useCallback(async () => {
     setIsLoading(true);
@@ -197,6 +223,53 @@ export function ReportsPage() {
     }
   };
 
+  const downloadAttachment = async (attachment: ReportAttachmentItem) => {
+    setDownloadingAttachmentId(attachment.id);
+
+    try {
+      const response = await authFetch(`/reports/attachments/${attachment.id}/download`);
+      if (!response.ok) {
+        let message = t("error_download_attachment", "Failed to download attachment");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_download_attachment", "Failed to download attachment");
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = attachment.original_name || attachment.file_name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setError(extractErrorMessage(downloadError));
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  };
+
+  const openReportMessageInMessages = (report: ReportItem) => {
+    if (report.target_type !== "message" || report.target_conversation_id === null) {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set("conversation_id", String(report.target_conversation_id));
+    params.set("message_id", String(report.target_id));
+    navigate(`/messages?${params.toString()}`);
+  };
+
   const moderationOptions = useMemo(() => {
     if (!selectedReport) {
       return [] as Array<{ value: string; label: string }>;
@@ -209,6 +282,10 @@ export function ReportsPage() {
         { value: "archive", label: t("moderation_archive_listing", "Archive listing") },
         { value: "deactivate", label: t("moderation_deactivate_listing", "Deactivate listing") },
       ];
+    }
+
+    if (selectedReport.target_type === "message") {
+      return [] as Array<{ value: string; label: string }>;
     }
 
     return [
@@ -269,6 +346,7 @@ export function ReportsPage() {
           <option value="">{t("all_target_types", "All target types")}</option>
           <option value="listing">{t("target_listing", "Listing")}</option>
           <option value="user">{t("target_user", "User")}</option>
+          <option value="message">{t("target_message", "Message")}</option>
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>
           {t("apply_filters", "Apply filters")}
@@ -307,14 +385,32 @@ export function ReportsPage() {
                     <td>#{report.id}</td>
                     <td>
                       <div className="users-name-cell">
-                        <strong>{report.target_type === "listing" ? t("target_listing", "Listing") : t("target_user", "User")}</strong>
+                        <strong>{targetTypeLabel(report.target_type, t)}</strong>
+                        <span>{t("reporter", "Reporter")} #{formatInteger(report.reporter_user_id, language)}</span>
                         <span>{t("target", "target")} #{formatInteger(report.target_id, language)}</span>
                       </div>
                     </td>
                     <td>
                       <div className="users-name-cell">
                         <strong>{report.reason_code}</strong>
-                        <span>{report.reason_text ?? "-"}</span>
+                        <span>{report.reason_text ?? t("no_reason_text", "No text provided")}</span>
+                        {report.attachments.length > 0 ? (
+                          <div className="reports-attachments-list">
+                            {report.attachments.map((attachment) => (
+                              <button
+                                key={attachment.id}
+                                type="button"
+                                className="btn btn-ghost messages-attachment-btn"
+                                disabled={downloadingAttachmentId === attachment.id}
+                                onClick={() => void downloadAttachment(attachment)}
+                              >
+                                {downloadingAttachmentId === attachment.id
+                                  ? t("downloading", "Downloading...")
+                                  : `${t("evidence", "Evidence")}: ${attachment.original_name}`}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </td>
                     <td>
@@ -325,19 +421,30 @@ export function ReportsPage() {
                     <td>{formatDateTime(report.created_at, language)}</td>
                     <td>{formatDateTime(report.reviewed_at, language)}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        onClick={() => {
-                          setResolveAction("resolve");
-                          setModerationAction("");
-                          setResolutionNote(report.resolution_note ?? "");
-                          setSelectedReportId(report.id);
-                          setIsReviewModalOpen(true);
-                        }}
-                      >
-                        {t("review", "Review")}
-                      </button>
+                      <div className="users-actions-cell">
+                        {report.target_type === "message" && report.target_conversation_id !== null ? (
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => openReportMessageInMessages(report)}
+                          >
+                            {t("open_in_messages", "Open in messages")}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          onClick={() => {
+                            setResolveAction("resolve");
+                            setModerationAction("");
+                            setResolutionNote(report.resolution_note ?? "");
+                            setSelectedReportId(report.id);
+                            setIsReviewModalOpen(true);
+                          }}
+                        >
+                          {t("review", "Review")}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -399,6 +506,7 @@ export function ReportsPage() {
                     className="users-filter-select"
                     value={moderationAction}
                     onChange={(event) => setModerationAction(event.target.value)}
+                    disabled={moderationOptions.length === 0}
                   >
                     <option value="">{t("no_moderation_action", "No moderation action")}</option>
                     {moderationOptions.map((option) => (

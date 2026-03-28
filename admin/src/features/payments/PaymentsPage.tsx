@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
@@ -58,6 +59,8 @@ const initialFilters: PaymentFilters = {
   paid_to: "",
 };
 
+const paymentStatusValues: PaymentStatus[] = ["pending", "successful", "failed", "cancelled", "refunded"];
+
 function statusLabel(status: PaymentStatus, t: (key: string, fallback: string) => string): string {
   if (status === "pending") {
     return t("status_pending", "Pending");
@@ -108,20 +111,133 @@ function parsePositiveInt(value: string): number | null {
   return parsed;
 }
 
+function parsePaymentStatus(value: string | null): PaymentStatus | "" {
+  if (value === null) {
+    return "";
+  }
+
+  return paymentStatusValues.includes(value as PaymentStatus) ? (value as PaymentStatus) : "";
+}
+
+function readPageParam(value: string | null): number {
+  if (value === null) {
+    return 1;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+function readPaymentFiltersFromSearchParams(searchParams: URLSearchParams): PaymentFilters {
+  return {
+    status_filter: parsePaymentStatus(searchParams.get("status_filter")),
+    user_id: searchParams.get("user_id") ?? "",
+    listing_id: searchParams.get("listing_id") ?? "",
+    promotion_id: searchParams.get("promotion_id") ?? "",
+    promotion_package_id: searchParams.get("promotion_package_id") ?? "",
+    payment_provider: searchParams.get("payment_provider") ?? "",
+    created_from: searchParams.get("created_from") ?? "",
+    created_to: searchParams.get("created_to") ?? "",
+    paid_from: searchParams.get("paid_from") ?? "",
+    paid_to: searchParams.get("paid_to") ?? "",
+  };
+}
+
+function arePaymentFiltersEqual(left: PaymentFilters, right: PaymentFilters): boolean {
+  return (
+    left.status_filter === right.status_filter &&
+    left.user_id === right.user_id &&
+    left.listing_id === right.listing_id &&
+    left.promotion_id === right.promotion_id &&
+    left.promotion_package_id === right.promotion_package_id &&
+    left.payment_provider === right.payment_provider &&
+    left.created_from === right.created_from &&
+    left.created_to === right.created_to &&
+    left.paid_from === right.paid_from &&
+    left.paid_to === right.paid_to
+  );
+}
+
+function buildPaymentSearchParams(filters: PaymentFilters, page: number): URLSearchParams {
+  const params = new URLSearchParams();
+
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+
+  if (filters.status_filter) {
+    params.set("status_filter", filters.status_filter);
+  }
+
+  const userId = parsePositiveInt(filters.user_id);
+  if (userId !== null) {
+    params.set("user_id", String(userId));
+  }
+
+  const listingId = parsePositiveInt(filters.listing_id);
+  if (listingId !== null) {
+    params.set("listing_id", String(listingId));
+  }
+
+  const promotionId = parsePositiveInt(filters.promotion_id);
+  if (promotionId !== null) {
+    params.set("promotion_id", String(promotionId));
+  }
+
+  const promotionPackageId = parsePositiveInt(filters.promotion_package_id);
+  if (promotionPackageId !== null) {
+    params.set("promotion_package_id", String(promotionPackageId));
+  }
+
+  const provider = filters.payment_provider.trim();
+  if (provider.length >= 2) {
+    params.set("payment_provider", provider);
+  }
+
+  if (filters.created_from) {
+    params.set("created_from", filters.created_from);
+  }
+  if (filters.created_to) {
+    params.set("created_to", filters.created_to);
+  }
+  if (filters.paid_from) {
+    params.set("paid_from", filters.paid_from);
+  }
+  if (filters.paid_to) {
+    params.set("paid_to", filters.paid_to);
+  }
+
+  return params;
+}
+
 export function PaymentsPage() {
   const { authFetch } = useAuth();
   const { t, language } = usePageI18n("payments");
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [payments, setPayments] = useState<PaymentHistoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [page, setPage] = useState(1);
-  const [draftFilters, setDraftFilters] = useState<PaymentFilters>(initialFilters);
-  const [appliedFilters, setAppliedFilters] = useState<PaymentFilters>(initialFilters);
+  const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
+  const [draftFilters, setDraftFilters] = useState<PaymentFilters>(() => readPaymentFiltersFromSearchParams(searchParams));
+  const [appliedFilters, setAppliedFilters] = useState<PaymentFilters>(() => readPaymentFiltersFromSearchParams(searchParams));
 
   const [selectedPayment, setSelectedPayment] = useState<PaymentHistoryItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  useEffect(() => {
+    const queryFilters = readPaymentFiltersFromSearchParams(searchParams);
+    const queryPage = readPageParam(searchParams.get("page"));
+
+    setDraftFilters((previous) => (arePaymentFiltersEqual(previous, queryFilters) ? previous : queryFilters));
+    setAppliedFilters((previous) => (arePaymentFiltersEqual(previous, queryFilters) ? previous : queryFilters));
+    setPage((previous) => (previous === queryPage ? previous : queryPage));
+  }, [searchParams]);
 
   const loadPayments = useCallback(async () => {
     setIsLoading(true);
@@ -216,13 +332,16 @@ export function PaymentsPage() {
   }, [loadPayments]);
 
   const onApplyFilters = () => {
+    const nextFilters: PaymentFilters = {
+      ...draftFilters,
+      payment_provider: draftFilters.payment_provider.trim(),
+    };
+
     if (page !== 1) {
       setPage(1);
     }
-    setAppliedFilters({
-      ...draftFilters,
-      payment_provider: draftFilters.payment_provider.trim(),
-    });
+    setAppliedFilters(nextFilters);
+    setSearchParams(buildPaymentSearchParams(nextFilters, 1), { replace: true });
   };
 
   const onResetFilters = () => {
@@ -231,6 +350,7 @@ export function PaymentsPage() {
     if (page !== 1) {
       setPage(1);
     }
+    setSearchParams(new URLSearchParams(), { replace: true });
   };
 
   const rows = payments?.items ?? [];
@@ -438,7 +558,11 @@ export function PaymentsPage() {
             type="button"
             className="btn btn-ghost"
             disabled={!canPrev}
-            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            onClick={() => {
+              const nextPage = Math.max(1, page - 1);
+              setPage(nextPage);
+              setSearchParams(buildPaymentSearchParams(appliedFilters, nextPage), { replace: true });
+            }}
           >
             {t("previous", "Previous")}
           </button>
@@ -449,7 +573,11 @@ export function PaymentsPage() {
             type="button"
             className="btn btn-ghost"
             disabled={!canNext}
-            onClick={() => setPage((prev) => prev + 1)}
+            onClick={() => {
+              const nextPage = page + 1;
+              setPage(nextPage);
+              setSearchParams(buildPaymentSearchParams(appliedFilters, nextPage), { replace: true });
+            }}
           >
             {t("next", "Next")}
           </button>

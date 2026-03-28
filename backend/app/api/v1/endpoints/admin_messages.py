@@ -171,6 +171,7 @@ def admin_list_messages(
     conversation_id: int = Query(..., gt=0),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=30, ge=1, le=100),
+    message_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_admin_or_moderator),
 ) -> MessageListResponse:
@@ -182,12 +183,39 @@ def admin_list_messages(
     total_items = db.scalar(select(func.count()).select_from(Message).where(*filters)) or 0
     total_pages = ceil(total_items / page_size) if total_items else 0
 
+    resolved_page = page
+    if message_id is not None:
+        target_message = db.scalar(
+            select(Message).where(
+                Message.id == message_id,
+                Message.conversation_id == conversation.id,
+            )
+        )
+        if target_message is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found in this conversation")
+
+        target_position = db.scalar(
+            select(func.count())
+            .select_from(Message)
+            .where(
+                Message.conversation_id == conversation.id,
+                or_(
+                    Message.sent_at < target_message.sent_at,
+                    and_(
+                        Message.sent_at == target_message.sent_at,
+                        Message.id <= target_message.id,
+                    ),
+                ),
+            )
+        ) or 0
+        resolved_page = ceil(target_position / page_size) if target_position else 1
+
     messages = db.scalars(
         select(Message)
         .where(*filters)
         .options(joinedload(Message.attachments))
         .order_by(Message.sent_at.asc(), Message.id.asc())
-        .offset((page - 1) * page_size)
+        .offset((resolved_page - 1) * page_size)
         .limit(page_size)
     ).unique().all()
 
@@ -197,13 +225,13 @@ def admin_list_messages(
         action="admin_message_list_view",
         target_type="conversation",
         target_id=conversation.id,
-        details=f"page={page};page_size={page_size}",
+        details=f"page={resolved_page};page_size={page_size};message_id={message_id}",
     )
     db.commit()
 
     return MessageListResponse(
         items=[MessageItem.model_validate(message) for message in messages],
-        page=page,
+        page=resolved_page,
         page_size=page_size,
         total_items=total_items,
         total_pages=total_pages,

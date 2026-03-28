@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     message_attachment_max_size_mb: int = 10
     message_attachment_max_files_per_message: int = 5
     message_attachment_allowed_mime_csv: str = "image/jpeg,image/png,image/webp,application/pdf"
+    report_attachments_subdir: str = "report_attachments"
+    report_attachment_max_size_mb: int = 10
+    report_attachment_max_files_per_report: int = 5
+    report_attachment_allowed_mime_csv: str = "image/jpeg,image/png,image/webp,application/pdf,text/plain"
     listing_media_subdir: str = "listing_media"
     listing_media_max_size_mb: int = 10
     listing_media_max_files_per_listing: int = 20
@@ -94,6 +98,14 @@ class Settings(BaseSettings):
         return [
             mime_type.strip().lower()
             for mime_type in self.listing_media_allowed_mime_csv.split(",")
+            if mime_type.strip()
+        ]
+
+    @property
+    def report_attachment_allowed_mime_types(self) -> list[str]:
+        return [
+            mime_type.strip().lower()
+            for mime_type in self.report_attachment_allowed_mime_csv.split(",")
             if mime_type.strip()
         ]
 

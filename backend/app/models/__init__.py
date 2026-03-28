@@ -12,6 +12,7 @@ from app.models.payment import Payment, PaymentStatus
 from app.models.promotion import Promotion, PromotionPackage, PromotionStatus
 from app.models.refresh_token import RefreshToken
 from app.models.report import Report, ReportStatus, ReportTargetType
+from app.models.report_attachment import ReportAttachment
 from app.models.role import Role
 from app.models.user import AccountStatus, User, user_roles
 
@@ -37,6 +38,7 @@ __all__ = [
 	"PromotionStatus",
 	"RefreshToken",
 	"Report",
+	"ReportAttachment",
 	"ReportStatus",
 	"ReportTargetType",
 	"Role",

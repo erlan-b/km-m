@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
@@ -77,6 +78,8 @@ const initialPackageForm: PackageFormState = {
   is_active: true,
 };
 
+const promotionStatusValues: PromotionStatus[] = ["pending", "active", "expired", "cancelled"];
+
 function extractErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -96,6 +99,74 @@ function parsePositiveInt(raw: string): number | null {
   }
 
   return parsed;
+}
+
+function parsePromotionStatus(value: string | null): PromotionStatus | "" {
+  if (value === null) {
+    return "";
+  }
+
+  return promotionStatusValues.includes(value as PromotionStatus) ? (value as PromotionStatus) : "";
+}
+
+function readPageParam(value: string | null): number {
+  if (value === null) {
+    return 1;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+function readPromotionFiltersFromSearchParams(searchParams: URLSearchParams): PromotionFilters {
+  return {
+    status_filter: parsePromotionStatus(searchParams.get("status_filter")),
+    listing_id: searchParams.get("listing_id") ?? "",
+    user_id: searchParams.get("user_id") ?? "",
+    promotion_package_id: searchParams.get("promotion_package_id") ?? "",
+  };
+}
+
+function arePromotionFiltersEqual(left: PromotionFilters, right: PromotionFilters): boolean {
+  return (
+    left.status_filter === right.status_filter &&
+    left.listing_id === right.listing_id &&
+    left.user_id === right.user_id &&
+    left.promotion_package_id === right.promotion_package_id
+  );
+}
+
+function buildPromotionSearchParams(filters: PromotionFilters, page: number): URLSearchParams {
+  const params = new URLSearchParams();
+
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+
+  if (filters.status_filter) {
+    params.set("status_filter", filters.status_filter);
+  }
+
+  const listingId = parsePositiveInt(filters.listing_id);
+  if (listingId !== null) {
+    params.set("listing_id", String(listingId));
+  }
+
+  const userId = parsePositiveInt(filters.user_id);
+  if (userId !== null) {
+    params.set("user_id", String(userId));
+  }
+
+  const packageId = parsePositiveInt(filters.promotion_package_id);
+  if (packageId !== null) {
+    params.set("promotion_package_id", String(packageId));
+  }
+
+  return params;
 }
 
 function statusLabel(status: PromotionStatus, t: (key: string, fallback: string) => string): string {
@@ -127,6 +198,7 @@ function statusClass(status: PromotionStatus): string {
 export function PromotionsPage() {
   const { authFetch } = useAuth();
   const { t, language } = usePageI18n("promotions");
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [packages, setPackages] = useState<PromotionPackageItem[]>([]);
   const [isPackagesLoading, setIsPackagesLoading] = useState(true);
@@ -136,9 +208,9 @@ export function PromotionsPage() {
   const [isPromotionsLoading, setIsPromotionsLoading] = useState(true);
   const [promotionsError, setPromotionsError] = useState<string | null>(null);
 
-  const [page, setPage] = useState(1);
-  const [draftFilters, setDraftFilters] = useState<PromotionFilters>(initialFilters);
-  const [appliedFilters, setAppliedFilters] = useState<PromotionFilters>(initialFilters);
+  const [page, setPage] = useState(() => readPageParam(searchParams.get("page")));
+  const [draftFilters, setDraftFilters] = useState<PromotionFilters>(() => readPromotionFiltersFromSearchParams(searchParams));
+  const [appliedFilters, setAppliedFilters] = useState<PromotionFilters>(() => readPromotionFiltersFromSearchParams(searchParams));
 
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<PromotionPackageItem | null>(null);
@@ -148,6 +220,15 @@ export function PromotionsPage() {
 
   const [busyPackageId, setBusyPackageId] = useState<number | null>(null);
   const [busyPromotionId, setBusyPromotionId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const queryFilters = readPromotionFiltersFromSearchParams(searchParams);
+    const queryPage = readPageParam(searchParams.get("page"));
+
+    setDraftFilters((previous) => (arePromotionFiltersEqual(previous, queryFilters) ? previous : queryFilters));
+    setAppliedFilters((previous) => (arePromotionFiltersEqual(previous, queryFilters) ? previous : queryFilters));
+    setPage((previous) => (previous === queryPage ? previous : queryPage));
+  }, [searchParams]);
 
   const loadPackages = useCallback(async () => {
     setIsPackagesLoading(true);
@@ -241,19 +322,23 @@ export function PromotionsPage() {
   }, [loadPromotions]);
 
   const onApplyFilters = () => {
-    setPage(1);
-    setAppliedFilters({
+    const nextFilters: PromotionFilters = {
       status_filter: draftFilters.status_filter,
       listing_id: draftFilters.listing_id.trim(),
       user_id: draftFilters.user_id.trim(),
       promotion_package_id: draftFilters.promotion_package_id.trim(),
-    });
+    };
+
+    setPage(1);
+    setAppliedFilters(nextFilters);
+    setSearchParams(buildPromotionSearchParams(nextFilters, 1), { replace: true });
   };
 
   const onResetFilters = () => {
     setDraftFilters(initialFilters);
     setAppliedFilters(initialFilters);
     setPage(1);
+    setSearchParams(new URLSearchParams(), { replace: true });
   };
 
   const openCreatePackageModal = () => {
@@ -668,7 +753,11 @@ export function PromotionsPage() {
             type="button"
             className="btn btn-ghost"
             disabled={!canPromotionPrev}
-            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            onClick={() => {
+              const nextPage = Math.max(1, page - 1);
+              setPage(nextPage);
+              setSearchParams(buildPromotionSearchParams(appliedFilters, nextPage), { replace: true });
+            }}
           >
             {t("previous", "Previous")}
           </button>
@@ -679,7 +768,11 @@ export function PromotionsPage() {
             type="button"
             className="btn btn-ghost"
             disabled={!canPromotionNext}
-            onClick={() => setPage((prev) => prev + 1)}
+            onClick={() => {
+              const nextPage = page + 1;
+              setPage(nextPage);
+              setSearchParams(buildPromotionSearchParams(appliedFilters, nextPage), { replace: true });
+            }}
           >
             {t("next", "Next")}
           </button>

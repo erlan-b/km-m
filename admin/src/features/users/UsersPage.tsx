@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
@@ -75,6 +76,7 @@ function extractErrorMessage(error: unknown): string {
 export function UsersPage() {
   const { authFetch } = useAuth();
   const { t, language } = usePageI18n("users");
+  const navigate = useNavigate();
 
   const [users, setUsers] = useState<AdminUserListResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -163,6 +165,15 @@ export function UsersPage() {
 
   const closeDetailModal = () => {
     setIsDetailModalOpen(false);
+  };
+
+  const openRelatedSection = (path: string) => {
+    if (!selectedDetail) {
+      return;
+    }
+
+    setIsDetailModalOpen(false);
+    navigate(`${path}?user_id=${selectedDetail.id}`);
   };
 
   const applyStatusAction = async (user: AdminUserListItem) => {
@@ -421,6 +432,17 @@ export function UsersPage() {
                 <h3>{t("commerce", "Commerce")}</h3>
                 <p>{t("payments", "Payments")}: <strong>{formatInteger(selectedDetail.payment_count, language)}</strong></p>
                 <p>{t("subscriptions", "Subscriptions")}: <strong>{formatInteger(selectedDetail.subscription_count, language)}</strong></p>
+                <div className="users-detail-links">
+                  <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/payments")}>
+                    {t("open_payments", "Open payments")}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/promotions")}>
+                    {t("open_promotions", "Open promotions")}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => openRelatedSection("/messages")}>
+                    {t("open_messages", "Open messages")}
+                  </button>
+                </div>
               </article>
               <article className="dashboard-stat-group">
                 <h3>{t("timestamps", "Timestamps")}</h3>
