@@ -17,9 +17,10 @@ from app.models.conversation import Conversation
 from app.models.listing import Listing, ListingStatus, TransactionType
 from app.models.message import Message, MessageType
 from app.models.payment import Payment, PaymentStatus
+from app.models.promotion import Promotion, PromotionPackage, PromotionStatus
 from app.models.report import Report, ReportStatus, ReportTargetType
 from app.models.role import Role
-from app.models.user import AccountStatus, User
+from app.models.user import AccountStatus, SellerType, User, VerificationStatus
 
 SEED_NAMESPACE = "admin-panel-v1"
 
@@ -28,6 +29,8 @@ SEED_NAMESPACE = "admin-panel-v1"
 class SeedStats:
     users_created: int = 0
     listings_created: int = 0
+    promotion_packages_created: int = 0
+    promotions_created: int = 0
     payments_created: int = 0
     reports_created: int = 0
     audit_logs_created: int = 0
@@ -37,6 +40,12 @@ class SeedStats:
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+
+
+def _reason_code_from_key(key: str) -> str:
+    reason_codes = ("spam", "abuse", "fraud", "duplicate")
+    index = sum(ord(ch) for ch in key) % len(reason_codes)
+    return reason_codes[index]
 
 
 def _get_or_create_role(db: Session, role_name: str) -> Role:
@@ -94,6 +103,23 @@ def _ensure_regular_user(db: Session, user_role: Role, index: int) -> tuple[User
         account_status = AccountStatus.ACTIVE
 
     preferred_language = "ru" if index % 2 == 0 else "en"
+    seller_type = SellerType.COMPANY if index % 4 == 0 else SellerType.OWNER
+    company_name = f"Seed Company {index:02d}" if seller_type == SellerType.COMPANY else None
+
+    if account_status == AccountStatus.ACTIVE and index % 5 == 0:
+        verification_status = VerificationStatus.VERIFIED
+    elif index % 6 == 0:
+        verification_status = VerificationStatus.PENDING
+    elif index % 8 == 0:
+        verification_status = VerificationStatus.REJECTED
+    else:
+        verification_status = VerificationStatus.UNVERIFIED
+
+    city = ("Bishkek", "Osh", "Karakol", "Jalal-Abad")[index % 4]
+    last_seen_at = _utc_now() - timedelta(hours=index % 72)
+    phone = f"+996700{index:06d}"
+    profile_image_url = f"avatars/seed_user_{index:02d}.jpg"
+    bio = f"[SEED:{SEED_NAMESPACE}] Profile bio for user {index:02d}."
 
     created = False
     if user is None:
@@ -103,6 +129,14 @@ def _ensure_regular_user(db: Session, user_role: Role, index: int) -> tuple[User
             password_hash=hash_password("User12345!"),
             preferred_language=preferred_language,
             account_status=account_status,
+            seller_type=seller_type,
+            company_name=company_name,
+            verification_status=verification_status,
+            city=city,
+            last_seen_at=last_seen_at,
+            phone=phone,
+            profile_image_url=profile_image_url,
+            bio=bio,
             roles=[user_role],
         )
         db.add(user)
@@ -112,6 +146,14 @@ def _ensure_regular_user(db: Session, user_role: Role, index: int) -> tuple[User
         user.full_name = f"Seed User {index:02d}"
         user.preferred_language = preferred_language
         user.account_status = account_status
+        user.seller_type = seller_type
+        user.company_name = company_name
+        user.verification_status = verification_status
+        user.city = city
+        user.last_seen_at = last_seen_at
+        user.phone = phone
+        user.profile_image_url = profile_image_url
+        user.bio = bio
         user.roles = [user_role]
         db.add(user)
 
@@ -185,6 +227,107 @@ def _ensure_listing(
     return listing, created
 
 
+def _ensure_promotion_package(
+    db: Session,
+    *,
+    key: str,
+    title: str,
+    duration_days: int,
+    price: Decimal,
+    currency: str = "KGS",
+) -> tuple[PromotionPackage, bool]:
+    marker_title = f"[SEED:{SEED_NAMESPACE}] {title}"
+    package = db.scalar(select(PromotionPackage).where(PromotionPackage.title == marker_title))
+
+    created = False
+    if package is None:
+        package = PromotionPackage(
+            title=marker_title,
+            description=f"[SEED:{SEED_NAMESPACE}] package {key}",
+            duration_days=duration_days,
+            price=price,
+            currency=currency,
+            is_active=True,
+        )
+        db.add(package)
+        db.flush()
+        created = True
+    else:
+        package.title = marker_title
+        package.description = f"[SEED:{SEED_NAMESPACE}] package {key}"
+        package.duration_days = duration_days
+        package.price = price
+        package.currency = currency
+        package.is_active = True
+        db.add(package)
+
+    return package, created
+
+
+def _ensure_promotion(
+    db: Session,
+    *,
+    key: str,
+    listing_id: int,
+    user_id: int,
+    package: PromotionPackage,
+    status: PromotionStatus,
+    target_category_id: int | None,
+    now: datetime,
+) -> tuple[Promotion, bool]:
+    target_city_marker = f"[SEED:{SEED_NAMESPACE}] promo {key}"
+    promotion = db.scalar(
+        select(Promotion).where(
+            Promotion.listing_id == listing_id,
+            Promotion.user_id == user_id,
+            Promotion.target_city == target_city_marker,
+        )
+    )
+
+    if status == PromotionStatus.ACTIVE:
+        starts_at = now - timedelta(days=2)
+        ends_at = starts_at + timedelta(days=package.duration_days)
+    elif status == PromotionStatus.PENDING:
+        starts_at = now + timedelta(days=1)
+        ends_at = starts_at + timedelta(days=package.duration_days)
+    elif status == PromotionStatus.EXPIRED:
+        ends_at = now - timedelta(days=1)
+        starts_at = ends_at - timedelta(days=package.duration_days)
+    else:
+        starts_at = now - timedelta(days=3)
+        ends_at = starts_at + timedelta(days=package.duration_days)
+
+    created = False
+    if promotion is None:
+        promotion = Promotion(
+            listing_id=listing_id,
+            user_id=user_id,
+            promotion_package_id=package.id,
+            target_city=target_city_marker,
+            target_category_id=target_category_id,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            status=status,
+            purchased_price=package.price,
+            currency=package.currency,
+        )
+        db.add(promotion)
+        db.flush()
+        created = True
+    else:
+        promotion.promotion_package_id = package.id
+        promotion.target_city = target_city_marker
+        promotion.target_category_id = target_category_id
+        promotion.starts_at = starts_at
+        promotion.ends_at = ends_at
+        promotion.status = status
+        promotion.purchased_price = package.price
+        promotion.currency = package.currency
+        db.add(promotion)
+
+    return promotion, created
+
+
 def _ensure_payment(
     db: Session,
     *,
@@ -195,6 +338,8 @@ def _ensure_payment(
     payment_provider: str,
     amount: Decimal,
     created_at: datetime,
+    promotion_id: int | None = None,
+    promotion_package_id: int | None = None,
 ) -> tuple[Payment, bool]:
     provider_reference = f"seed-{SEED_NAMESPACE}-{key}"
     payment = db.scalar(select(Payment).where(Payment.provider_reference == provider_reference))
@@ -210,6 +355,8 @@ def _ensure_payment(
         payment = Payment(
             user_id=user_id,
             listing_id=listing_id,
+            promotion_id=promotion_id,
+            promotion_package_id=promotion_package_id,
             amount=amount,
             currency="KGS",
             status=status,
@@ -225,6 +372,8 @@ def _ensure_payment(
     else:
         payment.user_id = user_id
         payment.listing_id = listing_id
+        payment.promotion_id = promotion_id
+        payment.promotion_package_id = promotion_package_id
         payment.amount = amount
         payment.currency = "KGS"
         payment.status = status
@@ -244,15 +393,18 @@ def _ensure_report(
     reporter_user_id: int,
     target_type: ReportTargetType,
     target_id: int,
+    target_conversation_id: int | None,
     status: ReportStatus,
     reviewed_by_admin_id: int | None,
     created_at: datetime,
+    reason_code: str | None = None,
 ) -> tuple[Report, bool]:
     marker = f"[SEED:{SEED_NAMESPACE}] report {key}"
     report = db.scalar(select(Report).where(Report.reason_text == marker))
 
     reviewed_at = created_at + timedelta(hours=4) if status != ReportStatus.OPEN else None
     resolution_note = "Processed by seed flow" if status != ReportStatus.OPEN else None
+    resolved_reason_code = reason_code or _reason_code_from_key(key)
 
     created = False
     if report is None:
@@ -260,7 +412,8 @@ def _ensure_report(
             reporter_user_id=reporter_user_id,
             target_type=target_type,
             target_id=target_id,
-            reason_code=("spam", "abuse", "fraud", "duplicate")[int(key) % 4],
+            target_conversation_id=target_conversation_id,
+            reason_code=resolved_reason_code,
             reason_text=marker,
             status=status,
             resolution_note=resolution_note,
@@ -275,7 +428,8 @@ def _ensure_report(
         report.reporter_user_id = reporter_user_id
         report.target_type = target_type
         report.target_id = target_id
-        report.reason_code = ("spam", "abuse", "fraud", "duplicate")[int(key) % 4]
+        report.target_conversation_id = target_conversation_id
+        report.reason_code = resolved_reason_code
         report.reason_text = marker
         report.status = status
         report.resolution_note = resolution_note
@@ -332,7 +486,7 @@ def _ensure_conversation_and_messages(
     participant_user_id: int,
     key: str,
     now: datetime,
-) -> tuple[bool, int]:
+) -> tuple[Conversation, bool, int]:
     participant_a_id, participant_b_id = sorted((listing.owner_id, participant_user_id))
 
     conversation = db.scalar(
@@ -382,7 +536,7 @@ def _ensure_conversation_and_messages(
             db.add(conversation)
             message_created_count += 1
 
-    return conversation_created, message_created_count
+    return conversation, conversation_created, message_created_count
 
 
 def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
@@ -425,9 +579,28 @@ def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
         if not categories:
             raise RuntimeError("No categories found after seeding")
 
+        promotion_packages: list[PromotionPackage] = []
+        package_specs = [
+            ("starter", "Starter Boost", 7, Decimal("199.00")),
+            ("pro", "Pro Visibility", 14, Decimal("349.00")),
+            ("max", "Max Reach", 30, Decimal("599.00")),
+        ]
+        for key, title, duration_days, price in package_specs:
+            package, created = _ensure_promotion_package(
+                db,
+                key=key,
+                title=title,
+                duration_days=duration_days,
+                price=price,
+            )
+            promotion_packages.append(package)
+            if created:
+                stats.promotion_packages_created += 1
+
         regular_users: list[User] = []
         listings: list[Listing] = []
         published_listings: list[Listing] = []
+        promotions_by_user_id: dict[int, Promotion] = {}
 
         statuses_cycle = [
             ListingStatus.PUBLISHED,
@@ -467,6 +640,42 @@ def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
                 if listing_created:
                     stats.listings_created += 1
 
+        promotion_statuses = [
+            PromotionStatus.ACTIVE,
+            PromotionStatus.PENDING,
+            PromotionStatus.CANCELLED,
+            PromotionStatus.EXPIRED,
+        ]
+
+        for index, user in enumerate(regular_users, start=1):
+            owner_published_listings = [item for item in listings if item.owner_id == user.id and item.status == ListingStatus.PUBLISHED]
+            if not owner_published_listings:
+                continue
+
+            listing = owner_published_listings[0]
+            package = promotion_packages[index % len(promotion_packages)]
+            promotion_status = promotion_statuses[index % len(promotion_statuses)]
+            target_category_id = listing.category_id if index % 2 == 0 else None
+
+            promotion, created = _ensure_promotion(
+                db,
+                key=f"u{index:02d}-p1",
+                listing_id=listing.id,
+                user_id=user.id,
+                package=package,
+                status=promotion_status,
+                target_category_id=target_category_id,
+                now=now,
+            )
+            promotions_by_user_id[user.id] = promotion
+            if created:
+                stats.promotions_created += 1
+
+            if promotion_status == PromotionStatus.ACTIVE:
+                listing.is_subscription = True
+                listing.subscription_expires_at = promotion.ends_at
+                db.add(listing)
+
         payment_statuses = [
             PaymentStatus.SUCCESSFUL,
             PaymentStatus.PENDING,
@@ -482,9 +691,22 @@ def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
                 continue
 
             primary_listing = owner_listings[0]
-            status = payment_statuses[index % len(payment_statuses)]
+            linked_promotion = promotions_by_user_id.get(user.id)
+            if linked_promotion is not None:
+                if linked_promotion.status == PromotionStatus.ACTIVE:
+                    status = PaymentStatus.SUCCESSFUL
+                elif linked_promotion.status == PromotionStatus.PENDING:
+                    status = PaymentStatus.PENDING
+                elif linked_promotion.status == PromotionStatus.CANCELLED:
+                    status = PaymentStatus.CANCELLED
+                else:
+                    status = PaymentStatus.REFUNDED
+                amount = linked_promotion.purchased_price
+            else:
+                status = payment_statuses[index % len(payment_statuses)]
+                amount = Decimal("350.00") + Decimal(index * 15)
+
             provider = providers[index % len(providers)]
-            amount = Decimal("350.00") + Decimal(index * 15)
             created_at = now - timedelta(days=index % 20, hours=index % 5)
 
             _, created = _ensure_payment(
@@ -496,6 +718,8 @@ def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
                 payment_provider=provider,
                 amount=amount,
                 created_at=created_at,
+                promotion_id=linked_promotion.id if linked_promotion is not None else None,
+                promotion_package_id=linked_promotion.promotion_package_id if linked_promotion is not None else None,
             )
             if created:
                 stats.payments_created += 1
@@ -520,6 +744,7 @@ def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
                 reporter_user_id=reporter.id,
                 target_type=target_type,
                 target_id=target_id,
+                target_conversation_id=None,
                 status=status,
                 reviewed_by_admin_id=reviewed_by_admin_id,
                 created_at=now - timedelta(days=index % 15, hours=index % 6),
@@ -563,22 +788,57 @@ def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
             if created:
                 stats.audit_logs_created += 1
 
+        seeded_conversations: list[Conversation] = []
         conversation_candidates = published_listings[: min(len(published_listings), 14)]
         for index, listing in enumerate(conversation_candidates, start=1):
             participant = regular_users[(index * 3) % len(regular_users)]
             if participant.id == listing.owner_id:
                 participant = regular_users[(index * 3 + 1) % len(regular_users)]
 
-            conversation_created, message_created = _ensure_conversation_and_messages(
+            conversation, conversation_created, message_created = _ensure_conversation_and_messages(
                 db,
                 listing=listing,
                 participant_user_id=participant.id,
                 key=str(index),
                 now=now,
             )
+            seeded_conversations.append(conversation)
             if conversation_created:
                 stats.conversations_created += 1
             stats.messages_created += message_created
+
+        for index, conversation in enumerate(seeded_conversations[:12], start=1):
+            message = db.scalar(
+                select(Message)
+                .where(Message.conversation_id == conversation.id)
+                .order_by(Message.sent_at.asc(), Message.id.asc())
+            )
+            if message is None:
+                continue
+
+            reporter_user_id = conversation.participant_a_id
+            if reporter_user_id == message.sender_id:
+                reporter_user_id = conversation.participant_b_id
+
+            status = (ReportStatus.OPEN, ReportStatus.RESOLVED, ReportStatus.DISMISSED)[index % 3]
+            reviewed_by_admin_id = None
+            if status != ReportStatus.OPEN:
+                reviewed_by_admin_id = admin_user.id if index % 2 == 0 else moderator_user.id
+
+            _, created = _ensure_report(
+                db,
+                key=f"msg-{index}",
+                reporter_user_id=reporter_user_id,
+                target_type=ReportTargetType.MESSAGE,
+                target_id=message.id,
+                target_conversation_id=conversation.id,
+                status=status,
+                reviewed_by_admin_id=reviewed_by_admin_id,
+                created_at=now - timedelta(days=index % 9, hours=index % 4),
+                reason_code="abuse",
+            )
+            if created:
+                stats.reports_created += 1
 
         db.commit()
 
@@ -588,6 +848,8 @@ def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
         "Created -> "
         f"users: {stats.users_created}, "
         f"listings: {stats.listings_created}, "
+        f"promotion_packages: {stats.promotion_packages_created}, "
+        f"promotions: {stats.promotions_created}, "
         f"payments: {stats.payments_created}, "
         f"reports: {stats.reports_created}, "
         f"audit_logs: {stats.audit_logs_created}, "
