@@ -80,13 +80,13 @@ alembic upgrade head
 6. Seed categories:
 
 ```bash
-python db/scripts/seed_categories.py
+python db/scripts/seed_basics.py --scope categories
 ```
 
 7. Seed demo accounts (user/admin/moderator):
 
 ```bash
-python db/scripts/seed_demo_users.py
+python db/scripts/seed_basics.py --scope users
 ```
 
 8. Start API:
@@ -229,14 +229,15 @@ Current integration suites cover:
 
 - auth lifecycle (`tests/test_auth_lifecycle.py`)
 - listings lifecycle and delete policy (`tests/test_listing_soft_delete.py`)
-- localization content management (`tests/test_localization_content.py`)
+- i18n public/auth/admin coverage (`tests/test_i18n_pages.py`, `tests/test_i18n_auth_messages.py`, `tests/test_i18n_admin_crud.py`)
 - messaging/attachments access control (`tests/test_messaging_access_control.py`)
-- payments/promotions activation rules (`tests/test_payments_promotions.py`)
+- payments/promotions activation rules (`tests/test_promotions_payments_flow.py`, `tests/test_payments_admin.py`)
 - reports moderation workflow (`tests/test_reports_workflow.py`)
+- role matrix access policy (`tests/test_role_matrix_access.py`)
 
 ## Demo Credentials
 
-After running `python db/scripts/seed_demo_users.py`:
+After running `python db/scripts/seed_basics.py --scope users`:
 
 - Superadmin:
 	- email: `superadmin@demo.kg`
@@ -267,12 +268,12 @@ After running `python db/scripts/seed_demo_users.py`:
 - user preferred language is stored in profile
 - supported languages are exposed via `/api/v1/auth/languages`
 - backend page dictionaries are exposed via `/api/v1/i18n/pages` and `/api/v1/i18n/pages/{page_key}`
-- admin localization CRUD endpoints are planned as a next step
+- admin localization CRUD is available via `/api/v1/i18n/admin/entries`
+- public i18n page responses merge static dictionaries with active DB overrides
 
 ## Known Limitations
 
 - payment provider callbacks are simulated, not integrated with a live provider
-- admin localization content management CRUD is not implemented yet
 - README demo video link must be filled before final submission
 
 ## Future Work

@@ -1,3 +1,4 @@
+import argparse
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -119,3 +120,35 @@ def seed_demo_users() -> None:
         db.commit()
 
     print("Demo users seed complete")
+
+
+def seed_all() -> None:
+    seed_categories()
+    print("Category seed complete")
+    seed_demo_users()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Seed baseline demo data")
+    parser.add_argument(
+        "--scope",
+        choices=("categories", "users", "all"),
+        default="all",
+        help="Select what to seed",
+    )
+    args = parser.parse_args()
+
+    if args.scope == "categories":
+        seed_categories()
+        print("Category seed complete")
+        return
+
+    if args.scope == "users":
+        seed_demo_users()
+        return
+
+    seed_all()
+
+
+if __name__ == "__main__":
+    main()
