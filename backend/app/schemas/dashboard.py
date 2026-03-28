@@ -21,5 +21,6 @@ class AdminDashboardResponse(BaseModel):
 
     total_reports: int
     total_payments: int
-    total_subscription_revenue: Decimal
+    total_promotion_revenue: Decimal
     active_subscriptions: int
+    active_promotions: int

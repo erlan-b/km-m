@@ -18,8 +18,9 @@ type AdminDashboardResponse = {
   total_messages: number;
   total_reports: number;
   total_payments: number;
-  total_subscription_revenue: string | number;
+  total_promotion_revenue: string | number;
   active_subscriptions: number;
+  active_promotions: number;
 };
 
 function extractErrorMessage(error: unknown): string {
@@ -80,7 +81,6 @@ export function DashboardPage() {
   const totalUsers = fmtCount(data?.total_users);
   const pendingListings = fmtCount(data?.pending_listings);
   const totalReports = fmtCount(data?.total_reports);
-  const activeSubscriptions = fmtCount(data?.active_subscriptions);
 
   return (
     <section className="module-page">
@@ -110,8 +110,8 @@ export function DashboardPage() {
           <strong>{totalReports}</strong>
         </article>
         <article>
-          <h3>{t("active_subscriptions", "Active Subscriptions")}</h3>
-          <strong>{activeSubscriptions}</strong>
+          <h3>{t("active_promotions", "Active Promotions")}</h3>
+          <strong>{fmtCount(data?.active_promotions)}</strong>
         </article>
       </div>
 
@@ -141,8 +141,9 @@ export function DashboardPage() {
             <h3>{t("payments_section", "Payments")}</h3>
             <p>{t("total_payments", "Total payments")}: <strong>{fmtCount(data?.total_payments)}</strong></p>
             <p>
-              {t("subscription_revenue", "Subscription revenue")}: <strong>{data ? formatCurrency(data.total_subscription_revenue, "USD", language) : "--"}</strong>
+              {t("promotion_revenue", "Promotion revenue")}: <strong>{data ? formatCurrency(data.total_promotion_revenue, "KGS", language) : "--"}</strong>
             </p>
+            <p>{t("active_subscriptions", "Active subscriptions")}: <strong>{fmtCount(data?.active_subscriptions)}</strong></p>
           </article>
         </div>
       </section>

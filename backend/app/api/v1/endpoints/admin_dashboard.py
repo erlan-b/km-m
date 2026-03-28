@@ -11,6 +11,7 @@ from app.models.conversation import Conversation
 from app.models.listing import Listing, ListingStatus
 from app.models.message import Message
 from app.models.payment import Payment, PaymentStatus
+from app.models.promotion import Promotion, PromotionStatus
 from app.models.report import Report
 from app.models.user import AccountStatus, User
 from app.schemas.dashboard import AdminDashboardResponse
@@ -44,16 +45,20 @@ def get_admin_dashboard(
     total_reports = db.scalar(select(func.count()).select_from(Report)) or 0
     total_payments = db.scalar(select(func.count()).select_from(Payment)) or 0
 
-    total_subscription_revenue = db.scalar(
+    total_promotion_revenue = db.scalar(
         select(func.coalesce(func.sum(Payment.amount), 0)).where(
             Payment.status == PaymentStatus.SUCCESSFUL,
         )
     )
-    if total_subscription_revenue is None:
-        total_subscription_revenue = Decimal("0")
+    if total_promotion_revenue is None:
+        total_promotion_revenue = Decimal("0")
 
     active_subscriptions = db.scalar(
         select(func.count()).select_from(Listing).where(Listing.is_subscription.is_(True))
+    ) or 0
+
+    active_promotions = db.scalar(
+        select(func.count()).select_from(Promotion).where(Promotion.status == PromotionStatus.ACTIVE)
     ) or 0
 
     return AdminDashboardResponse(
@@ -69,6 +74,7 @@ def get_admin_dashboard(
         total_messages=total_messages,
         total_reports=total_reports,
         total_payments=total_payments,
-        total_subscription_revenue=total_subscription_revenue,
+        total_promotion_revenue=total_promotion_revenue,
         active_subscriptions=active_subscriptions,
+        active_promotions=active_promotions,
     )

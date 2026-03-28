@@ -1,0 +1,53 @@
+name: km_marketplace
+description: "Real Estate Marketplace"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # HTTP
+  dio: ^5.7.0
+
+  # Routing
+  go_router: ^15.1.2
+
+  # Storage
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.5.3
+
+  # Maps (OSM)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+  # Media
+  image_picker: ^1.1.2
+  file_picker: ^8.1.7
+  cached_network_image: ^3.4.1
+
+  # UI
+  cupertino_icons: ^1.0.8
+  intl: any
+  shimmer: ^3.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  riverpod_generator: ^2.6.4
+  build_runner: ^2.4.15
+  json_serializable: ^6.9.4
+  json_annotation: ^4.9.0
+
+flutter:
+  uses-material-design: true
