@@ -2,6 +2,7 @@ from app.models.admin_audit_log import AdminAuditLog
 from app.models.category import Category
 from app.models.conversation import Conversation
 from app.models.favorite import Favorite
+from app.models.i18n_entry import I18nEntry
 from app.models.listing import Listing, ListingStatus, TransactionType
 from app.models.listing_media import ListingMedia
 from app.models.message import Message, MessageType
@@ -22,6 +23,7 @@ __all__ = [
 	"Category",
 	"Conversation",
 	"Favorite",
+	"I18nEntry",
 	"Listing",
 	"ListingMedia",
 	"ListingStatus",

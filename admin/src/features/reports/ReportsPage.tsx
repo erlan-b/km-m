@@ -106,7 +106,7 @@ function getReportListingId(report: ReportItem): number | null {
 }
 
 export function ReportsPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, canModerateContent } = useAuth();
   const { t, language } = usePageI18n("reports");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -271,6 +271,11 @@ export function ReportsPage() {
 
   const onResolveSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!canModerateContent) {
+      setError(t("access_denied_moderation", "Access denied: moderator, admin or superadmin role required"));
+      return;
+    }
 
     if (!selectedReport) {
       return;
@@ -774,6 +779,7 @@ export function ReportsPage() {
                         key={preset.id}
                         type="button"
                         className="btn btn-ghost"
+                        disabled={!canModerateContent}
                         onClick={() => applyChatPreset(preset)}
                       >
                         {preset.label}
@@ -784,6 +790,12 @@ export function ReportsPage() {
               ) : null}
 
               <form className="reports-form" onSubmit={onResolveSubmit}>
+                {!canModerateContent ? (
+                  <div className="dashboard-error">
+                    {t("read_only_mode", "Read-only mode: moderation actions require moderator, admin or superadmin role")}
+                  </div>
+                ) : null}
+
                 <div className="reports-form-grid">
                   <label>
                     {t("action", "Action")}
@@ -791,6 +803,7 @@ export function ReportsPage() {
                       className="users-filter-select"
                       value={resolveAction}
                       onChange={(event) => setResolveAction(event.target.value as ResolveAction)}
+                      disabled={!canModerateContent}
                     >
                       <option value="resolve">{t("resolve", "Resolve")}</option>
                       <option value="dismiss">{t("dismiss", "Dismiss")}</option>
@@ -803,7 +816,7 @@ export function ReportsPage() {
                       className="users-filter-select"
                       value={moderationAction}
                       onChange={(event) => setModerationAction(event.target.value)}
-                      disabled={moderationOptions.length === 0}
+                      disabled={!canModerateContent || moderationOptions.length === 0}
                     >
                       <option value="">{t("no_moderation_action", "No moderation action")}</option>
                       {moderationOptions.map((option) => (
@@ -823,16 +836,18 @@ export function ReportsPage() {
                     onChange={(event) => setResolutionNote(event.target.value)}
                     placeholder={t("resolution_note_placeholder", "Provide moderation context for audit and reporter notifications")}
                     maxLength={2000}
+                    disabled={!canModerateContent}
                   />
                 </label>
 
                 <div className="users-actions-cell">
-                  <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                  <button type="submit" className="btn btn-primary" disabled={!canModerateContent || isSubmitting}>
                     {isSubmitting ? t("applying", "Applying...") : t("apply_action", "Apply action")}
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost"
+                    disabled={!canModerateContent}
                     onClick={() => {
                       setResolveAction("resolve");
                       setModerationAction("");

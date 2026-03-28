@@ -60,7 +60,7 @@ def test_non_admin_cannot_access_admin_audit_logs(client, db_session, set_curren
 
     response = client.get("/api/v1/admin/audit-logs")
     assert response.status_code == 403
-    assert response.json()["detail"] == "Admin or moderator role required"
+    assert response.json()["detail"] == "Admin or superadmin role required"
 
 
 def test_admin_can_filter_audit_logs_by_action_target_and_admin(client, db_session, set_current_user):

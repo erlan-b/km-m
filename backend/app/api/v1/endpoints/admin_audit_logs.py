@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin_or_moderator
+from app.api.deps import require_admin_management_access
 from app.db.session import get_db
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.user import User
@@ -21,7 +21,7 @@ def list_admin_audit_logs(
     target_type: str | None = Query(default=None, min_length=2, max_length=50),
     admin_user_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_management_access),
 ) -> AdminAuditLogListResponse:
     filters = []
     if action is not None:

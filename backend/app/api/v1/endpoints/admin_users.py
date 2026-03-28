@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin_or_moderator
+from app.api.deps import require_admin_management_access, require_admin_panel_access
 from app.models.conversation import Conversation
 from app.db.session import get_db
 from app.models.admin_audit_log import AdminAuditLog
@@ -130,7 +130,7 @@ def list_users_admin(
     status_filter: AccountStatus | None = None,
     role: str | None = Query(default=None, min_length=2, max_length=50),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> AdminUserListResponse:
     filters = []
     if q is not None:
@@ -171,7 +171,7 @@ def list_users_admin(
 def get_user_admin_detail(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> AdminUserDetailResponse:
     target_user = get_target_user_or_404(db, user_id)
     return build_admin_user_detail_response(db, target_user)
@@ -182,7 +182,7 @@ def set_user_verification_status(
     user_id: int,
     payload: AdminUserVerificationActionRequest,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_admin_management_access),
 ) -> AdminUserDetailResponse:
     target_user = get_target_user_or_404(db, user_id)
 
@@ -207,7 +207,7 @@ def suspend_user(
     user_id: int,
     payload: AdminUserStatusActionRequest,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_admin_management_access),
 ) -> AdminUserStatusResponse:
     target_user = get_target_user_or_404(db, user_id)
 
@@ -253,7 +253,7 @@ def unsuspend_user(
     user_id: int,
     payload: AdminUserStatusActionRequest,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_admin_management_access),
 ) -> AdminUserStatusResponse:
     target_user = get_target_user_or_404(db, user_id)
 

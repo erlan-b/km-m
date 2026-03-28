@@ -258,7 +258,7 @@ def test_admin_moderation_endpoint_requires_admin_role(client, db_session, set_c
 
     response = client.get("/api/v1/listings/admin/moderation")
     assert response.status_code == 403
-    assert response.json()["detail"] == "Admin or moderator role required"
+    assert response.json()["detail"] == "Support, moderator, admin or superadmin role required"
 
 
 def test_admin_moderation_supports_listing_id_filter(client, db_session, set_current_user):

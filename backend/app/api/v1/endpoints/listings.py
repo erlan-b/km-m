@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin_or_moderator, user_has_role
+from app.api.deps import get_current_user, require_admin_panel_access, require_moderation_access, user_has_role
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.admin_audit_log import AdminAuditLog
@@ -447,7 +447,7 @@ def moderate_listing_status(
     listing_id: int,
     payload: ListingModerationActionRequest,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_moderation_access),
 ) -> ListingStatusUpdateResponse:
     listing = db.scalar(select(Listing).where(Listing.id == listing_id))
     if listing is None:
@@ -529,7 +529,7 @@ def list_listings_for_moderation(
     transaction_type: TransactionType | None = None,
     sort_by: Literal["newest", "oldest", "price_asc", "price_desc", "most_viewed"] = "newest",
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> ListingListResponse:
     filters = []
 

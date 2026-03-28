@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_current_user, require_admin_or_moderator, user_has_role
+from app.api.deps import ADMIN_PANEL_ACCESS_ROLES, get_current_user, require_admin_panel_access, require_moderation_access, user_has_role
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.core.utils import utc_now
@@ -242,11 +242,11 @@ def get_report_attachment_for_user(
     if attachment is None or attachment.report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
 
-    is_admin_or_moderator = user_has_role(current_user, {"admin", "moderator", "superadmin"})
-    if not is_admin_or_moderator and attachment.report.reporter_user_id != current_user.id:
+    is_admin_panel_operator = user_has_role(current_user, ADMIN_PANEL_ACCESS_ROLES)
+    if not is_admin_panel_operator and attachment.report.reporter_user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
 
-    return attachment, is_admin_or_moderator
+    return attachment, is_admin_panel_operator
 
 
 def resolve_report_attachment_path(attachment: ReportAttachment) -> Path:
@@ -378,7 +378,7 @@ def list_reports_admin_queue(
     status_filter: ReportStatus | None = ReportStatus.OPEN,
     target_type_filter: ReportTargetType | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> ReportListResponse:
     filters = []
     if status_filter is not None:
@@ -414,7 +414,7 @@ def resolve_report(
     report_id: int,
     payload: ReportResolveRequest,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_moderation_access),
 ) -> ReportResponse:
     report = db.scalar(
         select(Report)

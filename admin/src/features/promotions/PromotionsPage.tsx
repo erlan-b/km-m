@@ -196,7 +196,7 @@ function statusClass(status: PromotionStatus): string {
 }
 
 export function PromotionsPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, canManageAdministration } = useAuth();
   const { t, language } = usePageI18n("promotions");
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -342,6 +342,11 @@ export function PromotionsPage() {
   };
 
   const openCreatePackageModal = () => {
+    if (!canManageAdministration) {
+      setPackagesError(t("access_denied_admin_management", "Access denied: admin or superadmin role required"));
+      return;
+    }
+
     setEditingPackage(null);
     setPackageForm({ ...initialPackageForm, currency: "KGS", price: "0.00", duration_days: "7" });
     setPackageFormError(null);
@@ -349,6 +354,11 @@ export function PromotionsPage() {
   };
 
   const openEditPackageModal = (item: PromotionPackageItem) => {
+    if (!canManageAdministration) {
+      setPackagesError(t("access_denied_admin_management", "Access denied: admin or superadmin role required"));
+      return;
+    }
+
     setEditingPackage(item);
     setPackageForm({
       title: item.title,
@@ -363,6 +373,11 @@ export function PromotionsPage() {
   };
 
   const savePackage = async () => {
+    if (!canManageAdministration) {
+      setPackageFormError(t("access_denied_admin_management", "Access denied: admin or superadmin role required"));
+      return;
+    }
+
     const trimmedTitle = packageForm.title.trim();
     const durationDays = Number.parseInt(packageForm.duration_days, 10);
     const price = Number(packageForm.price);
@@ -434,6 +449,11 @@ export function PromotionsPage() {
   };
 
   const togglePackageActive = async (item: PromotionPackageItem) => {
+    if (!canManageAdministration) {
+      setPackagesError(t("access_denied_admin_management", "Access denied: admin or superadmin role required"));
+      return;
+    }
+
     setBusyPackageId(item.id);
     setPackagesError(null);
 
@@ -468,6 +488,11 @@ export function PromotionsPage() {
   };
 
   const deactivatePromotion = async (item: PromotionItem) => {
+    if (!canManageAdministration) {
+      setPromotionsError(t("access_denied_admin_management", "Access denied: admin or superadmin role required"));
+      return;
+    }
+
     const confirmed = window.confirm(t("confirm_deactivate_promotion", "Deactivate this promotion?"));
     if (!confirmed) {
       return;
@@ -597,9 +622,11 @@ export function PromotionsPage() {
           <strong>{t("packages", "Promotion packages")}</strong>
           <div className="users-actions-cell">
             <span>{formatInteger(packages.length, language)} {t("total", "total")}</span>
-            <button type="button" className="btn btn-primary" onClick={openCreatePackageModal}>
-              {t("create_package", "Create package")}
-            </button>
+            {canManageAdministration ? (
+              <button type="button" className="btn btn-primary" onClick={openCreatePackageModal}>
+                {t("create_package", "Create package")}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -642,23 +669,25 @@ export function PromotionsPage() {
                     </td>
                     <td>{formatDateTime(item.created_at, language)}</td>
                     <td>
-                      <div className="users-actions-cell">
-                        <button type="button" className="btn btn-ghost" onClick={() => openEditPackageModal(item)}>
-                          {t("edit", "Edit")}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          disabled={busyPackageId === item.id}
-                          onClick={() => void togglePackageActive(item)}
-                        >
-                          {busyPackageId === item.id
-                            ? t("processing", "Processing...")
-                            : item.is_active
-                              ? t("deactivate", "Deactivate")
-                              : t("activate", "Activate")}
-                        </button>
-                      </div>
+                      {canManageAdministration ? (
+                        <div className="users-actions-cell">
+                          <button type="button" className="btn btn-ghost" onClick={() => openEditPackageModal(item)}>
+                            {t("edit", "Edit")}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={busyPackageId === item.id}
+                            onClick={() => void togglePackageActive(item)}
+                          >
+                            {busyPackageId === item.id
+                              ? t("processing", "Processing...")
+                              : item.is_active
+                                ? t("deactivate", "Deactivate")
+                                : t("activate", "Activate")}
+                          </button>
+                        </div>
+                      ) : "-"}
                     </td>
                   </tr>
                 ))
@@ -728,18 +757,20 @@ export function PromotionsPage() {
                     <td>{formatCurrency(item.purchased_price, item.currency, language)}</td>
                     <td>{formatDateTime(item.created_at, language)}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        disabled={
-                          busyPromotionId === item.id ||
-                          item.status === "cancelled" ||
-                          item.status === "expired"
-                        }
-                        onClick={() => void deactivatePromotion(item)}
-                      >
-                        {busyPromotionId === item.id ? t("processing", "Processing...") : t("deactivate", "Deactivate")}
-                      </button>
+                      {canManageAdministration ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost"
+                          disabled={
+                            busyPromotionId === item.id ||
+                            item.status === "cancelled" ||
+                            item.status === "expired"
+                          }
+                          onClick={() => void deactivatePromotion(item)}
+                        >
+                          {busyPromotionId === item.id ? t("processing", "Processing...") : t("deactivate", "Deactivate")}
+                        </button>
+                      ) : "-"}
                     </td>
                   </tr>
                 ))

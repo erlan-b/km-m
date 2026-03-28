@@ -98,7 +98,7 @@ def test_non_admin_cannot_access_payments_admin(client, db_session, set_current_
 
     response = client.get("/api/v1/payments/admin")
     assert response.status_code == 403
-    assert response.json()["detail"] == "Admin or moderator role required"
+    assert response.json()["detail"] == "Support, moderator, admin or superadmin role required"
 
 
 def test_admin_payments_filters_by_status_provider_user_listing_and_dates(client, db_session, set_current_user):

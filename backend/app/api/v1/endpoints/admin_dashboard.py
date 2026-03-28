@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin_or_moderator
+from app.api.deps import require_admin_panel_access
 from app.db.session import get_db
 from app.core.utils import utc_now
 from app.models.conversation import Conversation
@@ -21,7 +21,7 @@ router = APIRouter()
 @router.get("", response_model=AdminDashboardResponse)
 def get_admin_dashboard(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> AdminDashboardResponse:
     total_users = db.scalar(select(func.count()).select_from(User)) or 0
     active_users = db.scalar(select(func.count()).select_from(User).where(User.account_status == AccountStatus.ACTIVE)) or 0

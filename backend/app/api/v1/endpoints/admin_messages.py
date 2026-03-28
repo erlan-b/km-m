@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import require_admin_or_moderator
+from app.api.deps import require_admin_panel_access
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.admin_audit_log import AdminAuditLog
@@ -96,7 +96,7 @@ def admin_list_user_conversations(
     page_size: int = Query(default=20, ge=1, le=100),
     listing_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_admin_panel_access),
 ) -> ConversationListResponse:
     filters = [
         or_(
@@ -146,7 +146,7 @@ def admin_list_user_conversations(
 def admin_get_conversation_detail(
     conversation_id: int,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_admin_panel_access),
 ) -> ConversationItem:
     conversation = db.scalar(select(Conversation).where(Conversation.id == conversation_id))
     if conversation is None:
@@ -173,7 +173,7 @@ def admin_list_messages(
     page_size: int = Query(default=30, ge=1, le=100),
     message_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_admin_panel_access),
 ) -> MessageListResponse:
     conversation = db.scalar(select(Conversation).where(Conversation.id == conversation_id))
     if conversation is None:
@@ -242,7 +242,7 @@ def admin_list_messages(
 def admin_download_attachment(
     attachment_id: int,
     db: Session = Depends(get_db),
-    admin_user: User = Depends(require_admin_or_moderator),
+    admin_user: User = Depends(require_admin_panel_access),
 ) -> FileResponse:
     attachment = db.scalar(select(MessageAttachment).where(MessageAttachment.id == attachment_id))
     if attachment is None:

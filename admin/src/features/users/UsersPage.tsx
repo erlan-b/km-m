@@ -125,7 +125,7 @@ function extractErrorMessage(error: unknown): string {
 }
 
 export function UsersPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, canManageAdministration } = useAuth();
   const { t, language } = usePageI18n("users");
   const navigate = useNavigate();
 
@@ -238,6 +238,11 @@ export function UsersPage() {
   };
 
   const applyStatusAction = async (user: AdminUserListItem) => {
+    if (!canManageAdministration) {
+      setError(t("access_denied_admin_management", "Access denied: admin or superadmin role required"));
+      return;
+    }
+
     const actionPath = user.account_status === "blocked" ? "unsuspend" : "suspend";
     const actionLabel = actionPath === "suspend" ? t("suspend", "Suspend") : t("unsuspend", "Unsuspend");
 
@@ -309,6 +314,11 @@ export function UsersPage() {
   };
 
   const applyVerificationStatus = async () => {
+    if (!canManageAdministration) {
+      setDetailError(t("access_denied_admin_management", "Access denied: admin or superadmin role required"));
+      return;
+    }
+
     if (!selectedDetail) {
       return;
     }
@@ -434,8 +444,10 @@ export function UsersPage() {
         </select>
         <select className="users-filter-select" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
           <option value="">{t("all_roles", "All roles")}</option>
+          <option value="support">{t("role_support", "Support")}</option>
           <option value="admin">{t("role_admin", "Admin")}</option>
           <option value="moderator">{t("role_moderator", "Moderator")}</option>
+          <option value="superadmin">{t("role_superadmin", "Superadmin")}</option>
           <option value="user">{t("role_user", "User")}</option>
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>{t("apply_filters", "Apply filters")}</button>
@@ -489,18 +501,20 @@ export function UsersPage() {
                         <button type="button" className="btn btn-ghost" onClick={() => void openDetail(user.id)}>
                           {t("details", "Details")}
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => void applyStatusAction(user)}
-                          disabled={actionBusyUserId === user.id}
-                        >
-                          {actionBusyUserId === user.id
-                            ? t("processing", "Processing...")
-                            : user.account_status === "blocked"
-                              ? t("unsuspend", "Unsuspend")
-                              : t("suspend", "Suspend")}
-                        </button>
+                        {canManageAdministration ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => void applyStatusAction(user)}
+                            disabled={actionBusyUserId === user.id}
+                          >
+                            {actionBusyUserId === user.id
+                              ? t("processing", "Processing...")
+                              : user.account_status === "blocked"
+                                ? t("unsuspend", "Unsuspend")
+                                : t("suspend", "Suspend")}
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -568,30 +582,32 @@ export function UsersPage() {
                 <p>{t("company_name", "Company name")}: <strong>{selectedDetail.company_name ?? "-"}</strong></p>
                 <p>{t("response_rate", "Response rate")}: <strong>{formatPercent(selectedDetail.response_rate, language)}</strong></p>
 
-                <div className="users-verification-controls">
-                  <label>
-                    {t("manage_verification", "Manage verification")}
-                    <select
-                      className="users-filter-select"
-                      value={verificationStatusDraft}
-                      onChange={(event) => setVerificationStatusDraft(event.target.value as VerificationStatus)}
-                    >
-                      <option value="unverified">{t("verification_unverified", "Unverified")}</option>
-                      <option value="pending">{t("verification_pending", "Pending")}</option>
-                      <option value="verified">{t("verification_verified", "Verified")}</option>
-                      <option value="rejected">{t("verification_rejected", "Rejected")}</option>
-                    </select>
-                  </label>
+                {canManageAdministration ? (
+                  <div className="users-verification-controls">
+                    <label>
+                      {t("manage_verification", "Manage verification")}
+                      <select
+                        className="users-filter-select"
+                        value={verificationStatusDraft}
+                        onChange={(event) => setVerificationStatusDraft(event.target.value as VerificationStatus)}
+                      >
+                        <option value="unverified">{t("verification_unverified", "Unverified")}</option>
+                        <option value="pending">{t("verification_pending", "Pending")}</option>
+                        <option value="verified">{t("verification_verified", "Verified")}</option>
+                        <option value="rejected">{t("verification_rejected", "Rejected")}</option>
+                      </select>
+                    </label>
 
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={isVerificationSubmitting || verificationStatusDraft === selectedDetail.verification_status}
-                    onClick={() => void applyVerificationStatus()}
-                  >
-                    {isVerificationSubmitting ? t("applying", "Applying...") : t("apply_verification", "Apply verification")}
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={isVerificationSubmitting || verificationStatusDraft === selectedDetail.verification_status}
+                      onClick={() => void applyVerificationStatus()}
+                    >
+                      {isVerificationSubmitting ? t("applying", "Applying...") : t("apply_verification", "Apply verification")}
+                    </button>
+                  </div>
+                ) : null}
               </article>
 
               <article className="dashboard-stat-group">

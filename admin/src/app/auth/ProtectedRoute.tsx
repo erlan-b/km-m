@@ -4,7 +4,7 @@ import { useAuth } from "./AuthContext";
 
 export function ProtectedRoute() {
   const location = useLocation();
-  const { isLoading, isAuthenticated, isAdminLike } = useAuth();
+  const { isLoading, isAuthenticated, isAdminPanelOperator } = useAuth();
 
   if (isLoading) {
     return <div className="page-center">Checking session...</div>;
@@ -15,8 +15,8 @@ export function ProtectedRoute() {
     return <Navigate to={`/login?redirect=${redirect}`} replace />;
   }
 
-  if (!isAdminLike) {
-    return <div className="page-center">Access denied: admin or moderator role required.</div>;
+  if (!isAdminPanelOperator) {
+    return <div className="page-center">Access denied: support, moderator, admin or superadmin role required.</div>;
   }
 
   return <Outlet />;

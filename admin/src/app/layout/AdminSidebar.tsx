@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 
+import { useAuth } from "../auth/AuthContext";
 import { usePageI18n } from "../i18n/I18nContext";
 
 const navItems = [
@@ -11,11 +12,15 @@ const navItems = [
   { to: "/payments", translationKey: "nav_payments", fallback: "Payments" },
   { to: "/promotions", translationKey: "nav_promotions", fallback: "Promotions" },
   { to: "/messages", translationKey: "nav_messages", fallback: "Messages" },
-  { to: "/audit-logs", translationKey: "nav_audit_logs", fallback: "Audit Logs" },
+  { to: "/audit-logs", translationKey: "nav_audit_logs", fallback: "Audit Logs", requiresManagement: true },
+  { to: "/localization", translationKey: "nav_localization", fallback: "Localization", requiresManagement: true },
 ];
 
 export function AdminSidebar() {
+  const { canManageAdministration } = useAuth();
   const { t } = usePageI18n("layout");
+
+  const visibleNavItems = navItems.filter((item) => !item.requiresManagement || canManageAdministration);
 
   return (
     <aside className="admin-sidebar" aria-label="Admin navigation">
@@ -24,7 +29,7 @@ export function AdminSidebar() {
       </div>
 
       <nav>
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

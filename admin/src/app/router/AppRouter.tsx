@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { CapabilityRoute } from "../auth/CapabilityRoute";
 import { ProtectedRoute } from "../auth/ProtectedRoute";
 import { AdminLayout } from "../layout/AdminLayout";
 import { LoginPage } from "../../features/auth/LoginPage";
@@ -12,6 +13,7 @@ import { PaymentsPage } from "../../features/payments/PaymentsPage";
 import { AuditLogsPage } from "../../features/audit/AuditLogsPage";
 import { AdminMessagesPage } from "../../features/messages/AdminMessagesPage";
 import { PromotionsPage } from "../../features/promotions/PromotionsPage";
+import { LocalizationPage } from "../../features/localization/LocalizationPage";
 
 export function AppRouter() {
   return (
@@ -28,7 +30,10 @@ export function AppRouter() {
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/messages" element={<AdminMessagesPage />} />
           <Route path="/promotions" element={<PromotionsPage />} />
-          <Route path="/audit-logs" element={<AuditLogsPage />} />
+          <Route element={<CapabilityRoute capability="management" />}>
+            <Route path="/audit-logs" element={<AuditLogsPage />} />
+            <Route path="/localization" element={<LocalizationPage />} />
+          </Route>
         </Route>
       </Route>
 

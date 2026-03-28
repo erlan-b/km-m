@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_admin_or_moderator
+from app.api.deps import require_admin_panel_access, require_moderation_access
 from app.db.session import get_db
 from app.models.category import Category
 from app.models.user import User
@@ -32,7 +32,7 @@ def list_public_categories(db: Session = Depends(get_db)) -> CategoryListRespons
 def list_categories_for_admin(
     include_inactive: bool = Query(default=True),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> CategoryListResponse:
     stmt = select(Category)
     if not include_inactive:
@@ -47,7 +47,7 @@ def list_categories_for_admin(
 def create_category(
     payload: CategoryCreateRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_moderation_access),
 ) -> CategoryResponse:
     payload_data = payload.model_dump()
     category = Category(
@@ -77,7 +77,7 @@ def update_category(
     category_id: int,
     payload: CategoryUpdateRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_moderation_access),
 ) -> CategoryResponse:
     category = db.scalar(select(Category).where(Category.id == category_id))
     if category is None:
@@ -105,7 +105,7 @@ def update_category(
 def activate_category(
     category_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_moderation_access),
 ) -> CategoryResponse:
     category = db.scalar(select(Category).where(Category.id == category_id))
     if category is None:
@@ -122,7 +122,7 @@ def activate_category(
 def deactivate_category(
     category_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_moderation_access),
 ) -> CategoryResponse:
     category = db.scalar(select(Category).where(Category.id == category_id))
     if category is None:

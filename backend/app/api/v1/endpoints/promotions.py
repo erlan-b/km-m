@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin_or_moderator
+from app.api.deps import get_current_user, require_admin_management_access, require_admin_panel_access
 from app.core.utils import utc_now
 from app.db.session import get_db
 from app.models.category import Category
@@ -49,7 +49,7 @@ def list_promotion_packages(db: Session = Depends(get_db)) -> PromotionPackageLi
 @router.get("/packages/admin", response_model=PromotionPackageListResponse)
 def list_all_promotion_packages(
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> PromotionPackageListResponse:
     packages = db.scalars(
         select(PromotionPackage).order_by(PromotionPackage.id.asc())
@@ -63,7 +63,7 @@ def list_all_promotion_packages(
 def create_promotion_package(
     payload: PromotionPackageCreateRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_management_access),
 ) -> PromotionPackageResponse:
     package = PromotionPackage(
         title=payload.title,
@@ -83,7 +83,7 @@ def update_promotion_package(
     package_id: int,
     payload: PromotionPackageUpdateRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_management_access),
 ) -> PromotionPackageResponse:
     package = db.scalar(select(PromotionPackage).where(PromotionPackage.id == package_id))
     if package is None:
@@ -208,7 +208,7 @@ def list_promotions_admin(
     user_id: int | None = Query(default=None, gt=0),
     promotion_package_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> PromotionListResponse:
     filters = []
     if status_filter is not None:
@@ -245,7 +245,7 @@ def deactivate_promotion_admin(
     promotion_id: int,
     payload: PromotionDeactivateRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_management_access),
 ) -> PromotionResponse:
     promotion = db.scalar(select(Promotion).where(Promotion.id == promotion_id))
     if promotion is None:

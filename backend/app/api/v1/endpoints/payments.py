@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin_or_moderator
+from app.api.deps import get_current_user, require_admin_panel_access
 from app.core.utils import utc_now
 from app.db.session import get_db
 from app.models.listing import Listing
@@ -124,7 +124,7 @@ def list_payments_admin(
     paid_from: datetime | None = None,
     paid_to: datetime | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin_or_moderator),
+    _: User = Depends(require_admin_panel_access),
 ) -> PaymentHistoryResponse:
     if created_from is not None and created_to is not None and created_from > created_to:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="created_from cannot be after created_to")

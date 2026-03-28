@@ -132,7 +132,7 @@ function statusBadgeClass(status: ListingStatus): string {
 }
 
 export function ListingsModerationPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, canModerateContent } = useAuth();
   const { t, language } = usePageI18n("listings");
   const [searchParams] = useSearchParams();
 
@@ -259,6 +259,11 @@ export function ListingsModerationPage() {
 
   const onModerateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!canModerateContent) {
+      setError(t("access_denied_moderation", "Access denied: moderator, admin or superadmin role required"));
+      return;
+    }
 
     if (!selectedListing || !action) {
       return;
@@ -544,6 +549,12 @@ export function ListingsModerationPage() {
               </article>
 
               <form className="reports-form" onSubmit={onModerateSubmit}>
+                {!canModerateContent ? (
+                  <div className="dashboard-error">
+                    {t("read_only_mode", "Read-only mode: moderation actions require moderator, admin or superadmin role")}
+                  </div>
+                ) : null}
+
                 <div className="reports-form-grid">
                   <label>
                     {t("action", "Action")}
@@ -551,7 +562,7 @@ export function ListingsModerationPage() {
                       className="users-filter-select"
                       value={action}
                       onChange={(event) => setAction(event.target.value)}
-                      disabled={availableActions.length === 0}
+                      disabled={!canModerateContent || availableActions.length === 0}
                     >
                       {availableActions.length === 0 ? <option value="">{t("no_available_actions", "No available actions")}</option> : null}
                       {availableActions.map((option) => (
@@ -579,6 +590,7 @@ export function ListingsModerationPage() {
                     onChange={(event) => setNote(event.target.value)}
                     placeholder={t("note_placeholder", "Add context for audit trail")}
                     maxLength={1000}
+                    disabled={!canModerateContent}
                   />
                 </label>
 
@@ -586,13 +598,14 @@ export function ListingsModerationPage() {
                   <button
                     type="submit"
                     className="btn btn-primary"
-                    disabled={isSubmitting || availableActions.length === 0 || action.length === 0}
+                    disabled={!canModerateContent || isSubmitting || availableActions.length === 0 || action.length === 0}
                   >
                     {isSubmitting ? t("applying", "Applying...") : t("apply_action", "Apply action")}
                   </button>
                   <button
                     type="button"
                     className="btn btn-ghost"
+                    disabled={!canModerateContent}
                     onClick={() => {
                       if (availableActions.length > 0) {
                         setAction(availableActions[0]);

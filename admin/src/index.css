@@ -1292,6 +1292,38 @@ textarea:focus-visible {
   font-family: inherit;
 }
 
+.localization-search-strip {
+  grid-template-columns: minmax(240px, 1.5fr) repeat(2, minmax(150px, 1fr)) auto auto auto auto;
+  align-items: end;
+}
+
+.localization-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.localization-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1080px;
+}
+
+.localization-table th,
+.localization-table td {
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.localization-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-subtle);
+  background: var(--bg-muted);
+}
+
 .audit-search-strip {
   grid-template-columns: minmax(220px, 1.5fr) minmax(180px, 1fr) minmax(140px, 0.8fr) auto auto;
 }
@@ -1377,6 +1409,10 @@ textarea:focus-visible {
   }
 
   .promotions-search-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .localization-search-strip {
     grid-template-columns: 1fr;
   }
 

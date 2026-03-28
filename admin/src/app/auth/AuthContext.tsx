@@ -13,7 +13,7 @@ import {
 
 import { API_ROOT } from "../../shared/config/env";
 
-type Role = "admin" | "moderator" | "user";
+type Role = "support" | "moderator" | "admin" | "superadmin" | "user";
 
 type AuthState = {
   accessToken: string | null;
@@ -37,6 +37,9 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   email: string | null;
   roles: Role[];
+  isAdminPanelOperator: boolean;
+  canModerateContent: boolean;
+  canManageAdministration: boolean;
   isAdminLike: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -102,7 +105,14 @@ async function buildApiError(response: Response, fallback: string): Promise<ApiH
 function normalizeRoles(rawRoles: string[]): Role[] {
   const mapped = rawRoles.map((role) => role.toLowerCase()).filter(Boolean);
   const unique = Array.from(new Set(mapped));
-  return unique.filter((role): role is Role => role === "admin" || role === "moderator" || role === "user");
+  return unique.filter(
+    (role): role is Role =>
+      role === "support"
+      || role === "moderator"
+      || role === "admin"
+      || role === "superadmin"
+      || role === "user",
+  );
 }
 
 function readStoredState(): AuthState {
@@ -333,13 +343,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => {
     const isAuthenticated = Boolean(authState.accessToken);
-    const isAdminLike = authState.roles.includes("admin") || authState.roles.includes("moderator");
+    const isAdminPanelOperator = authState.roles.includes("support")
+      || authState.roles.includes("moderator")
+      || authState.roles.includes("admin")
+      || authState.roles.includes("superadmin");
+    const canModerateContent = authState.roles.includes("moderator")
+      || authState.roles.includes("admin")
+      || authState.roles.includes("superadmin");
+    const canManageAdministration = authState.roles.includes("admin")
+      || authState.roles.includes("superadmin");
+    const isAdminLike = canModerateContent;
 
     return {
       isLoading,
       isAuthenticated,
       email: authState.email,
       roles: authState.roles,
+      isAdminPanelOperator,
+      canModerateContent,
+      canManageAdministration,
       isAdminLike,
       login,
       logout,

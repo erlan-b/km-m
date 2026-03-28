@@ -190,7 +190,7 @@ function normalizeAttributesSchema(
 }
 
 export function CategoriesPage() {
-  const { authFetch } = useAuth();
+  const { authFetch, canModerateContent } = useAuth();
   const { t, language } = usePageI18n("categories");
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -278,6 +278,11 @@ export function CategoriesPage() {
   }, [categories, query]);
 
   const resetCreateForm = () => {
+    if (!canModerateContent) {
+      setError(t("access_denied_moderation", "Access denied: moderator, admin or superadmin role required"));
+      return;
+    }
+
     setSelectedCategoryId(null);
     setFormState(buildInitialFormState());
     setNextFieldId(1);
@@ -285,6 +290,11 @@ export function CategoriesPage() {
   };
 
   const applyActivationToggle = async (category: CategoryItem) => {
+    if (!canModerateContent) {
+      setError(t("access_denied_moderation", "Access denied: moderator, admin or superadmin role required"));
+      return;
+    }
+
     const actionPath = category.is_active ? "deactivate" : "activate";
     const actionLabel = category.is_active ? t("deactivate", "Deactivate") : t("activate", "Activate");
 
@@ -331,6 +341,11 @@ export function CategoriesPage() {
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (!canModerateContent) {
+      setError(t("access_denied_moderation", "Access denied: moderator, admin or superadmin role required"));
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
@@ -530,7 +545,7 @@ export function CategoriesPage() {
           />
           {t("include_inactive", "Include inactive")}
         </label>
-        <button type="button" className="btn btn-ghost" onClick={resetCreateForm}>
+        <button type="button" className="btn btn-ghost" onClick={resetCreateForm} disabled={!canModerateContent}>
           {t("new_category", "New category")}
         </button>
       </div>
@@ -574,36 +589,40 @@ export function CategoriesPage() {
                     <td>{formatDateTime(category.created_at, language)}</td>
                     <td>
                       <div className="users-actions-cell">
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          onClick={() => {
-                            const draftAttributes = toDraftAttributes(category.attributes_schema);
-                            setFormState({
-                              name: category.name,
-                              isActive: category.is_active,
-                              displayOrder: String(category.display_order),
-                              attributesSchema: draftAttributes,
-                            });
-                            setNextFieldId(getNextFieldId(draftAttributes));
-                            setSelectedCategoryId(category.id);
-                            setIsFormModalOpen(true);
-                          }}
-                        >
-                          {t("edit", "Edit")}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          disabled={isActionBusyCategoryId === category.id}
-                          onClick={() => void applyActivationToggle(category)}
-                        >
-                          {isActionBusyCategoryId === category.id
-                            ? t("processing", "Processing...")
-                            : category.is_active
-                              ? t("deactivate", "Deactivate")
-                              : t("activate", "Activate")}
-                        </button>
+                        {canModerateContent ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              onClick={() => {
+                                const draftAttributes = toDraftAttributes(category.attributes_schema);
+                                setFormState({
+                                  name: category.name,
+                                  isActive: category.is_active,
+                                  displayOrder: String(category.display_order),
+                                  attributesSchema: draftAttributes,
+                                });
+                                setNextFieldId(getNextFieldId(draftAttributes));
+                                setSelectedCategoryId(category.id);
+                                setIsFormModalOpen(true);
+                              }}
+                            >
+                              {t("edit", "Edit")}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              disabled={isActionBusyCategoryId === category.id}
+                              onClick={() => void applyActivationToggle(category)}
+                            >
+                              {isActionBusyCategoryId === category.id
+                                ? t("processing", "Processing...")
+                                : category.is_active
+                                  ? t("deactivate", "Deactivate")
+                                  : t("activate", "Activate")}
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
