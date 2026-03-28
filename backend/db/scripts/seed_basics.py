@@ -9,11 +9,11 @@ from app.models.role import Role
 from app.models.user import AccountStatus, User
 
 DEFAULT_CATEGORIES = [
-    {"name": "Apartments", "slug": "apartments"},
-    {"name": "Houses", "slug": "houses"},
-    {"name": "Commercial", "slug": "commercial"},
-    {"name": "Land", "slug": "land"},
-    {"name": "Rooms", "slug": "rooms"},
+    {"name": "Apartments", "slug": "apartments", "display_order": 10},
+    {"name": "Houses", "slug": "houses", "display_order": 20},
+    {"name": "Commercial", "slug": "commercial", "display_order": 30},
+    {"name": "Land", "slug": "land", "display_order": 40},
+    {"name": "Rooms", "slug": "rooms", "display_order": 50},
 ]
 
 
@@ -28,11 +28,25 @@ class DemoUserSpec:
 
 DEMO_USERS: tuple[DemoUserSpec, ...] = (
     DemoUserSpec(
+        full_name="Demo Superadmin",
+        email="superadmin@demo.kg",
+        password="Superadmin12345!",
+        preferred_language="en",
+        roles=("superadmin",),
+    ),
+    DemoUserSpec(
         full_name="Demo Admin",
         email="admin@demo.kg",
         password="Admin12345!",
         preferred_language="en",
         roles=("admin",),
+    ),
+    DemoUserSpec(
+        full_name="Demo Support",
+        email="support@demo.kg",
+        password="Support12345!",
+        preferred_language="ru",
+        roles=("support",),
     ),
     DemoUserSpec(
         full_name="Demo Moderator",
@@ -57,6 +71,12 @@ def seed_categories() -> None:
             existing = db.scalar(select(Category).where(Category.slug == item["slug"]))
             if existing is None:
                 db.add(Category(**item, is_active=True))
+                continue
+
+            existing.name = item["name"]
+            existing.display_order = item["display_order"]
+            existing.is_active = True
+            db.add(existing)
 
         db.commit()
 

@@ -16,7 +16,7 @@ from app.models.conversation import Conversation
 from app.models.favorite import Favorite
 from app.models.listing import Listing, ListingStatus, TransactionType
 from app.models.listing_media import ListingMedia
-from app.models.user import AccountStatus, User
+from app.models.user import AccountStatus, SellerType, User
 from app.schemas.listing import (
     ListingCreateRequest,
     ListingListResponse,
@@ -26,6 +26,7 @@ from app.schemas.listing import (
     ListingStatusUpdateResponse,
     ListingUpdateRequest,
 )
+from app.services.listing_media_image_service import get_thumbnail_path
 
 router = APIRouter()
 
@@ -122,6 +123,8 @@ def build_order_clause(sort_by: str):
         return asc(Listing.price)
     if sort_by == "price_desc":
         return desc(Listing.price)
+    if sort_by == "most_viewed":
+        return desc(Listing.view_count)
     return desc(Listing.created_at)
 
 
@@ -149,6 +152,7 @@ def delete_listing_media_files(file_paths: list[str]) -> None:
         except ValueError:
             continue
         absolute_path.unlink(missing_ok=True)
+        get_thumbnail_path(absolute_path).unlink(missing_ok=True)
 
 
 def write_listing_audit_log(
@@ -212,13 +216,16 @@ def list_my_listings(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     status_filter: ListingStatus | None = None,
-    sort_by: Literal["newest", "oldest", "price_asc", "price_desc"] = "newest",
+    promoted_only: bool = Query(default=False),
+    sort_by: Literal["newest", "oldest", "price_asc", "price_desc", "most_viewed"] = "newest",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ListingListResponse:
     filters = [Listing.owner_id == current_user.id]
     if status_filter is not None:
         filters.append(Listing.status == status_filter)
+    if promoted_only:
+        filters.append(Listing.is_subscription.is_(True))
 
     total_items = db.scalar(select(func.count()).select_from(Listing).where(*filters)) or 0
     total_pages = ceil(total_items / page_size) if total_items else 0
@@ -517,8 +524,10 @@ def list_listings_for_moderation(
     owner_id: int | None = Query(default=None, gt=0),
     category_id: int | None = Query(default=None, gt=0),
     city: str | None = Query(default=None, min_length=2, max_length=120),
+    seller_type: SellerType | None = None,
+    promoted_only: bool = Query(default=False),
     transaction_type: TransactionType | None = None,
-    sort_by: Literal["newest", "oldest", "price_asc", "price_desc"] = "newest",
+    sort_by: Literal["newest", "oldest", "price_asc", "price_desc", "most_viewed"] = "newest",
     db: Session = Depends(get_db),
     _: User = Depends(require_admin_or_moderator),
 ) -> ListingListResponse:
@@ -543,6 +552,10 @@ def list_listings_for_moderation(
         filters.append(Listing.category_id == category_id)
     if city is not None:
         filters.append(Listing.city.ilike(f"%{city}%"))
+    if seller_type is not None:
+        filters.append(Listing.owner.has(User.seller_type == seller_type))
+    if promoted_only:
+        filters.append(Listing.is_subscription.is_(True))
     if transaction_type is not None:
         filters.append(Listing.transaction_type == transaction_type)
 
@@ -575,8 +588,10 @@ def list_public_listings(
     city: str | None = Query(default=None, min_length=2, max_length=120),
     min_price: Decimal | None = Query(default=None, ge=0),
     max_price: Decimal | None = Query(default=None, ge=0),
+    seller_type: SellerType | None = None,
+    promoted_only: bool = Query(default=False),
     transaction_type: TransactionType | None = None,
-    sort_by: Literal["newest", "oldest", "price_asc", "price_desc"] = "newest",
+    sort_by: Literal["newest", "oldest", "price_asc", "price_desc", "most_viewed"] = "newest",
     db: Session = Depends(get_db),
 ) -> ListingListResponse:
     if min_price is not None and max_price is not None and min_price > max_price:
@@ -603,6 +618,10 @@ def list_public_listings(
         filters.append(Listing.price >= min_price)
     if max_price is not None:
         filters.append(Listing.price <= max_price)
+    if seller_type is not None:
+        filters.append(Listing.owner.has(User.seller_type == seller_type))
+    if promoted_only:
+        filters.append(Listing.is_subscription.is_(True))
     if transaction_type is not None:
         filters.append(Listing.transaction_type == transaction_type)
 

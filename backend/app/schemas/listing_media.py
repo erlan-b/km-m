@@ -17,6 +17,7 @@ class ListingMediaItem(BaseModel):
     is_primary: bool
     created_at: datetime
     file_url: str
+    thumbnail_url: str | None = None
 
 
 class ListingMediaListResponse(BaseModel):

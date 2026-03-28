@@ -22,6 +22,8 @@ def build_owner_listing_order(sort_by: str):
         return asc(Listing.price)
     if sort_by == "price_desc":
         return desc(Listing.price)
+    if sort_by == "most_viewed":
+        return desc(Listing.view_count)
     return desc(Listing.created_at)
 
 
@@ -58,7 +60,7 @@ def list_public_user_listings(
     user_id: int,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    sort_by: Literal["newest", "oldest", "price_asc", "price_desc"] = "newest",
+    sort_by: Literal["newest", "oldest", "price_asc", "price_desc", "most_viewed"] = "newest",
     db: Session = Depends(get_db),
 ) -> ListingListResponse:
     owner_exists = db.scalar(select(func.count()).select_from(User).where(User.id == user_id)) or 0

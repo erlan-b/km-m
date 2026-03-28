@@ -238,9 +238,15 @@ Current integration suites cover:
 
 After running `python db/scripts/seed_demo_users.py`:
 
+- Superadmin:
+	- email: `superadmin@demo.kg`
+	- password: `Superadmin12345!`
 - Admin:
 	- email: `admin@demo.kg`
 	- password: `Admin12345!`
+- Support:
+	- email: `support@demo.kg`
+	- password: `Support12345!`
 - Moderator:
 	- email: `moderator@demo.kg`
 	- password: `Moderator12345!`
@@ -260,13 +266,13 @@ After running `python db/scripts/seed_demo_users.py`:
 
 - user preferred language is stored in profile
 - supported languages are exposed via `/api/v1/auth/languages`
-- backend-managed localization dictionaries are exposed via `/api/v1/localization/content`
-- admin can manage localization entries via `/api/v1/localization/admin/entries`
+- backend page dictionaries are exposed via `/api/v1/i18n/pages` and `/api/v1/i18n/pages/{page_key}`
+- admin localization CRUD endpoints are planned as a next step
 
 ## Known Limitations
 
-- no separate web admin UI yet (API-first admin operations only)
 - payment provider callbacks are simulated, not integrated with a live provider
+- admin localization content management CRUD is not implemented yet
 - README demo video link must be filled before final submission
 
 ## Future Work

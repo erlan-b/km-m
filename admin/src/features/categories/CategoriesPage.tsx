@@ -20,7 +20,9 @@ type CategoryAttributeDefinition = {
 type CategoryItem = {
   id: number;
   name: string;
+  slug: string;
   is_active: boolean;
+  display_order: number;
   attributes_schema: CategoryAttributeDefinition[] | null;
   created_at: string;
 };
@@ -43,6 +45,7 @@ type CategoryAttributeDraft = {
 type CategoryFormState = {
   name: string;
   isActive: boolean;
+  displayOrder: string;
   attributesSchema: CategoryAttributeDraft[];
 };
 
@@ -70,8 +73,21 @@ function buildInitialFormState(): CategoryFormState {
   return {
     name: "",
     isActive: true,
+    displayOrder: "0",
     attributesSchema: [],
   };
+}
+
+function sortCategories(items: CategoryItem[]): CategoryItem[] {
+  return [...items].sort((left, right) => {
+    if (left.display_order !== right.display_order) {
+      return left.display_order - right.display_order;
+    }
+
+    const leftCreated = Date.parse(left.created_at);
+    const rightCreated = Date.parse(right.created_at);
+    return leftCreated - rightCreated;
+  });
 }
 
 function normalizeSlug(value: string): string {
@@ -210,7 +226,7 @@ export function CategoriesPage() {
       }
 
       const payload = (await response.json()) as CategoryListResponse;
-      setCategories(payload.items);
+      setCategories(sortCategories(payload.items));
 
       setSelectedCategoryId((previous) => {
         if (payload.items.length === 0) {
@@ -243,6 +259,7 @@ export function CategoriesPage() {
     setFormState({
       name: selectedCategory.name,
       isActive: selectedCategory.is_active,
+      displayOrder: String(selectedCategory.display_order),
       attributesSchema: draftAttributes,
     });
     setNextFieldId(getNextFieldId(draftAttributes));
@@ -301,9 +318,9 @@ export function CategoriesPage() {
 
       const updated = (await response.json()) as CategoryItem;
 
-      setCategories((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setCategories((prev) => sortCategories(prev.map((item) => (item.id === updated.id ? updated : item))));
       if (selectedCategoryId === updated.id) {
-        setFormState((prev) => ({ ...prev, isActive: updated.is_active }));
+        setFormState((prev) => ({ ...prev, isActive: updated.is_active, displayOrder: String(updated.display_order) }));
       }
     } catch (actionError) {
       setError(extractErrorMessage(actionError));
@@ -323,11 +340,13 @@ export function CategoriesPage() {
 
       const isEditMode = selectedCategory !== null;
       const slug = normalizeSlug(formState.name);
+      const parsedDisplayOrder = Number(formState.displayOrder.trim());
 
       const basePayload = {
         name: formState.name.trim(),
         slug,
         is_active: formState.isActive,
+        display_order: parsedDisplayOrder,
         attributes_schema: attributesSchema,
       };
       const payload = basePayload;
@@ -337,6 +356,9 @@ export function CategoriesPage() {
       }
       if (!payload.slug || payload.slug.length < 2) {
         throw new Error(t("error_name_slug", "Name should contain at least 2 latin letters or digits"));
+      }
+      if (!Number.isInteger(payload.display_order) || payload.display_order < 0) {
+        throw new Error(t("error_display_order", "Display order must be a non-negative integer"));
       }
 
       const path = isEditMode ? `/categories/${selectedCategory.id}` : "/categories";
@@ -367,9 +389,9 @@ export function CategoriesPage() {
 
       setCategories((prev) => {
         if (isEditMode) {
-          return prev.map((item) => (item.id === saved.id ? saved : item));
+          return sortCategories(prev.map((item) => (item.id === saved.id ? saved : item)));
         }
-        return [...prev, saved];
+        return sortCategories([...prev, saved]);
       });
       setSelectedCategoryId(saved.id);
       setIsFormModalOpen(false);
@@ -523,6 +545,7 @@ export function CategoriesPage() {
           <table className="categories-table">
             <thead>
               <tr>
+                <th>{t("display_order", "Order")}</th>
                 <th>{t("name", "Name")}</th>
                 <th>{t("attributes", "Attributes")}</th>
                 <th>{t("status", "Status")}</th>
@@ -533,13 +556,14 @@ export function CategoriesPage() {
             <tbody>
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="users-empty-cell">
+                  <td colSpan={6} className="users-empty-cell">
                     {isLoading ? t("loading_categories", "Loading categories...") : t("no_categories_found", "No categories found")}
                   </td>
                 </tr>
               ) : (
                 filteredRows.map((category) => (
                   <tr key={category.id}>
+                    <td>{category.display_order}</td>
                     <td>{category.name}</td>
                     <td>{category.attributes_schema?.length ?? 0}</td>
                     <td>
@@ -558,6 +582,7 @@ export function CategoriesPage() {
                             setFormState({
                               name: category.name,
                               isActive: category.is_active,
+                              displayOrder: String(category.display_order),
                               attributesSchema: draftAttributes,
                             });
                             setNextFieldId(getNextFieldId(draftAttributes));
@@ -605,6 +630,17 @@ export function CategoriesPage() {
                   onChange={(event) => setFormState((prev) => ({ ...prev, name: event.target.value }))}
                   required
                   minLength={2}
+                />
+              </label>
+
+              <label>
+                {t("display_order", "Order")}
+                <input
+                  type="number"
+                  min={0}
+                  value={formState.displayOrder}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, displayOrder: event.target.value }))}
+                  required
                 />
               </label>
             </div>
@@ -766,6 +802,7 @@ export function CategoriesPage() {
                     setFormState({
                       name: selectedCategory.name,
                       isActive: selectedCategory.is_active,
+                      displayOrder: String(selectedCategory.display_order),
                       attributesSchema: draftAttributes,
                     });
                     setNextFieldId(getNextFieldId(draftAttributes));

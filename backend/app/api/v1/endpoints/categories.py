@@ -22,7 +22,7 @@ def list_public_categories(db: Session = Depends(get_db)) -> CategoryListRespons
     stmt = (
         select(Category)
         .where(Category.is_active.is_(True))
-        .order_by(Category.created_at.asc())
+        .order_by(Category.display_order.asc(), Category.created_at.asc())
     )
     items = db.scalars(stmt).all()
     return CategoryListResponse(items=[CategoryResponse.model_validate(item) for item in items])
@@ -38,7 +38,7 @@ def list_categories_for_admin(
     if not include_inactive:
         stmt = stmt.where(Category.is_active.is_(True))
 
-    stmt = stmt.order_by(Category.created_at.asc())
+    stmt = stmt.order_by(Category.display_order.asc(), Category.created_at.asc())
     items = db.scalars(stmt).all()
     return CategoryListResponse(items=[CategoryResponse.model_validate(item) for item in items])
 
@@ -54,6 +54,7 @@ def create_category(
         name=payload_data["name"],
         slug=payload_data["slug"],
         is_active=payload_data["is_active"],
+        display_order=payload_data["display_order"],
         attributes_schema=payload_data.get("attributes_schema"),
     )
 

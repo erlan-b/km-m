@@ -13,14 +13,17 @@ from app.models.listing_media import ListingMedia
 from app.models.user import AccountStatus, User
 from app.schemas.listing_media import ListingMediaItem, ListingMediaListResponse, ListingMediaOrderUpdateRequest
 from app.services.attachment_service import save_upload_file
+from app.services.listing_media_image_service import get_thumbnail_path, process_listing_image
 
 router = APIRouter()
 
 
 def build_media_item(media: ListingMedia, *, private_download: bool = False) -> ListingMediaItem:
     file_url = f"/api/v1/listing-media/{media.id}/download"
+    thumbnail_url = f"/api/v1/listing-media/{media.id}/thumbnail"
     if private_download:
         file_url = f"/api/v1/listing-media/{media.id}/download/my"
+        thumbnail_url = f"/api/v1/listing-media/{media.id}/thumbnail/my"
 
     return ListingMediaItem(
         id=media.id,
@@ -32,6 +35,7 @@ def build_media_item(media: ListingMedia, *, private_download: bool = False) -> 
         is_primary=media.is_primary,
         created_at=media.created_at,
         file_url=file_url,
+        thumbnail_url=thumbnail_url,
     )
 
 
@@ -131,6 +135,7 @@ def upload_listing_media(
 
     base_dir = Path(settings.media_root)
     saved_absolute_paths: list[Path] = []
+    saved_thumbnail_paths: list[Path] = []
 
     created_items: list[ListingMedia] = []
     try:
@@ -152,12 +157,25 @@ def upload_listing_media(
             )
             saved_absolute_paths.append(saved_file.absolute_path)
 
+            try:
+                processed_image = process_listing_image(
+                    image_path=saved_file.absolute_path,
+                    mime_type=saved_file.mime_type,
+                )
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid or corrupted image file",
+                ) from exc
+
+            saved_thumbnail_paths.append(processed_image.thumbnail_path)
+
             media = ListingMedia(
                 listing_id=listing.id,
                 file_name=saved_file.stored_name,
                 original_name=saved_file.original_name,
                 mime_type=saved_file.mime_type,
-                file_size=saved_file.file_size,
+                file_size=processed_image.file_size,
                 file_path=saved_file.relative_path,
                 sort_order=next_sort_order + index,
                 is_primary=(not has_primary and index == 0),
@@ -172,6 +190,8 @@ def upload_listing_media(
         db.rollback()
         for saved_path in saved_absolute_paths:
             saved_path.unlink(missing_ok=True)
+        for thumbnail_path in saved_thumbnail_paths:
+            thumbnail_path.unlink(missing_ok=True)
         raise
 
     items = db.scalars(
@@ -236,6 +256,7 @@ def replace_media_file(
     base_dir = Path(settings.media_root)
 
     old_path = (base_dir / media.file_path).resolve()
+    old_thumbnail_path = get_thumbnail_path(old_path)
 
     saved_file = save_upload_file(
         file,
@@ -246,10 +267,22 @@ def replace_media_file(
     )
 
     try:
+        processed_image = process_listing_image(
+            image_path=saved_file.absolute_path,
+            mime_type=saved_file.mime_type,
+        )
+    except Exception as exc:
+        saved_file.absolute_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or corrupted image file",
+        ) from exc
+
+    try:
         media.file_name = saved_file.stored_name
         media.original_name = saved_file.original_name
         media.mime_type = saved_file.mime_type
-        media.file_size = saved_file.file_size
+        media.file_size = processed_image.file_size
         media.file_path = saved_file.relative_path
 
         db.add(media)
@@ -258,9 +291,11 @@ def replace_media_file(
     except Exception:
         db.rollback()
         saved_file.absolute_path.unlink(missing_ok=True)
+        processed_image.thumbnail_path.unlink(missing_ok=True)
         raise
 
     old_path.unlink(missing_ok=True)
+    old_thumbnail_path.unlink(missing_ok=True)
     return build_media_item(media, private_download=True)
 
 
@@ -277,6 +312,7 @@ def delete_listing_media(
     settings = get_settings()
     base_dir = Path(settings.media_root).resolve()
     file_path = (base_dir / media.file_path).resolve()
+    thumbnail_path = get_thumbnail_path(file_path)
 
     db.delete(media)
     db.flush()
@@ -296,9 +332,33 @@ def delete_listing_media(
     try:
         file_path.relative_to(base_dir)
         file_path.unlink(missing_ok=True)
+        thumbnail_path.unlink(missing_ok=True)
     except ValueError:
         # Stored path is invalid; DB state is already consistent.
         pass
+
+
+@router.get("/{media_id}/thumbnail")
+def download_listing_media_thumbnail(media_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    media = get_media_or_404(db, media_id)
+    listing = get_listing_or_404(db, media.listing_id)
+    if listing.status != ListingStatus.PUBLISHED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing media not found")
+
+    settings = get_settings()
+    base_dir = Path(settings.media_root).resolve()
+    absolute_path = (base_dir / media.file_path).resolve()
+    thumbnail_path = get_thumbnail_path(absolute_path)
+
+    try:
+        thumbnail_path.relative_to(base_dir)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid media path") from exc
+
+    if not thumbnail_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing thumbnail is missing")
+
+    return FileResponse(path=thumbnail_path, media_type="image/webp", filename=f"{media.id}_thumbnail.webp")
 
 
 @router.get("/{media_id}/download")
@@ -354,3 +414,29 @@ def download_listing_media_for_owner(
         media_type=media.mime_type,
         filename=media.original_name,
     )
+
+
+@router.get("/{media_id}/thumbnail/my")
+def download_listing_media_thumbnail_for_owner(
+    media_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    media = get_media_or_404(db, media_id)
+    listing = get_listing_or_404(db, media.listing_id)
+    ensure_owner_or_admin(listing, current_user)
+
+    settings = get_settings()
+    base_dir = Path(settings.media_root).resolve()
+    absolute_path = (base_dir / media.file_path).resolve()
+    thumbnail_path = get_thumbnail_path(absolute_path)
+
+    try:
+        thumbnail_path.relative_to(base_dir)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid media path") from exc
+
+    if not thumbnail_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing thumbnail is missing")
+
+    return FileResponse(path=thumbnail_path, media_type="image/webp", filename=f"{media.id}_thumbnail.webp")
