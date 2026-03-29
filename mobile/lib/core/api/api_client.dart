@@ -19,13 +19,6 @@ final dioProvider = Provider<Dio>((ref) {
   );
 
   dio.interceptors.add(AuthInterceptor(dio: dio, ref: ref));
-  dio.interceptors.add(
-    LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-      logPrint: (msg) => print('[DIO] $msg'), // ignore: avoid_print
-    ),
-  );
 
   return dio;
 });

@@ -30,6 +30,18 @@ class ChatDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
+  static const TextStyle _bubbleTextStyle = TextStyle(
+    fontSize: 14,
+    height: 1.38,
+  );
+  static const TextStyle _bubbleTimeTextStyle = TextStyle(
+    fontSize: 11,
+    color: AppTheme.textSubtle,
+  );
+  static const double _bubbleHorizontalPadding = 24.0;
+  static const double _inlineTimestampGap = 6.0;
+  static const double _inlineTimestampSafetyPx = 3.0;
+
   final _messageCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final _composerFocusNode = FocusNode();
@@ -831,6 +843,23 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     return '$hh:$mm';
   }
 
+  String _normalizeBubbleText(String text) {
+    // Insert soft-break opportunities for very long tokens to prevent RenderFlex overflow.
+    return text.replaceAllMapped(RegExp(r'\S{22,}'), (match) {
+      final token = match.group(0)!;
+      final buffer = StringBuffer();
+      const chunk = 12;
+      for (var i = 0; i < token.length; i += chunk) {
+        final end = (i + chunk) < token.length ? (i + chunk) : token.length;
+        if (i > 0) {
+          buffer.write('\u200B');
+        }
+        buffer.write(token.substring(i, end));
+      }
+      return buffer.toString();
+    });
+  }
+
   double _measureSingleLineTextWidth(
     BuildContext context,
     String text,
@@ -861,11 +890,10 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       return baseMaxWidth;
     }
 
-    const horizontalPadding = 24.0;
     const minBubbleWidth = 68.0;
     const minContentWidth = 44.0;
 
-    final maxContentWidth = (baseMaxWidth - horizontalPadding)
+    final maxContentWidth = (baseMaxWidth - _bubbleHorizontalPadding)
         .clamp(minContentWidth, baseMaxWidth)
         .toDouble();
     final normalizedText = text.trimRight();
@@ -879,7 +907,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       final lineWidth = _measureSingleLineTextWidth(
         context,
         line,
-        const TextStyle(fontSize: 14, height: 1.38),
+        _bubbleTextStyle,
       );
       if (lineWidth > longestLineWidth) {
         longestLineWidth = lineWidth;
@@ -890,19 +918,109 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     final timestampWidth = _measureSingleLineTextWidth(
       context,
       resolvedTimeLabel,
-      const TextStyle(fontSize: 11, color: AppTheme.textSubtle),
+      _bubbleTimeTextStyle,
     );
 
-    final widestContent = longestLineWidth > timestampWidth
+    var widestContent = longestLineWidth > timestampWidth
         ? longestLineWidth
         : timestampWidth;
+
+    if (textLines.length == 1) {
+      final inlineCandidateWidth =
+          longestLineWidth +
+          _inlineTimestampGap +
+          timestampWidth +
+          _inlineTimestampSafetyPx;
+      if (inlineCandidateWidth > widestContent) {
+        widestContent = inlineCandidateWidth;
+      }
+    }
+
     final clampedContentWidth = widestContent
         .clamp(minContentWidth, maxContentWidth)
         .toDouble();
 
-    return (clampedContentWidth + horizontalPadding)
+    return (clampedContentWidth + _bubbleHorizontalPadding)
         .clamp(minBubbleWidth, baseMaxWidth)
         .toDouble();
+  }
+
+  bool _canInlineTimestamp({
+    required BuildContext context,
+    required String text,
+    required String timeLabel,
+    required bool hasAttachments,
+    required double bubbleMaxWidth,
+  }) {
+    if (hasAttachments) {
+      return false;
+    }
+
+    final normalizedText = text.trim();
+    if (normalizedText.isEmpty || normalizedText.contains('\n')) {
+      return false;
+    }
+
+    if (RegExp(r'\S{20,}').hasMatch(normalizedText)) {
+      return false;
+    }
+
+    const minContentWidth = 44.0;
+    final maxContentWidth = (bubbleMaxWidth - _bubbleHorizontalPadding)
+        .clamp(minContentWidth, bubbleMaxWidth)
+        .toDouble();
+    final resolvedTimeLabel = timeLabel.isEmpty ? '00:00' : timeLabel;
+
+    final textWidth = _measureSingleLineTextWidth(
+      context,
+      normalizedText,
+      _bubbleTextStyle,
+    );
+    final timeWidth = _measureSingleLineTextWidth(
+      context,
+      resolvedTimeLabel,
+      _bubbleTimeTextStyle,
+    );
+
+    return textWidth + _inlineTimestampGap + timeWidth <=
+        (maxContentWidth - _inlineTimestampSafetyPx);
+  }
+
+  Widget _buildTextWithPinnedTime({
+    required String textBody,
+    required String timeLabel,
+  }) {
+    final resolvedTimeLabel = timeLabel.isEmpty ? '00:00' : timeLabel;
+    return Stack(
+      children: [
+        Text.rich(
+          TextSpan(
+            style: _bubbleTextStyle,
+            children: [
+              TextSpan(text: textBody),
+              const WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: SizedBox(width: _inlineTimestampGap),
+              ),
+              WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                child: Opacity(
+                  opacity: 0,
+                  child: Text(resolvedTimeLabel, style: _bubbleTimeTextStyle),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Text(resolvedTimeLabel, style: _bubbleTimeTextStyle),
+        ),
+      ],
+    );
   }
 
   @override
@@ -1081,15 +1199,31 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
 
     final textBody = message['text_body']?.toString();
     final hasTextBody = textBody != null && textBody.trim().isNotEmpty;
+    final displayTextBody = hasTextBody ? _normalizeBubbleText(textBody) : '';
     final rawAttachments = message['attachments'];
     final attachments = _toMapList(rawAttachments);
+    final hasAttachments = attachments.isNotEmpty;
+    final hasAttachmentCaption = hasAttachments && hasTextBody;
+    if (!hasTextBody && !hasAttachments) {
+      return const SizedBox.shrink();
+    }
+
     final timeLabel = _messageTimeLabel(message);
     final bubbleMaxWidth = _resolveBubbleMaxWidth(
       context: context,
       text: hasTextBody ? textBody : '',
       timeLabel: timeLabel,
-      hasAttachments: attachments.isNotEmpty,
+      hasAttachments: hasAttachments,
     );
+    final shouldInlineTimestamp =
+        hasTextBody &&
+        _canInlineTimestamp(
+          context: context,
+          text: displayTextBody,
+          timeLabel: timeLabel,
+          hasAttachments: hasAttachments,
+          bubbleMaxWidth: bubbleMaxWidth,
+        );
     final bubbleRadius = BorderRadius.only(
       topLeft: const Radius.circular(14),
       topRight: const Radius.circular(14),
@@ -1124,36 +1258,72 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (hasTextBody)
-                    Padding(
-                      padding: EdgeInsets.only(
-                        bottom: attachments.isEmpty ? 0 : 8,
-                      ),
-                      child: Text(
-                        textBody,
-                        style: const TextStyle(fontSize: 14, height: 1.38),
-                      ),
-                    ),
-                  if (attachments.isNotEmpty)
-                    ...attachments.map(_buildAttachmentWidget),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        timeLabel,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textSubtle,
+                  if (hasTextBody && shouldInlineTimestamp)
+                    Row(
+                      mainAxisSize: MainAxisSize.max,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            displayTextBody,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                            style: _bubbleTextStyle,
+                          ),
                         ),
+                        const SizedBox(width: _inlineTimestampGap),
+                        Text(timeLabel, style: _bubbleTimeTextStyle),
+                      ],
+                    ),
+                  if (hasTextBody && !shouldInlineTimestamp && !hasAttachments)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 0),
+                      child: _buildTextWithPinnedTime(
+                        textBody: displayTextBody,
+                        timeLabel: timeLabel,
                       ),
                     ),
-                  ),
+                  if (hasAttachments)
+                    ...attachments.map(_buildAttachmentWidget),
+                  if (hasAttachmentCaption)
+                    _buildAttachmentCaptionAndTimeRow(
+                      textBody: displayTextBody,
+                      timeLabel: timeLabel,
+                    ),
+                  if (!shouldInlineTimestamp &&
+                      !hasAttachmentCaption &&
+                      !hasTextBody)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(timeLabel, style: _bubbleTimeTextStyle),
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAttachmentCaptionAndTimeRow({
+    required String textBody,
+    required String timeLabel,
+  }) {
+    final caption = textBody.trim();
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(child: Text(caption, style: _bubbleTextStyle)),
+          const SizedBox(width: _inlineTimestampGap),
+          Text(timeLabel, style: _bubbleTimeTextStyle),
+        ],
       ),
     );
   }
