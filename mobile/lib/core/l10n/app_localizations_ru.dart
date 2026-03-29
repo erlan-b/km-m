@@ -279,6 +279,44 @@ class SRu extends S {
   String get profileUpdated => 'Профиль обновлён';
 
   @override
+  String get requestRoleChange => 'Смена роли продавца';
+
+  @override
+  String get roleChangeRequestSubtitle => 'Отправьте документы на проверку';
+
+  @override
+  String get roleChangeTarget => 'Желаемая роль продавца';
+
+  @override
+  String get sellerTypeOwner => 'Собственник';
+
+  @override
+  String get sellerTypeCompany => 'Компания';
+
+  @override
+  String get companyName => 'Название компании';
+
+  @override
+  String get verificationDocuments => 'Документы для верификации';
+
+  @override
+  String get addDocuments => 'Добавить документы';
+
+  @override
+  String get roleChangeComment => 'Комментарий для админа';
+
+  @override
+  String get verificationDocumentsRequired =>
+      'Прикрепите хотя бы один документ';
+
+  @override
+  String get changeRoleRequestSent => 'Запрос отправлен на проверку';
+
+  @override
+  String get roleChangePendingHint =>
+      'После отправки заявка будет в статусе ожидания, пока админ не примет решение.';
+
+  @override
   String get manageYourListings =>
       'Управляйте активными и архивными объявлениями';
 

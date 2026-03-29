@@ -637,6 +637,78 @@ abstract class S {
   /// **'Profile updated'**
   String get profileUpdated;
 
+  /// No description provided for @requestRoleChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Request seller role update'**
+  String get requestRoleChange;
+
+  /// No description provided for @roleChangeRequestSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Send documents for admin review'**
+  String get roleChangeRequestSubtitle;
+
+  /// No description provided for @roleChangeTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Target seller type'**
+  String get roleChangeTarget;
+
+  /// No description provided for @sellerTypeOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get sellerTypeOwner;
+
+  /// No description provided for @sellerTypeCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'Company'**
+  String get sellerTypeCompany;
+
+  /// No description provided for @companyName.
+  ///
+  /// In en, this message translates to:
+  /// **'Company name'**
+  String get companyName;
+
+  /// No description provided for @verificationDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification documents'**
+  String get verificationDocuments;
+
+  /// No description provided for @addDocuments.
+  ///
+  /// In en, this message translates to:
+  /// **'Add documents'**
+  String get addDocuments;
+
+  /// No description provided for @roleChangeComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment for admin'**
+  String get roleChangeComment;
+
+  /// No description provided for @verificationDocumentsRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Attach at least one verification document'**
+  String get verificationDocumentsRequired;
+
+  /// No description provided for @changeRoleRequestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Request sent for review'**
+  String get changeRoleRequestSent;
+
+  /// No description provided for @roleChangePendingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'After submit your status will be pending verification until admin decision.'**
+  String get roleChangePendingHint;
+
   /// No description provided for @manageYourListings.
   ///
   /// In en, this message translates to:

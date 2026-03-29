@@ -15,6 +15,8 @@ from app.models.refresh_token import RefreshToken
 from app.models.report import Report, ReportStatus, ReportTargetType
 from app.models.report_attachment import ReportAttachment
 from app.models.role import Role
+from app.models.seller_type_change_document import SellerTypeChangeDocument
+from app.models.seller_type_change_request import SellerTypeChangeRequest, SellerTypeChangeRequestStatus
 from app.models.user import AccountStatus, SellerType, User, VerificationStatus, user_roles
 
 __all__ = [
@@ -44,6 +46,9 @@ __all__ = [
 	"ReportStatus",
 	"ReportTargetType",
 	"Role",
+	"SellerTypeChangeDocument",
+	"SellerTypeChangeRequest",
+	"SellerTypeChangeRequestStatus",
 	"SellerType",
 	"TransactionType",
 	"User",

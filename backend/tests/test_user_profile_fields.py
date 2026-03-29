@@ -1,5 +1,6 @@
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 from sqlalchemy import select
 
@@ -10,6 +11,7 @@ from app.models.conversation import Conversation
 from app.models.listing import Listing, ListingStatus, TransactionType
 from app.models.message import Message, MessageType
 from app.models.role import Role
+from app.models.seller_type_change_request import SellerTypeChangeRequest, SellerTypeChangeRequestStatus
 from app.models.user import AccountStatus, SellerType, User, VerificationStatus
 
 
@@ -358,3 +360,147 @@ def test_admin_can_manage_user_verification_status_and_verified_badge(client, db
         .order_by(AdminAuditLog.id.desc())
     )
     assert reject_audit is not None
+
+
+def test_user_can_submit_seller_type_change_request_with_documents(
+    client,
+    db_session,
+    set_current_user,
+    monkeypatch,
+    tmp_path,
+):
+    user_role = create_role(db_session, "user")
+    user = create_user(db_session, "role-change-user@example.com", [user_role])
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.profile.get_settings",
+        lambda: SimpleNamespace(
+            media_root=str(tmp_path),
+            verification_documents_subdir="verification_documents",
+            verification_document_max_size_mb=5,
+            verification_document_max_files_per_request=3,
+            verification_document_allowed_mime_types=["application/pdf", "image/jpeg", "image/png", "image/webp"],
+        ),
+    )
+
+    set_current_user(user)
+
+    response = client.post(
+        "/api/v1/profile/seller-type-change-request",
+        data={
+            "requested_seller_type": "company",
+            "requested_company_name": "Sunrise Realty",
+            "note": "Please verify my company status",
+        },
+        files=[("files", ("passport.pdf", b"fake-pdf", "application/pdf"))],
+    )
+    assert response.status_code == 201
+
+    payload = response.json()
+    assert payload["requested_seller_type"] == "company"
+    assert payload["requested_company_name"] == "Sunrise Realty"
+    assert payload["status"] == "pending"
+    assert len(payload["documents"]) == 1
+    assert payload["documents"][0]["original_name"] == "passport.pdf"
+
+    db_session.refresh(user)
+    assert user.seller_type == SellerType.OWNER
+    assert user.verification_status == VerificationStatus.PENDING
+
+    duplicate_response = client.post(
+        "/api/v1/profile/seller-type-change-request",
+        data={
+            "requested_seller_type": "company",
+            "requested_company_name": "Sunrise Realty",
+        },
+        files=[("files", ("id.pdf", b"fake-pdf-2", "application/pdf"))],
+    )
+    assert duplicate_response.status_code == 409
+
+
+def test_admin_can_review_seller_type_change_request_and_approve(client, db_session, set_current_user):
+    admin_role = create_role(db_session, "admin")
+    user_role = create_role(db_session, "user")
+
+    admin_user = create_user(db_session, "admin-role-review@example.com", [admin_role])
+    target_user = create_user(db_session, "target-role-review@example.com", [user_role])
+
+    request_item = SellerTypeChangeRequest(
+        user_id=target_user.id,
+        requested_seller_type=SellerType.COMPANY,
+        requested_company_name="Approved Company",
+        status=SellerTypeChangeRequestStatus.PENDING,
+    )
+    db_session.add(request_item)
+    db_session.commit()
+    db_session.refresh(request_item)
+
+    set_current_user(admin_user)
+    response = client.post(
+        f"/api/v1/admin/users/seller-type-change/requests/{request_item.id}/review",
+        json={"decision": "approve", "reason": "Documents are valid"},
+    )
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["status"] == "approved"
+
+    db_session.refresh(target_user)
+    db_session.refresh(request_item)
+    assert target_user.seller_type == SellerType.COMPANY
+    assert target_user.company_name == "Approved Company"
+    assert target_user.verification_status == VerificationStatus.VERIFIED
+    assert request_item.status == SellerTypeChangeRequestStatus.APPROVED
+    assert request_item.reviewed_by_admin_id == admin_user.id
+
+    audit = db_session.scalar(
+        select(AdminAuditLog)
+        .where(
+            AdminAuditLog.target_type == "user",
+            AdminAuditLog.target_id == target_user.id,
+            AdminAuditLog.action == "seller_type_change_request:approved",
+        )
+        .order_by(AdminAuditLog.id.desc())
+    )
+    assert audit is not None
+
+
+def test_admin_can_review_seller_type_change_request_and_reject(client, db_session, set_current_user):
+    admin_role = create_role(db_session, "admin")
+    user_role = create_role(db_session, "user")
+
+    admin_user = create_user(db_session, "admin-role-reject@example.com", [admin_role])
+    target_user = create_user(db_session, "target-role-reject@example.com", [user_role])
+    target_user.seller_type = SellerType.COMPANY
+    target_user.company_name = "Current Company"
+    db_session.add(target_user)
+    db_session.commit()
+    db_session.refresh(target_user)
+
+    request_item = SellerTypeChangeRequest(
+        user_id=target_user.id,
+        requested_seller_type=SellerType.OWNER,
+        requested_company_name=None,
+        status=SellerTypeChangeRequestStatus.PENDING,
+    )
+    db_session.add(request_item)
+    db_session.commit()
+    db_session.refresh(request_item)
+
+    set_current_user(admin_user)
+    response = client.post(
+        f"/api/v1/admin/users/seller-type-change/requests/{request_item.id}/review",
+        json={"decision": "reject", "reason": "Documents mismatch"},
+    )
+    assert response.status_code == 200
+
+    payload = response.json()
+    assert payload["status"] == "rejected"
+    assert payload["rejection_reason"] == "Documents mismatch"
+
+    db_session.refresh(target_user)
+    db_session.refresh(request_item)
+    assert target_user.seller_type == SellerType.COMPANY
+    assert target_user.company_name == "Current Company"
+    assert target_user.verification_status == VerificationStatus.REJECTED
+    assert request_item.status == SellerTypeChangeRequestStatus.REJECTED

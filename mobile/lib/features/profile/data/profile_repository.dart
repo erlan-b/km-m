@@ -46,6 +46,45 @@ class ProfileRepository {
     );
     return response.data as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> submitSellerTypeChangeRequest({
+    required String requestedSellerType,
+    String? requestedCompanyName,
+    String? note,
+    required List<String> documentPaths,
+  }) async {
+    final formData = FormData();
+    formData.fields.add(MapEntry('requested_seller_type', requestedSellerType));
+
+    final normalizedCompanyName = requestedCompanyName?.trim();
+    if (normalizedCompanyName != null && normalizedCompanyName.isNotEmpty) {
+      formData.fields.add(
+        MapEntry('requested_company_name', normalizedCompanyName),
+      );
+    }
+
+    final normalizedNote = note?.trim();
+    if (normalizedNote != null && normalizedNote.isNotEmpty) {
+      formData.fields.add(MapEntry('note', normalizedNote));
+    }
+
+    for (final filePath in documentPaths) {
+      final fileName = filePath.split(RegExp(r'[\\/]+')).last;
+      formData.files.add(
+        MapEntry(
+          'files',
+          await MultipartFile.fromFile(filePath, filename: fileName),
+        ),
+      );
+    }
+
+    final response = await _dio.post(
+      '/profile/seller-type-change-request',
+      data: formData,
+      options: Options(contentType: 'multipart/form-data'),
+    );
+    return response.data as Map<String, dynamic>;
+  }
 }
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {

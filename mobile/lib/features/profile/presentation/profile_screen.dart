@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -174,6 +175,75 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ScaffoldMessenger.maybeOf(
         context,
       )?.showSnackBar(SnackBar(content: Text(S.of(context)!.profileUpdated)));
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(_friendlyError(e, l))));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showSellerRoleRequestSheet() async {
+    final me = _me;
+    if (me == null || _saving) {
+      return;
+    }
+
+    final currentSellerType =
+        me['seller_type']?.toString().toLowerCase() ?? 'owner';
+    final draft = await showModalBottomSheet<_SellerTypeChangeRequestDraft>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return _SellerTypeChangeRequestSheet(
+          currentSellerType: currentSellerType,
+        );
+      },
+    );
+
+    if (draft == null || !mounted) {
+      return;
+    }
+
+    final l = S.of(context)!;
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      await ref
+          .read(profileRepositoryProvider)
+          .submitSellerTypeChangeRequest(
+            requestedSellerType: draft.requestedSellerType,
+            requestedCompanyName: draft.requestedCompanyName,
+            note: draft.note,
+            documentPaths: draft.documentPaths,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      await _load();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(S.of(context)!.changeRoleRequestSent)),
+      );
     } catch (e) {
       if (!mounted) {
         return;
@@ -386,6 +456,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const SizedBox(height: 8),
             _ActionTile(
+              icon: Icons.workspace_premium_outlined,
+              title: l.requestRoleChange,
+              subtitle: l.roleChangeRequestSubtitle,
+              onTap: _showSellerRoleRequestSheet,
+            ),
+            const SizedBox(height: 8),
+            _ActionTile(
               icon: Icons.logout,
               title: l.logout,
               subtitle: l.signOutFromAccount,
@@ -563,6 +640,251 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: _submit, child: Text(l.save)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SellerTypeChangeRequestDraft {
+  const _SellerTypeChangeRequestDraft({
+    required this.requestedSellerType,
+    required this.requestedCompanyName,
+    required this.note,
+    required this.documentPaths,
+  });
+
+  final String requestedSellerType;
+  final String? requestedCompanyName;
+  final String? note;
+  final List<String> documentPaths;
+}
+
+class _SellerTypeChangeRequestSheet extends StatefulWidget {
+  const _SellerTypeChangeRequestSheet({required this.currentSellerType});
+
+  final String currentSellerType;
+
+  @override
+  State<_SellerTypeChangeRequestSheet> createState() =>
+      _SellerTypeChangeRequestSheetState();
+}
+
+class _SellerTypeChangeRequestSheetState
+    extends State<_SellerTypeChangeRequestSheet> {
+  late String _requestedSellerType;
+  final TextEditingController _companyNameCtrl = TextEditingController();
+  final TextEditingController _noteCtrl = TextEditingController();
+  List<PlatformFile> _documents = <PlatformFile>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _requestedSellerType = widget.currentSellerType == 'company'
+        ? 'owner'
+        : 'company';
+  }
+
+  @override
+  void dispose() {
+    _companyNameCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDocuments() async {
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+    );
+
+    if (picked == null || picked.files.isEmpty) {
+      return;
+    }
+
+    final existingPaths = _documents
+        .map((file) => file.path)
+        .whereType<String>()
+        .toSet();
+
+    final next = picked.files.where((file) {
+      final path = file.path;
+      return path != null && path.isNotEmpty && !existingPaths.contains(path);
+    }).toList();
+
+    if (next.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _documents = <PlatformFile>[..._documents, ...next];
+    });
+  }
+
+  void _removeDocument(int index) {
+    setState(() {
+      _documents = List<PlatformFile>.from(_documents)..removeAt(index);
+    });
+  }
+
+  void _submit() {
+    final l = S.of(context)!;
+
+    final requestedCompanyName = _companyNameCtrl.text.trim();
+    if (_requestedSellerType == 'company' && requestedCompanyName.isEmpty) {
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(l.fieldRequired)));
+      return;
+    }
+
+    final documentPaths = _documents
+        .map((file) => file.path)
+        .whereType<String>()
+        .toList();
+    if (documentPaths.isEmpty) {
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(l.verificationDocumentsRequired)));
+      return;
+    }
+
+    final note = _noteCtrl.text.trim();
+    Navigator.of(context).pop(
+      _SellerTypeChangeRequestDraft(
+        requestedSellerType: _requestedSellerType,
+        requestedCompanyName: requestedCompanyName.isEmpty
+            ? null
+            : requestedCompanyName,
+        note: note.isEmpty ? null : note,
+        documentPaths: documentPaths,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = S.of(context)!;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l.requestRoleChange,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              l.roleChangePendingHint,
+              style: const TextStyle(fontSize: 12, color: AppTheme.textSubtle),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: _requestedSellerType,
+              decoration: InputDecoration(labelText: l.roleChangeTarget),
+              items: [
+                DropdownMenuItem(
+                  value: 'owner',
+                  child: Text(l.sellerTypeOwner),
+                ),
+                DropdownMenuItem(
+                  value: 'company',
+                  child: Text(l.sellerTypeCompany),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _requestedSellerType = value;
+                });
+              },
+            ),
+            if (_requestedSellerType == 'company') ...[
+              const SizedBox(height: 10),
+              TextField(
+                controller: _companyNameCtrl,
+                decoration: InputDecoration(labelText: l.companyName),
+              ),
+            ],
+            const SizedBox(height: 10),
+            TextField(
+              controller: _noteCtrl,
+              decoration: InputDecoration(labelText: l.roleChangeComment),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              l.verificationDocuments,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _pickDocuments,
+              icon: const Icon(Icons.attach_file),
+              label: Text(l.addDocuments),
+            ),
+            if (_documents.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var i = 0; i < _documents.length; i++)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.bgMuted,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: AppTheme.border),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 170),
+                            child: Text(
+                              _documents[i].name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () => _removeDocument(i),
+                            child: const Icon(
+                              Icons.close,
+                              size: 16,
+                              color: AppTheme.textSubtle,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _submit,
+              child: Text(l.requestRoleChange),
+            ),
           ],
         ),
       ),

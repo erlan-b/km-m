@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     report_attachment_max_size_mb: int = 10
     report_attachment_max_files_per_report: int = 5
     report_attachment_allowed_mime_csv: str = "image/jpeg,image/png,image/webp,application/pdf,text/plain"
+    verification_documents_subdir: str = "verification_documents"
+    verification_document_max_size_mb: int = 10
+    verification_document_max_files_per_request: int = 5
+    verification_document_allowed_mime_csv: str = "image/jpeg,image/png,image/webp,application/pdf"
     listing_media_subdir: str = "listing_media"
     listing_media_max_size_mb: int = 10
     listing_media_max_files_per_listing: int = 20
@@ -106,6 +110,14 @@ class Settings(BaseSettings):
         return [
             mime_type.strip().lower()
             for mime_type in self.report_attachment_allowed_mime_csv.split(",")
+            if mime_type.strip()
+        ]
+
+    @property
+    def verification_document_allowed_mime_types(self) -> list[str]:
+        return [
+            mime_type.strip().lower()
+            for mime_type in self.verification_document_allowed_mime_csv.split(",")
             if mime_type.strip()
         ]
 

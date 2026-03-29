@@ -279,6 +279,44 @@ class SEn extends S {
   String get profileUpdated => 'Profile updated';
 
   @override
+  String get requestRoleChange => 'Request seller role update';
+
+  @override
+  String get roleChangeRequestSubtitle => 'Send documents for admin review';
+
+  @override
+  String get roleChangeTarget => 'Target seller type';
+
+  @override
+  String get sellerTypeOwner => 'Owner';
+
+  @override
+  String get sellerTypeCompany => 'Company';
+
+  @override
+  String get companyName => 'Company name';
+
+  @override
+  String get verificationDocuments => 'Verification documents';
+
+  @override
+  String get addDocuments => 'Add documents';
+
+  @override
+  String get roleChangeComment => 'Comment for admin';
+
+  @override
+  String get verificationDocumentsRequired =>
+      'Attach at least one verification document';
+
+  @override
+  String get changeRoleRequestSent => 'Request sent for review';
+
+  @override
+  String get roleChangePendingHint =>
+      'After submit your status will be pending verification until admin decision.';
+
+  @override
   String get manageYourListings => 'Manage your active and archived listings';
 
   @override
