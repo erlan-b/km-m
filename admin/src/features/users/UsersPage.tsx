@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
 import { formatDateTime, formatInteger, localeFromLanguage } from "../../shared/i18n/format";
+import { ImagePreviewOverlay } from "../common/ImagePreviewOverlay";
 import { Modal } from "../common/Modal";
 
 type AccountStatus = "active" | "blocked" | "pending_verification" | "deactivated";
@@ -70,6 +71,45 @@ type AdminUserVerificationActionRequest = {
   reason: string | null;
 };
 
+type SellerTypeChangeRequestStatus = "pending" | "approved" | "rejected";
+
+type SellerTypeChangeDocumentItem = {
+  id: number;
+  request_id: number;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  created_at: string;
+};
+
+type SellerTypeChangeRequestItem = {
+  id: number;
+  user_id: number;
+  requested_seller_type: SellerType;
+  requested_company_name: string | null;
+  note: string | null;
+  status: SellerTypeChangeRequestStatus;
+  rejection_reason: string | null;
+  reviewed_by_admin_id: number | null;
+  created_at: string;
+  updated_at: string;
+  reviewed_at: string | null;
+  documents: SellerTypeChangeDocumentItem[];
+};
+
+type SellerTypeChangeRequestListResponse = {
+  items: SellerTypeChangeRequestItem[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+};
+
+type SellerTypeChangeReviewRequest = {
+  decision: "approve" | "reject";
+  reason: string | null;
+};
+
 function statusLabel(status: AccountStatus, t: (key: string, fallback: string) => string): string {
   if (status === "active") {
     return t("status_active", "Active");
@@ -106,6 +146,31 @@ function verificationStatusLabel(
   return t("verification_unverified", "Unverified");
 }
 
+function sellerTypeChangeStatusLabel(
+  requestStatus: SellerTypeChangeRequestStatus,
+  t: (key: string, fallback: string) => string,
+): string {
+  if (requestStatus === "approved") {
+    return t("seller_type_request_approved", "Approved");
+  }
+  if (requestStatus === "rejected") {
+    return t("seller_type_request_rejected", "Rejected");
+  }
+  return t("seller_type_request_pending", "Pending");
+}
+
+function sellerTypeChangeStatusBadgeClass(
+  requestStatus: SellerTypeChangeRequestStatus,
+): string {
+  if (requestStatus === "approved") {
+    return "users-status-active";
+  }
+  if (requestStatus === "rejected") {
+    return "users-status-blocked";
+  }
+  return "users-status-pending_verification";
+}
+
 function formatPercent(value: number | null, language: "en" | "ru"): string {
   if (value === null || !Number.isFinite(value)) {
     return "-";
@@ -122,6 +187,10 @@ function extractErrorMessage(error: unknown): string {
     return error.message;
   }
   return "Request failed";
+}
+
+function isImageMimeType(mimeType: string): boolean {
+  return mimeType.toLowerCase().startsWith("image/");
 }
 
 export function UsersPage() {
@@ -146,6 +215,16 @@ export function UsersPage() {
   const [actionBusyUserId, setActionBusyUserId] = useState<number | null>(null);
   const [verificationStatusDraft, setVerificationStatusDraft] = useState<VerificationStatus>("unverified");
   const [isVerificationSubmitting, setIsVerificationSubmitting] = useState(false);
+  const [sellerTypeRequests, setSellerTypeRequests] = useState<SellerTypeChangeRequestListResponse | null>(null);
+  const [isSellerTypeRequestsLoading, setIsSellerTypeRequestsLoading] = useState(false);
+  const [sellerTypeRequestsError, setSellerTypeRequestsError] = useState<string | null>(null);
+  const [sellerTypeRequestsPage, setSellerTypeRequestsPage] = useState(1);
+  const [sellerTypeRequestStatusFilter, setSellerTypeRequestStatusFilter] = useState<SellerTypeChangeRequestStatus | "">("pending");
+  const [reviewBusyRequestId, setReviewBusyRequestId] = useState<number | null>(null);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<number | null>(null);
+  const [activeSection, setActiveSection] = useState<"users" | "type_approve">("users");
+  const [previewDocument, setPreviewDocument] = useState<SellerTypeChangeDocumentItem | null>(null);
+  const [previewDocumentUrl, setPreviewDocumentUrl] = useState<string | null>(null);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
@@ -183,6 +262,48 @@ export function UsersPage() {
   useEffect(() => {
     void loadUsers();
   }, [loadUsers]);
+
+  const loadSellerTypeRequests = useCallback(async () => {
+    setIsSellerTypeRequestsLoading(true);
+    setSellerTypeRequestsError(null);
+
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(sellerTypeRequestsPage));
+      params.set("page_size", "10");
+
+      if (sellerTypeRequestStatusFilter) {
+        params.set("status_filter", sellerTypeRequestStatusFilter);
+      }
+
+      const response = await authFetch(`/admin/users/seller-type-change/requests?${params.toString()}`);
+      if (!response.ok) {
+        let message = t("error_load_seller_type_requests", "Failed to load seller type requests");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_load_seller_type_requests", "Failed to load seller type requests");
+        }
+        throw new Error(message);
+      }
+
+      const payload = (await response.json()) as SellerTypeChangeRequestListResponse;
+      setSellerTypeRequests(payload);
+    } catch (requestLoadError) {
+      setSellerTypeRequestsError(extractErrorMessage(requestLoadError));
+    } finally {
+      setIsSellerTypeRequestsLoading(false);
+    }
+  }, [authFetch, sellerTypeRequestStatusFilter, sellerTypeRequestsPage, t]);
+
+  useEffect(() => {
+    void loadSellerTypeRequests();
+  }, [loadSellerTypeRequests]);
 
   const onSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -392,10 +513,196 @@ export function UsersPage() {
     }
   };
 
+  const reviewSellerTypeChangeRequest = async (
+    requestItem: SellerTypeChangeRequestItem,
+    decision: "approve" | "reject",
+  ) => {
+    if (!canManageAdministration) {
+      setSellerTypeRequestsError(t("access_denied_admin_management", "Access denied: admin or superadmin role required"));
+      return;
+    }
+
+    let reason: string | null = null;
+    if (decision === "reject") {
+      const reasonInput = window.prompt(t("reason_required_for_reject", "Reason is required for reject decision"), "");
+      if (reasonInput === null) {
+        return;
+      }
+      const normalizedReason = reasonInput.trim();
+      if (!normalizedReason) {
+        setSellerTypeRequestsError(t("reason_required_for_reject", "Reason is required for reject decision"));
+        return;
+      }
+      reason = normalizedReason;
+    }
+
+    const actionLabel = decision === "approve"
+      ? t("approve", "Approve")
+      : t("reject", "Reject");
+    const confirmed = window.confirm(
+      `${actionLabel} ${t("seller_type_request_for_user", "seller type request for user")} #${requestItem.user_id}?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setReviewBusyRequestId(requestItem.id);
+    setSellerTypeRequestsError(null);
+
+    try {
+      const body: SellerTypeChangeReviewRequest = {
+        decision,
+        reason,
+      };
+
+      const response = await authFetch(`/admin/users/seller-type-change/requests/${requestItem.id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        let message = t("error_review_seller_type_request", "Failed to review seller type request");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_review_seller_type_request", "Failed to review seller type request");
+        }
+        throw new Error(message);
+      }
+
+      const payload = (await response.json()) as SellerTypeChangeRequestItem;
+      setSellerTypeRequests((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return {
+          ...prev,
+          items: prev.items.map((item) => (item.id === payload.id ? payload : item)),
+        };
+      });
+      void loadUsers();
+    } catch (reviewError) {
+      setSellerTypeRequestsError(extractErrorMessage(reviewError));
+    } finally {
+      setReviewBusyRequestId(null);
+    }
+  };
+
+  const downloadSellerTypeDocument = async (requestDocument: SellerTypeChangeDocumentItem) => {
+    setDownloadingDocumentId(requestDocument.id);
+    setSellerTypeRequestsError(null);
+
+    try {
+      const response = await authFetch(`/admin/users/seller-type-change/documents/${requestDocument.id}/download`);
+      if (!response.ok) {
+        let message = t("error_download_document", "Failed to download document");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_download_document", "Failed to download document");
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = requestDocument.original_name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setSellerTypeRequestsError(extractErrorMessage(downloadError));
+    } finally {
+      setDownloadingDocumentId(null);
+    }
+  };
+
+  const openSellerTypeDocumentPreview = async (requestDocument: SellerTypeChangeDocumentItem) => {
+    setDownloadingDocumentId(requestDocument.id);
+    setSellerTypeRequestsError(null);
+
+    try {
+      const response = await authFetch(`/admin/users/seller-type-change/documents/${requestDocument.id}/download`);
+      if (!response.ok) {
+        let message = t("error_load_document_preview", "Failed to load document preview");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_load_document_preview", "Failed to load document preview");
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+
+      setPreviewDocumentUrl((previousUrl) => {
+        if (previousUrl) {
+          window.URL.revokeObjectURL(previousUrl);
+        }
+        return objectUrl;
+      });
+      setPreviewDocument(requestDocument);
+    } catch (previewError) {
+      setSellerTypeRequestsError(extractErrorMessage(previewError));
+    } finally {
+      setDownloadingDocumentId(null);
+    }
+  };
+
+  const closeSellerTypeDocumentPreview = () => {
+    setPreviewDocument(null);
+    setPreviewDocumentUrl((previousUrl) => {
+      if (previousUrl) {
+        window.URL.revokeObjectURL(previousUrl);
+      }
+      return null;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewDocumentUrl) {
+        window.URL.revokeObjectURL(previewDocumentUrl);
+      }
+    };
+  }, [previewDocumentUrl]);
+
+  const onSellerTypeDocumentClick = (requestDocument: SellerTypeChangeDocumentItem) => {
+    if (isImageMimeType(requestDocument.mime_type)) {
+      void openSellerTypeDocumentPreview(requestDocument);
+      return;
+    }
+    void downloadSellerTypeDocument(requestDocument);
+  };
+
   const rows = users?.items ?? [];
   const totalPages = users?.total_pages ?? 0;
   const canPrev = page > 1;
   const canNext = totalPages > 0 && page < totalPages;
+  const sellerTypeRows = sellerTypeRequests?.items ?? [];
+  const sellerTypeTotalPages = sellerTypeRequests?.total_pages ?? 0;
+  const canSellerTypePrev = sellerTypeRequestsPage > 1;
+  const canSellerTypeNext = sellerTypeTotalPages > 0 && sellerTypeRequestsPage < sellerTypeTotalPages;
 
   const summaryText = useMemo(() => {
     if (!users) {
@@ -410,6 +717,19 @@ export function UsersPage() {
     return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(users.total_items, language)}`;
   }, [language, t, users]);
 
+  const sellerTypeSummaryText = useMemo(() => {
+    if (!sellerTypeRequests) {
+      return "-";
+    }
+    if (sellerTypeRequests.total_items === 0) {
+      return t("no_seller_type_requests", "No seller type requests");
+    }
+
+    const from = (sellerTypeRequests.page - 1) * sellerTypeRequests.page_size + 1;
+    const to = Math.min(sellerTypeRequests.page * sellerTypeRequests.page_size, sellerTypeRequests.total_items);
+    return `${formatInteger(from, language)}-${formatInteger(to, language)} ${t("of", "of")} ${formatInteger(sellerTypeRequests.total_items, language)}`;
+  }, [language, sellerTypeRequests, t]);
+
   return (
     <section className="module-page">
       <header className="module-header">
@@ -417,14 +737,200 @@ export function UsersPage() {
           <h1>{t("title", "Users")}</h1>
           <p>{t("subtitle", "Search users, inspect profile statistics, suspend and unsuspend.")}</p>
         </div>
-        <button type="button" className="btn btn-ghost" onClick={() => void loadUsers()} disabled={isLoading}>
-          {isLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => {
+            if (activeSection === "type_approve") {
+              void loadSellerTypeRequests();
+              return;
+            }
+            void loadUsers();
+          }}
+          disabled={activeSection === "type_approve" ? isSellerTypeRequestsLoading : isLoading}
+        >
+          {(activeSection === "type_approve" ? isSellerTypeRequestsLoading : isLoading)
+            ? t("refreshing", "Refreshing...")
+            : t("refresh", "Refresh")}
         </button>
       </header>
 
-      {error ? <div className="dashboard-error">{error}</div> : null}
+      {activeSection === "users" && error ? <div className="dashboard-error">{error}</div> : null}
 
-      <form className="search-strip" onSubmit={onSearchSubmit}>
+      <div className="admin-section-tabs" role="tablist" aria-label={t("users_sections", "Users sections") }>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === "users"}
+          className={`admin-section-tab${activeSection === "users" ? " admin-section-tab-active" : ""}`}
+          onClick={() => setActiveSection("users")}
+        >
+          <span>{t("table_users", "Users")}</span>
+          <span className="admin-section-tab-count">{formatInteger(users?.total_items ?? 0, language)}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === "type_approve"}
+          className={`admin-section-tab${activeSection === "type_approve" ? " admin-section-tab-active" : ""}`}
+          onClick={() => setActiveSection("type_approve")}
+        >
+          <span>{t("type_approve", "Type approve")}</span>
+          <span className="admin-section-tab-count">{formatInteger(sellerTypeRequests?.total_items ?? 0, language)}</span>
+        </button>
+      </div>
+
+      <section
+        className="table-card"
+        aria-label={t("seller_type_requests_queue", "Seller type change requests queue") }
+        hidden={activeSection !== "type_approve"}
+      >
+        <div className="table-head users-table-head">
+          <strong>{t("seller_type_requests_queue", "Seller type change requests")}</strong>
+          <span>{sellerTypeSummaryText}</span>
+        </div>
+
+        {sellerTypeRequestsError ? <div className="dashboard-error">{sellerTypeRequestsError}</div> : null}
+
+        <div className="search-strip">
+          <select
+            className="users-filter-select"
+            value={sellerTypeRequestStatusFilter}
+            onChange={(event) => {
+              setSellerTypeRequestsPage(1);
+              setSellerTypeRequestStatusFilter(event.target.value as SellerTypeChangeRequestStatus | "");
+            }}
+          >
+            <option value="">{t("all_statuses", "All statuses")}</option>
+            <option value="pending">{t("seller_type_request_pending", "Pending")}</option>
+            <option value="approved">{t("seller_type_request_approved", "Approved")}</option>
+            <option value="rejected">{t("seller_type_request_rejected", "Rejected")}</option>
+          </select>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => void loadSellerTypeRequests()}
+            disabled={isSellerTypeRequestsLoading}
+          >
+            {isSellerTypeRequestsLoading ? t("refreshing", "Refreshing...") : t("refresh", "Refresh")}
+          </button>
+        </div>
+
+        <div className="users-table-wrap">
+          <table className="users-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>{t("user_id", "User ID")}</th>
+                <th>{t("seller_type", "Seller type")}</th>
+                <th>{t("company_name", "Company name")}</th>
+                <th>{t("status", "Status")}</th>
+                <th>{t("created", "Created")}</th>
+                <th>{t("documents", "Documents")}</th>
+                <th>{t("actions", "Actions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sellerTypeRows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="users-empty-cell">
+                    {isSellerTypeRequestsLoading
+                      ? t("loading_requests", "Loading requests...")
+                      : t("no_seller_type_requests", "No seller type requests")}
+                  </td>
+                </tr>
+              ) : (
+                sellerTypeRows.map((requestItem) => (
+                  <tr key={requestItem.id}>
+                    <td>#{formatInteger(requestItem.id, language)}</td>
+                    <td>#{formatInteger(requestItem.user_id, language)}</td>
+                    <td>{sellerTypeLabel(requestItem.requested_seller_type, t)}</td>
+                    <td>{requestItem.requested_company_name ?? "-"}</td>
+                    <td>
+                      <span className={`users-status-badge ${sellerTypeChangeStatusBadgeClass(requestItem.status)}`}>
+                        {sellerTypeChangeStatusLabel(requestItem.status, t)}
+                      </span>
+                    </td>
+                    <td>{formatDateTime(requestItem.created_at, language)}</td>
+                    <td>
+                      {requestItem.documents.length === 0 ? (
+                        "-"
+                      ) : (
+                        <div className="users-name-cell">
+                          {requestItem.documents.map((documentItem) => (
+                            <button
+                              key={documentItem.id}
+                              type="button"
+                              className="btn btn-ghost"
+                              disabled={downloadingDocumentId === documentItem.id}
+                              onClick={() => onSellerTypeDocumentClick(documentItem)}
+                            >
+                              {downloadingDocumentId === documentItem.id
+                                ? t("downloading", "Downloading...")
+                                : documentItem.original_name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td>
+                      {requestItem.status === "pending" && canManageAdministration ? (
+                        <div className="users-actions-cell">
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => void reviewSellerTypeChangeRequest(requestItem, "approve")}
+                            disabled={reviewBusyRequestId === requestItem.id}
+                          >
+                            {reviewBusyRequestId === requestItem.id
+                              ? t("processing", "Processing...")
+                              : t("approve", "Approve")}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            onClick={() => void reviewSellerTypeChangeRequest(requestItem, "reject")}
+                            disabled={reviewBusyRequestId === requestItem.id}
+                          >
+                            {t("reject", "Reject")}
+                          </button>
+                        </div>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="table-footer">
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={!canSellerTypePrev}
+            onClick={() => setSellerTypeRequestsPage((prev) => Math.max(1, prev - 1))}
+          >
+            {t("previous", "Previous")}
+          </button>
+          <span className="users-page-indicator">
+            {t("page", "Page")} {formatInteger(sellerTypeRequests?.page ?? sellerTypeRequestsPage, language)}{sellerTypeTotalPages ? ` / ${formatInteger(sellerTypeTotalPages, language)}` : ""}
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={!canSellerTypeNext}
+            onClick={() => setSellerTypeRequestsPage((prev) => prev + 1)}
+          >
+            {t("next", "Next")}
+          </button>
+        </div>
+      </section>
+
+      <div className="users-section-stack" hidden={activeSection !== "users"}>
+        <form className="search-strip" onSubmit={onSearchSubmit}>
         <input
           placeholder={t("search_placeholder", "Search by full name or email")}
           aria-label={t("search_users", "Search users")}
@@ -452,9 +958,9 @@ export function UsersPage() {
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>{t("apply_filters", "Apply filters")}</button>
         <button type="submit" className="btn btn-primary">{t("search", "Search")}</button>
-      </form>
+        </form>
 
-      <section className="table-card" aria-label="Users table">
+        <section className="table-card" aria-label="Users table">
         <div className="table-head users-table-head">
           <strong>{t("table_users", "Users")}</strong>
           <span>{summaryText}</span>
@@ -545,7 +1051,8 @@ export function UsersPage() {
             {t("next", "Next")}
           </button>
         </div>
-      </section>
+        </section>
+      </div>
 
       <Modal
         open={isDetailModalOpen}
@@ -664,6 +1171,23 @@ export function UsersPage() {
           ) : null}
         </div>
       </Modal>
+
+      <ImagePreviewOverlay
+        open={previewDocument !== null && previewDocumentUrl !== null}
+        imageSrc={previewDocumentUrl}
+        imageAlt={previewDocument?.original_name ?? t("image_preview", "Image preview")}
+        onClose={closeSellerTypeDocumentPreview}
+        onDownload={() => {
+          if (!previewDocument) {
+            return;
+          }
+          void downloadSellerTypeDocument(previewDocument);
+        }}
+        downloadLabel={t("download", "Download")}
+        downloadingLabel={t("downloading", "Downloading...")}
+        closeLabel={t("close", "Close")}
+        isDownloading={previewDocument !== null && downloadingDocumentId === previewDocument.id}
+      />
     </section>
   );
 }

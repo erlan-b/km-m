@@ -54,6 +54,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _sending = false;
+  bool _reportSheetOpen = false;
+  bool _reportSubmitInProgress = false;
   String? _error;
 
   int _currentPage = 1;
@@ -489,191 +491,273 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     );
   }
 
-  Future<void> _showMessageReportSheet(int messageId) async {
+  Future<Map<String, String>?> _showMessageReportSheet() async {
+    if (_reportSheetOpen) {
+      return null;
+    }
+
+    _reportSheetOpen = true;
+
     final l = S.of(context)!;
-    final reasonCtrl = TextEditingController();
     var selectedReason = 'spam';
-    var submitting = false;
+    var reasonText = '';
+    String? submitError;
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final reasons = <String, String>{
-              'spam': l.spam,
-              'scam': l.scam,
-              'offensive': l.offensive,
-              'other': l.other,
-            };
+    try {
+      final payload = await showModalBottomSheet<Map<String, String>>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.28),
+        builder: (sheetContext) {
+          return StatefulBuilder(
+            builder: (sheetContext, setSheetState) {
+              final reasons = <String, String>{
+                'spam': l.spam,
+                'scam': l.scam,
+                'offensive': l.offensive,
+                'other': l.other,
+              };
 
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    l.reportMessage,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+              return SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    10,
+                    0,
+                    10,
+                    MediaQuery.of(sheetContext).viewInsets.bottom + 10,
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          AppTheme.bgSurface,
+                          AppTheme.bgMuted.withValues(alpha: 0.96),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppTheme.border),
+                      boxShadow: <BoxShadow>[
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Center(
+                              child: Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.border,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              l.reportMessage,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              l.reportReason,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.textSubtle,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: reasons.entries.map((entry) {
+                                final isSelected = entry.key == selectedReason;
+                                return ChoiceChip(
+                                  label: Text(entry.value),
+                                  selected: isSelected,
+                                  backgroundColor: AppTheme.white,
+                                  selectedColor: AppTheme.accent.withValues(
+                                    alpha: 0.16,
+                                  ),
+                                  side: BorderSide(
+                                    color: isSelected
+                                        ? AppTheme.accent
+                                        : AppTheme.border,
+                                  ),
+                                  labelStyle: TextStyle(
+                                    color: AppTheme.textMain,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w600,
+                                  ),
+                                  onSelected: (selected) {
+                                    if (!selected) {
+                                      return;
+                                    }
+                                    setSheetState(() {
+                                      selectedReason = entry.key;
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              maxLines: 3,
+                              onChanged: (value) {
+                                reasonText = value;
+                                if (submitError != null) {
+                                  setSheetState(() {
+                                    submitError = null;
+                                  });
+                                }
+                              },
+                              decoration: InputDecoration(
+                                labelText: l.description,
+                              ),
+                            ),
+                            if (submitError != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                submitError!,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.statusError,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              height: 46,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.white,
+                                  foregroundColor: AppTheme.textMain,
+                                  side: const BorderSide(
+                                    color: AppTheme.border,
+                                  ),
+                                  elevation: 0,
+                                ),
+                                onPressed: () {
+                                  final details = reasonText.trim();
+                                  if (details.isEmpty) {
+                                    setSheetState(() {
+                                      submitError = l.fieldRequired;
+                                    });
+                                    return;
+                                  }
+
+                                  Navigator.of(
+                                    sheetContext,
+                                  ).pop(<String, String>{
+                                    'reason_code': selectedReason,
+                                    'reason_text': details,
+                                  });
+                                },
+                                child: Text(l.reportMessage),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedReason,
-                    decoration: InputDecoration(labelText: l.reportReason),
-                    items: reasons.entries
-                        .map(
-                          (entry) => DropdownMenuItem<String>(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: submitting
-                        ? null
-                        : (value) {
-                            if (value == null) {
-                              return;
-                            }
-                            setSheetState(() {
-                              selectedReason = value;
-                            });
-                          },
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: reasonCtrl,
-                    maxLines: 3,
-                    enabled: !submitting,
-                    decoration: InputDecoration(labelText: l.description),
-                  ),
-                  const SizedBox(height: 14),
-                  ElevatedButton(
-                    onPressed: submitting
-                        ? null
-                        : () async {
-                            final messenger = ScaffoldMessenger.of(context);
-                            final details = reasonCtrl.text.trim();
-                            if (details.isEmpty) {
-                              messenger.showSnackBar(
-                                SnackBar(content: Text(l.fieldRequired)),
-                              );
-                              return;
-                            }
+                ),
+              );
+            },
+          );
+        },
+      );
 
-                            setSheetState(() {
-                              submitting = true;
-                            });
-
-                            try {
-                              await ref
-                                  .read(reportsRepositoryProvider)
-                                  .createReport(
-                                    targetType: 'message',
-                                    targetId: messageId,
-                                    reasonCode: selectedReason,
-                                    reasonText: details,
-                                  );
-
-                              if (!context.mounted) {
-                                return;
-                              }
-
-                              if (sheetContext.mounted) {
-                                Navigator.pop(sheetContext);
-                              }
-                              messenger.showSnackBar(
-                                SnackBar(content: Text(l.reportSubmitted)),
-                              );
-                            } on DioException catch (e) {
-                              final data = e.response?.data;
-                              var message = l.errorOccurred;
-                              if (data is Map && data['detail'] is String) {
-                                message = data['detail'].toString();
-                              }
-                              if (context.mounted) {
-                                messenger.showSnackBar(
-                                  SnackBar(content: Text(message)),
-                                );
-                              }
-                            } catch (_) {
-                              if (context.mounted) {
-                                messenger.showSnackBar(
-                                  SnackBar(content: Text(l.errorOccurred)),
-                                );
-                              }
-                            } finally {
-                              if (sheetContext.mounted) {
-                                setSheetState(() {
-                                  submitting = false;
-                                });
-                              }
-                            }
-                          },
-                    child: submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(l.apply),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    reasonCtrl.dispose();
+      return payload;
+    } finally {
+      _reportSheetOpen = false;
+    }
   }
 
   Future<void> _showMessageActions(Map<String, dynamic> message) async {
+    if (_reportSubmitInProgress || _reportSheetOpen) {
+      return;
+    }
+
     final messageId = (message['id'] as num?)?.toInt();
     if (messageId == null) {
       return;
     }
 
+    final senderId = (message['sender_id'] as num?)?.toInt();
+    if (_myUserId != null && senderId == _myUserId) {
+      return;
+    }
+
     final l = S.of(context)!;
-    await showModalBottomSheet<void>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.flag_outlined),
-                title: Text(l.reportMessage),
-                onTap: () async {
-                  Navigator.of(sheetContext).pop();
-                  await _showMessageReportSheet(messageId);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    final reportPayload = await _showMessageReportSheet();
+    if (!mounted || reportPayload == null) {
+      return;
+    }
+
+    _reportSubmitInProgress = true;
+
+    try {
+      await ref
+          .read(reportsRepositoryProvider)
+          .createReport(
+            targetType: 'message',
+            targetId: messageId,
+            reasonCode: reportPayload['reason_code'] ?? 'spam',
+            reasonText: reportPayload['reason_text'] ?? '',
+          );
+    } on DioException catch (e) {
+      if (!mounted) {
+        _reportSubmitInProgress = false;
+        return;
+      }
+      final data = e.response?.data;
+      var message = l.errorOccurred;
+      if (data is Map && data['detail'] is String) {
+        message = data['detail'].toString();
+      }
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(message)));
+      _reportSubmitInProgress = false;
+      return;
+    } catch (_) {
+      if (!mounted) {
+        _reportSubmitInProgress = false;
+        return;
+      }
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(l.errorOccurred)));
+      _reportSubmitInProgress = false;
+      return;
+    }
+
+    if (!mounted) {
+      _reportSubmitInProgress = false;
+      return;
+    }
+
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(l.reportSubmitted)));
+    _reportSubmitInProgress = false;
   }
 
   void _removePickedFile(int index) {
@@ -1236,7 +1320,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: GestureDetector(
-          onLongPress: () => _showMessageActions(message),
+          onLongPress: isMine || _reportSubmitInProgress || _reportSheetOpen
+              ? null
+              : () => _showMessageActions(message),
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
             child: Container(

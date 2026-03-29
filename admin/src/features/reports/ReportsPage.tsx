@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
 import { formatDateTime, formatInteger } from "../../shared/i18n/format";
+import { ImagePreviewOverlay } from "../common/ImagePreviewOverlay";
 import { Modal } from "../common/Modal";
 
 type ReportStatus = "open" | "resolved" | "dismissed";
@@ -130,6 +131,9 @@ export function ReportsPage() {
   const [previewLoadingIds, setPreviewLoadingIds] = useState<number[]>([]);
   const [previewFailedIds, setPreviewFailedIds] = useState<number[]>([]);
   const previewUrlsRef = useRef<Record<number, string>>({});
+  const [reportImagePreviewAttachment, setReportImagePreviewAttachment] = useState<ReportAttachmentItem | null>(null);
+  const [reportImagePreviewUrl, setReportImagePreviewUrl] = useState<string | null>(null);
+  const [openingImagePreviewId, setOpeningImagePreviewId] = useState<number | null>(null);
 
   const loadReports = useCallback(async () => {
     setIsLoading(true);
@@ -368,6 +372,54 @@ export function ReportsPage() {
     }
   };
 
+  const openImageAttachmentPreview = async (attachment: ReportAttachmentItem) => {
+    if (!isImageAttachment(attachment)) {
+      void downloadAttachment(attachment);
+      return;
+    }
+
+    setOpeningImagePreviewId(attachment.id);
+
+    try {
+      const response = await authFetch(`/reports/attachments/${attachment.id}/preview`);
+      if (!response.ok) {
+        throw new Error(t("error_load_preview", "Failed to load preview"));
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      setReportImagePreviewUrl((previousUrl) => {
+        if (previousUrl) {
+          window.URL.revokeObjectURL(previousUrl);
+        }
+        return objectUrl;
+      });
+      setReportImagePreviewAttachment(attachment);
+    } catch (previewError) {
+      setError(extractErrorMessage(previewError));
+    } finally {
+      setOpeningImagePreviewId(null);
+    }
+  };
+
+  const closeImageAttachmentPreview = () => {
+    setReportImagePreviewAttachment(null);
+    setReportImagePreviewUrl((previousUrl) => {
+      if (previousUrl) {
+        window.URL.revokeObjectURL(previousUrl);
+      }
+      return null;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (reportImagePreviewUrl) {
+        window.URL.revokeObjectURL(reportImagePreviewUrl);
+      }
+    };
+  }, [reportImagePreviewUrl]);
+
   const openReportMessageInMessages = (report: ReportItem) => {
     if (report.target_type !== "message" || report.target_conversation_id === null) {
       return;
@@ -569,12 +621,23 @@ export function ReportsPage() {
                                 key={attachment.id}
                                 type="button"
                                 className="btn btn-ghost messages-attachment-btn"
-                                disabled={downloadingAttachmentId === attachment.id}
-                                onClick={() => void downloadAttachment(attachment)}
+                                disabled={
+                                  downloadingAttachmentId === attachment.id ||
+                                  openingImagePreviewId === attachment.id
+                                }
+                                onClick={() => {
+                                  if (isImageAttachment(attachment)) {
+                                    void openImageAttachmentPreview(attachment);
+                                    return;
+                                  }
+                                  void downloadAttachment(attachment);
+                                }}
                               >
                                 {downloadingAttachmentId === attachment.id
                                   ? t("downloading", "Downloading...")
-                                  : `${t("evidence", "Evidence")}: ${attachment.original_name}`}
+                                  : openingImagePreviewId === attachment.id
+                                    ? t("loading_preview", "Loading preview...")
+                                    : `${t("evidence", "Evidence")}: ${attachment.original_name}`}
                               </button>
                             ))}
                           </div>
@@ -729,7 +792,13 @@ export function ReportsPage() {
                           <div className="reports-evidence-preview">
                             {isImageAttachment(attachment) ? (
                               previewUrl ? (
-                                <img src={previewUrl} alt={attachment.original_name} loading="lazy" />
+                                <button
+                                  type="button"
+                                  className="reports-evidence-preview-button"
+                                  onClick={() => void openImageAttachmentPreview(attachment)}
+                                >
+                                  <img src={previewUrl} alt={attachment.original_name} loading="lazy" />
+                                </button>
                               ) : previewLoading ? (
                                 <span>{t("loading_preview", "Loading preview...")}</span>
                               ) : previewFailed ? (
@@ -758,10 +827,25 @@ export function ReportsPage() {
                           <button
                             type="button"
                             className="btn btn-ghost messages-attachment-btn"
-                            disabled={downloadingAttachmentId === attachment.id}
-                            onClick={() => void downloadAttachment(attachment)}
+                            disabled={
+                              downloadingAttachmentId === attachment.id ||
+                              openingImagePreviewId === attachment.id
+                            }
+                            onClick={() => {
+                              if (isImageAttachment(attachment)) {
+                                void openImageAttachmentPreview(attachment);
+                                return;
+                              }
+                              void downloadAttachment(attachment);
+                            }}
                           >
-                            {downloadingAttachmentId === attachment.id ? t("downloading", "Downloading...") : t("download", "Download")}
+                            {downloadingAttachmentId === attachment.id
+                              ? t("downloading", "Downloading...")
+                              : openingImagePreviewId === attachment.id
+                                ? t("loading_preview", "Loading preview...")
+                                : isImageAttachment(attachment)
+                                  ? t("open_image", "Open image")
+                                  : t("download", "Download")}
                           </button>
                         </article>
                       );
@@ -862,6 +946,26 @@ export function ReportsPage() {
           ) : null}
         </div>
       </Modal>
+
+      <ImagePreviewOverlay
+        open={reportImagePreviewAttachment !== null && reportImagePreviewUrl !== null}
+        imageSrc={reportImagePreviewUrl}
+        imageAlt={reportImagePreviewAttachment?.original_name ?? t("image_preview", "Image preview")}
+        onClose={closeImageAttachmentPreview}
+        onDownload={() => {
+          if (!reportImagePreviewAttachment) {
+            return;
+          }
+          void downloadAttachment(reportImagePreviewAttachment);
+        }}
+        downloadLabel={t("download", "Download")}
+        downloadingLabel={t("downloading", "Downloading...")}
+        closeLabel={t("close", "Close")}
+        isDownloading={
+          reportImagePreviewAttachment !== null &&
+          downloadingAttachmentId === reportImagePreviewAttachment.id
+        }
+      />
     </section>
   );
 }

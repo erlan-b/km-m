@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
 import { formatDateTime, formatInteger } from "../../shared/i18n/format";
+import { ImagePreviewOverlay } from "../common/ImagePreviewOverlay";
 
 type ConversationItem = {
   id: number;
@@ -177,6 +178,10 @@ function formatFileSize(bytes: number, language: "en" | "ru"): string {
   return `${mb.toFixed(2)} MB`;
 }
 
+function isImageAttachment(attachment: MessageAttachmentItem): boolean {
+  return attachment.mime_type.toLowerCase().startsWith("image/");
+}
+
 export function AdminMessagesPage() {
   const { authFetch } = useAuth();
   const { t, language } = usePageI18n("messages");
@@ -204,6 +209,9 @@ export function AdminMessagesPage() {
   const [messagesError, setMessagesError] = useState<string | null>(null);
 
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<number | null>(null);
+  const [openingImagePreviewId, setOpeningImagePreviewId] = useState<number | null>(null);
+  const [messageImagePreviewAttachment, setMessageImagePreviewAttachment] = useState<MessageAttachmentItem | null>(null);
+  const [messageImagePreviewUrl, setMessageImagePreviewUrl] = useState<string | null>(null);
   const [pendingMessageId, setPendingMessageId] = useState<number | null>(() => parsePositiveInt(searchParams.get("message_id") ?? ""));
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(() => parsePositiveInt(searchParams.get("message_id") ?? ""));
   const lastQueryFilterKey = useRef("");
@@ -480,6 +488,65 @@ export function AdminMessagesPage() {
     }
   };
 
+  const openImageAttachmentPreview = async (attachment: MessageAttachmentItem) => {
+    if (!isImageAttachment(attachment)) {
+      void downloadAttachment(attachment);
+      return;
+    }
+
+    setOpeningImagePreviewId(attachment.id);
+
+    try {
+      const response = await authFetch(`/admin/messages/attachments/${attachment.id}/download`);
+      if (!response.ok) {
+        let message = t("error_load_preview", "Failed to load preview");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_load_preview", "Failed to load preview");
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      setMessageImagePreviewUrl((previousUrl) => {
+        if (previousUrl) {
+          window.URL.revokeObjectURL(previousUrl);
+        }
+        return objectUrl;
+      });
+      setMessageImagePreviewAttachment(attachment);
+    } catch (error) {
+      setMessagesError(extractErrorMessage(error, t("error_load_preview", "Failed to load preview")));
+    } finally {
+      setOpeningImagePreviewId(null);
+    }
+  };
+
+  const closeImageAttachmentPreview = () => {
+    setMessageImagePreviewAttachment(null);
+    setMessageImagePreviewUrl((previousUrl) => {
+      if (previousUrl) {
+        window.URL.revokeObjectURL(previousUrl);
+      }
+      return null;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (messageImagePreviewUrl) {
+        window.URL.revokeObjectURL(messageImagePreviewUrl);
+      }
+    };
+  }, [messageImagePreviewUrl]);
+
   const conversationRows = conversations?.items ?? [];
   const messageRows = messages?.items ?? [];
 
@@ -727,12 +794,23 @@ export function AdminMessagesPage() {
                               key={attachment.id}
                               type="button"
                               className="btn btn-ghost messages-attachment-btn"
-                              disabled={downloadingAttachmentId === attachment.id}
-                              onClick={() => void downloadAttachment(attachment)}
+                              disabled={
+                                downloadingAttachmentId === attachment.id ||
+                                openingImagePreviewId === attachment.id
+                              }
+                              onClick={() => {
+                                if (isImageAttachment(attachment)) {
+                                  void openImageAttachmentPreview(attachment);
+                                  return;
+                                }
+                                void downloadAttachment(attachment);
+                              }}
                             >
                               {downloadingAttachmentId === attachment.id
                                 ? t("downloading", "Downloading...")
-                                : `${attachment.original_name} (${formatFileSize(attachment.file_size, language)})`}
+                                : openingImagePreviewId === attachment.id
+                                  ? t("loading_preview", "Loading preview...")
+                                  : `${attachment.original_name} (${formatFileSize(attachment.file_size, language)})`}
                             </button>
                           ))}
                         </div>
@@ -782,6 +860,26 @@ export function AdminMessagesPage() {
           </button>
         </div>
       </section>
+
+      <ImagePreviewOverlay
+        open={messageImagePreviewAttachment !== null && messageImagePreviewUrl !== null}
+        imageSrc={messageImagePreviewUrl}
+        imageAlt={messageImagePreviewAttachment?.original_name ?? t("image_preview", "Image preview")}
+        onClose={closeImageAttachmentPreview}
+        onDownload={() => {
+          if (!messageImagePreviewAttachment) {
+            return;
+          }
+          void downloadAttachment(messageImagePreviewAttachment);
+        }}
+        downloadLabel={t("download", "Download")}
+        downloadingLabel={t("downloading", "Downloading...")}
+        closeLabel={t("close", "Close")}
+        isDownloading={
+          messageImagePreviewAttachment !== null &&
+          downloadingAttachmentId === messageImagePreviewAttachment.id
+        }
+      />
     </section>
   );
 }
