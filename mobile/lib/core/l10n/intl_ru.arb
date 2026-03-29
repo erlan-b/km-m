@@ -70,15 +70,38 @@
   "reactivate": "Активировать",
 
   "ownerProfile": "Профиль продавца",
+  "sellerType": "Тип продавца",
   "memberSince": "На сайте с",
   "activeListings": "Активные объявления",
   "viewAllListings": "Все объявления",
+  "listingStats": "Просмотры: {views} · В избранном: {favorites}",
+  "@listingStats": {
+    "description": "Строка со счетчиками объявления на экране деталей",
+    "placeholders": {
+      "views": {
+        "type": "int"
+      },
+      "favorites": {
+        "type": "int"
+      }
+    }
+  },
 
   "conversations": "Сообщения",
   "newMessage": "Новое сообщение",
   "typeMessage": "Введите сообщение...",
   "sendMessage": "Отправить",
   "attachFile": "Прикрепить файл",
+  "attachmentDownloaded": "Сохранено: {fileName} ({bytes} байт)",
+  "@attachmentDownloaded": {
+    "description": "Показывается после загрузки вложения",
+    "placeholders": {
+      "fileName": {},
+      "bytes": {
+        "type": "int"
+      }
+    }
+  },
   "noMessages": "Нет сообщений",
   "noConversations": "Нет диалогов",
 
@@ -92,6 +115,8 @@
   "profile": "Профиль",
   "settings": "Настройки",
   "language": "Язык",
+  "languageEnglish": "Английский",
+  "languageRussian": "Русский",
   "phone": "Телефон",
   "bio": "О себе",
   "logout": "Выйти",

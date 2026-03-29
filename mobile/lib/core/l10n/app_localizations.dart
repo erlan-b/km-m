@@ -481,6 +481,12 @@ abstract class S {
   /// **'Seller Profile'**
   String get ownerProfile;
 
+  /// No description provided for @sellerType.
+  ///
+  /// In en, this message translates to:
+  /// **'Seller type'**
+  String get sellerType;
+
   /// No description provided for @memberSince.
   ///
   /// In en, this message translates to:
@@ -498,6 +504,12 @@ abstract class S {
   /// In en, this message translates to:
   /// **'View all listings'**
   String get viewAllListings;
+
+  /// Listing counters line on listing details screen
+  ///
+  /// In en, this message translates to:
+  /// **'{views} views · {favorites} favorites'**
+  String listingStats(int views, int favorites);
 
   /// No description provided for @conversations.
   ///
@@ -528,6 +540,12 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Attach file'**
   String get attachFile;
+
+  /// Shown after attachment is downloaded
+  ///
+  /// In en, this message translates to:
+  /// **'Saved: {fileName} ({bytes} bytes)'**
+  String attachmentDownloaded(Object fileName, int bytes);
 
   /// No description provided for @noMessages.
   ///
@@ -588,6 +606,18 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Language'**
   String get language;
+
+  /// No description provided for @languageEnglish.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get languageEnglish;
+
+  /// No description provided for @languageRussian.
+  ///
+  /// In en, this message translates to:
+  /// **'Russian'**
+  String get languageRussian;
 
   /// No description provided for @phone.
   ///

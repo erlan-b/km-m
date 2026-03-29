@@ -70,15 +70,38 @@
   "reactivate": "Reactivate",
 
   "ownerProfile": "Seller Profile",
+  "sellerType": "Seller type",
   "memberSince": "Member since",
   "activeListings": "Active listings",
   "viewAllListings": "View all listings",
+  "listingStats": "{views} views · {favorites} favorites",
+  "@listingStats": {
+    "description": "Listing counters line on listing details screen",
+    "placeholders": {
+      "views": {
+        "type": "int"
+      },
+      "favorites": {
+        "type": "int"
+      }
+    }
+  },
 
   "conversations": "Messages",
   "newMessage": "New message",
   "typeMessage": "Type a message...",
   "sendMessage": "Send",
   "attachFile": "Attach file",
+  "attachmentDownloaded": "Saved: {fileName} ({bytes} bytes)",
+  "@attachmentDownloaded": {
+    "description": "Shown after attachment is downloaded",
+    "placeholders": {
+      "fileName": {},
+      "bytes": {
+        "type": "int"
+      }
+    }
+  },
   "noMessages": "No messages yet",
   "noConversations": "No conversations yet",
 
@@ -92,6 +115,8 @@
   "profile": "Profile",
   "settings": "Settings",
   "language": "Language",
+  "languageEnglish": "English",
+  "languageRussian": "Russian",
   "phone": "Phone",
   "bio": "Bio",
   "logout": "Log out",

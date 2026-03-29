@@ -14,6 +14,7 @@ class ListingCard extends StatelessWidget {
     required this.city,
     required this.transactionType,
     this.thumbnailUrl,
+    this.thumbnailUrlFuture,
     this.isFavorite = false,
     this.isPromoted = false,
     this.onTap,
@@ -27,6 +28,7 @@ class ListingCard extends StatelessWidget {
   final String city;
   final String transactionType;
   final String? thumbnailUrl;
+  final Future<String?>? thumbnailUrlFuture;
   final bool isFavorite;
   final bool isPromoted;
   final VoidCallback? onTap;
@@ -56,6 +58,60 @@ class ListingCard extends StatelessWidget {
     }
   }
 
+  Widget _buildNetworkThumbnail(String imageUrl) {
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: BoxFit.cover,
+      placeholder: (context, url) => Container(color: AppTheme.bgMuted),
+      errorWidget: (context, url, error) => Container(
+        color: AppTheme.bgMuted,
+        child: const Icon(
+          Icons.image_not_supported_outlined,
+          color: AppTheme.textSubtle,
+          size: 32,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderThumbnail() {
+    return Container(
+      color: AppTheme.bgMuted,
+      child: const Icon(
+        Icons.apartment_rounded,
+        color: AppTheme.textSubtle,
+        size: 40,
+      ),
+    );
+  }
+
+  Widget _buildThumbnail() {
+    final directUrl = thumbnailUrl?.trim();
+    if (directUrl != null && directUrl.isNotEmpty) {
+      return _buildNetworkThumbnail(directUrl);
+    }
+
+    if (thumbnailUrlFuture != null) {
+      return FutureBuilder<String?>(
+        future: thumbnailUrlFuture,
+        builder: (context, snapshot) {
+          final resolvedUrl = snapshot.data?.trim();
+          if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+            return _buildNetworkThumbnail(resolvedUrl);
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Container(color: AppTheme.bgMuted);
+          }
+
+          return _buildPlaceholderThumbnail();
+        },
+      );
+    }
+
+    return _buildPlaceholderThumbnail();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
@@ -80,30 +136,7 @@ class ListingCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (thumbnailUrl != null)
-                    CachedNetworkImage(
-                      imageUrl: thumbnailUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) =>
-                          Container(color: AppTheme.bgMuted),
-                      errorWidget: (context, url, error) => Container(
-                        color: AppTheme.bgMuted,
-                        child: const Icon(
-                          Icons.image_not_supported_outlined,
-                          color: AppTheme.textSubtle,
-                          size: 32,
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      color: AppTheme.bgMuted,
-                      child: const Icon(
-                        Icons.apartment_rounded,
-                        color: AppTheme.textSubtle,
-                        size: 40,
-                      ),
-                    ),
+                  _buildThumbnail(),
                   // Transaction type badge
                   Positioned(
                     top: 8,

@@ -164,17 +164,101 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _me = updated;
       });
 
-      await ref
-          .read(localeControllerProvider.notifier)
-          .setLocaleByCode(draft.preferredLanguage);
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(S.of(context)!.profileUpdated)));
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(_friendlyError(e, l))));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  String _languageLabel(String code, S l) {
+    return code == 'ru' ? l.languageRussian : l.languageEnglish;
+  }
+
+  Future<void> _showLanguageSheet() async {
+    final me = _me;
+    if (me == null || _saving) {
+      return;
+    }
+
+    final l = S.of(context)!;
+    final currentCode =
+        (me['preferred_language']?.toString().toLowerCase() == 'ru')
+        ? 'ru'
+        : 'en';
+
+    final selectedCode = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  l.language,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              ListTile(
+                title: Text(l.languageEnglish),
+                trailing: currentCode == 'en'
+                    ? const Icon(Icons.check, color: AppTheme.accent)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop('en'),
+              ),
+              ListTile(
+                title: Text(l.languageRussian),
+                trailing: currentCode == 'ru'
+                    ? const Icon(Icons.check, color: AppTheme.accent)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop('ru'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selectedCode == null || selectedCode == currentCode || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final updated = await ref.read(profileRepositoryProvider).updateProfile({
+        'preferred_language': selectedCode,
+      });
 
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text(S.of(context)!.profileUpdated)));
+      setState(() {
+        _me = updated;
+      });
+
+      await ref
+          .read(localeControllerProvider.notifier)
+          .setLocaleByCode(selectedCode);
     } catch (e) {
       if (!mounted) {
         return;
@@ -314,6 +398,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final displayName = me['full_name'] as String? ?? '-';
     final email = me['email'] as String? ?? '-';
     final city = me['city'] as String?;
+    final preferredLanguageCode =
+        (me['preferred_language']?.toString().toLowerCase() == 'ru')
+        ? 'ru'
+        : 'en';
     final profileImagePath = me['profile_image_url']?.toString();
     final profileImageUrl =
         (profileImagePath == null || profileImagePath.isEmpty)
@@ -447,6 +535,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               subtitle: l.pay,
               onTap: () => context.push('/payments'),
             ),
+            const SizedBox(height: 12),
+            Text(
+              l.settings,
+              style: const TextStyle(
+                color: AppTheme.textSubtle,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _ActionTile(
+              icon: Icons.language_outlined,
+              title: l.language,
+              subtitle: _languageLabel(preferredLanguageCode, l),
+              onTap: _showLanguageSheet,
+            ),
             const SizedBox(height: 8),
             _ActionTile(
               icon: Icons.edit_outlined,
@@ -482,14 +586,12 @@ class _ProfileUpdateDraft {
     required this.city,
     required this.phone,
     required this.bio,
-    required this.preferredLanguage,
   });
 
   final String fullName;
   final String city;
   final String phone;
   final String bio;
-  final String preferredLanguage;
 
   Map<String, dynamic> toPayload() {
     String? normalize(String value) {
@@ -505,7 +607,6 @@ class _ProfileUpdateDraft {
       'city': normalize(city),
       'phone': normalize(phone),
       'bio': normalize(bio),
-      'preferred_language': preferredLanguage,
     };
   }
 }
@@ -524,7 +625,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   late final TextEditingController _cityCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _bioCtrl;
-  late String _preferredLanguage;
 
   @override
   void initState() {
@@ -541,13 +641,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
     _bioCtrl = TextEditingController(
       text: widget.initialProfile['bio']?.toString() ?? '',
     );
-
-    _preferredLanguage =
-        (widget.initialProfile['preferred_language']?.toString() ?? 'en')
-            .toLowerCase();
-    if (_preferredLanguage != 'ru') {
-      _preferredLanguage = 'en';
-    }
   }
 
   @override
@@ -575,7 +668,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
         city: _cityCtrl.text,
         phone: _phoneCtrl.text,
         bio: _bioCtrl.text,
-        preferredLanguage: _preferredLanguage,
       ),
     );
   }
@@ -620,23 +712,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
               controller: _bioCtrl,
               decoration: InputDecoration(labelText: l.bio),
               maxLines: 3,
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: _preferredLanguage,
-              decoration: InputDecoration(labelText: l.language),
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() {
-                  _preferredLanguage = value;
-                });
-              },
-              items: const [
-                DropdownMenuItem(value: 'en', child: Text('English')),
-                DropdownMenuItem(value: 'ru', child: Text('Русский')),
-              ],
             ),
             const SizedBox(height: 16),
             ElevatedButton(onPressed: _submit, child: Text(l.save)),

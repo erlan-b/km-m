@@ -349,7 +349,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$safeName (${bytes.length} bytes)')),
+        SnackBar(content: Text(l.attachmentDownloaded(safeName, bytes.length))),
       );
     } catch (e) {
       if (!mounted) {

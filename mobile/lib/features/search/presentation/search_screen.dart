@@ -9,6 +9,37 @@ import '../../listings/data/categories_repository.dart';
 import '../../listings/data/listings_repository.dart';
 import '../../listings/presentation/widgets/listing_card.dart';
 
+final searchDraftProvider = StateProvider<_SearchDraft>((ref) {
+  return const _SearchDraft();
+});
+
+class _SearchDraft {
+  const _SearchDraft({
+    this.query = '',
+    this.selectedCategoryId,
+    this.selectedCity,
+    this.minPrice,
+    this.maxPrice,
+    this.sortBy = 'newest',
+  });
+
+  final String query;
+  final int? selectedCategoryId;
+  final String? selectedCity;
+  final double? minPrice;
+  final double? maxPrice;
+  final String sortBy;
+
+  bool get hasCriteria {
+    return query.trim().isNotEmpty ||
+        selectedCategoryId != null ||
+        (selectedCity != null && selectedCity!.trim().isNotEmpty) ||
+        minPrice != null ||
+        maxPrice != null ||
+        sortBy != 'newest';
+  }
+}
+
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
@@ -37,14 +68,44 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   void initState() {
     super.initState();
+    final draft = ref.read(searchDraftProvider);
+    _searchCtrl.text = draft.query;
+    _selectedCategoryId = draft.selectedCategoryId;
+    _selectedCity = draft.selectedCity;
+    _minPrice = draft.minPrice;
+    _maxPrice = draft.maxPrice;
+    _sortBy = draft.sortBy;
+
+    _searchCtrl.addListener(_persistSearchDraft);
     _loadCategories();
     _loadFavoriteIds();
+
+    if (draft.hasCriteria) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _search();
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _persistSearchDraft();
+    _searchCtrl.removeListener(_persistSearchDraft);
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  void _persistSearchDraft() {
+    ref.read(searchDraftProvider.notifier).state = _SearchDraft(
+      query: _searchCtrl.text,
+      selectedCategoryId: _selectedCategoryId,
+      selectedCity: _selectedCity,
+      minPrice: _minPrice,
+      maxPrice: _maxPrice,
+      sortBy: _sortBy,
+    );
   }
 
   Future<void> _loadCategories() async {
@@ -117,6 +178,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Future<void> _search({bool append = false}) async {
+    _persistSearchDraft();
+
     if (!append) {
       _page = 1;
       setState(() {
@@ -335,6 +398,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       _maxPrice = double.tryParse(maxCtrl.text);
                       _sortBy = tempSort;
                     });
+                    _persistSearchDraft();
                     Navigator.pop(ctx);
                     _search();
                   },
@@ -400,6 +464,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   Widget _buildResults(S l) {
+    final listingsRepo = ref.read(listingsRepositoryProvider);
+
     if (_loading && _results.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppTheme.accent),
@@ -465,6 +531,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           itemBuilder: (context, index) {
             final listing = _results[index] as Map<String, dynamic>;
             final listingId = listing['id'] as int;
+            final thumbnailUrl = listingsRepo.extractThumbnailUrl(listing);
+
             return ListingCard(
               id: listingId,
               title: listing['title'] as String,
@@ -474,6 +542,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               currency: listing['currency'] as String,
               city: listing['city'] as String,
               transactionType: listing['transaction_type'] as String,
+              thumbnailUrl: thumbnailUrl,
+              thumbnailUrlFuture: thumbnailUrl == null
+                  ? listingsRepo.getPrimaryThumbnailUrl(listingId)
+                  : null,
               isPromoted: listing['is_subscription'] == true,
               isFavorite: _favoriteIds.contains(listingId),
               onTap: () => context.push('/listing/$listingId'),

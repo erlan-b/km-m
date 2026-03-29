@@ -168,20 +168,13 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     }
   }
 
-  String? _getThumbnailUrl(Map<String, dynamic> listing) {
-    // The listing response doesn't include media directly.
-    // We'll use a helper for primary thumbnail using listing ID.
-    // For now, return null — Phase 3 will add media preloading.
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l.appTitle),
+        title: const Text('KM-M'),
         actions: [
           IconButton(
             icon: const Icon(Icons.storefront_outlined),
@@ -236,6 +229,8 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   }
 
   Widget _buildBody(S l) {
+    final listingsRepo = ref.read(listingsRepositoryProvider);
+
     if (_loading && _listings.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppTheme.accent),
@@ -308,6 +303,8 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
             itemBuilder: (context, index) {
               final listing = _listings[index] as Map<String, dynamic>;
               final listingId = listing['id'] as int;
+              final thumbnailUrl = listingsRepo.extractThumbnailUrl(listing);
+
               return ListingCard(
                 id: listingId,
                 title: listing['title'] as String,
@@ -317,7 +314,10 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                 currency: listing['currency'] as String,
                 city: listing['city'] as String,
                 transactionType: listing['transaction_type'] as String,
-                thumbnailUrl: _getThumbnailUrl(listing),
+                thumbnailUrl: thumbnailUrl,
+                thumbnailUrlFuture: thumbnailUrl == null
+                    ? listingsRepo.getPrimaryThumbnailUrl(listingId)
+                    : null,
                 isFavorite: _favoriteIds.contains(listingId),
                 isPromoted: listing['is_subscription'] == true,
                 onTap: () {

@@ -459,6 +459,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     final listing = _listing!;
     final lat = double.tryParse(listing['latitude'].toString()) ?? 0;
     final lng = double.tryParse(listing['longitude'].toString()) ?? 0;
+    final viewCount = (listing['view_count'] as num?)?.toInt() ?? 0;
+    final favoriteCount = (listing['favorite_count'] as num?)?.toInt() ?? 0;
     final repo = ref.read(listingsRepositoryProvider);
 
     return Scaffold(
@@ -639,7 +641,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${listing['view_count']} views · ${listing['favorite_count']} favorites',
+                    l.listingStats(viewCount, favoriteCount),
                     style: const TextStyle(
                       color: AppTheme.textSubtle,
                       fontSize: 12,
@@ -712,7 +714,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                           initialCenter: LatLng(lat, lng),
                           initialZoom: 15,
                           interactionOptions: const InteractionOptions(
-                            flags: InteractiveFlag.none,
+                            flags:
+                                InteractiveFlag.all & ~InteractiveFlag.rotate,
                           ),
                         ),
                         children: [
@@ -739,16 +742,6 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                       ),
                     ),
                   ),
-                  if (listing['map_address_label'] != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      listing['map_address_label'] as String,
-                      style: const TextStyle(
-                        color: AppTheme.textSubtle,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
 
                   const Divider(height: 32),
 

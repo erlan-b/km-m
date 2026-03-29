@@ -257,13 +257,6 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l.myListings)),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/my-listings/create'),
-        backgroundColor: AppTheme.accent,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: Text(l.createListing),
-      ),
       body: _buildBody(l),
     );
   }
@@ -311,11 +304,6 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
                 l.youDontHaveListings,
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: AppTheme.textSubtle),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () => context.push('/my-listings/create'),
-                child: Text(l.createListing),
               ),
             ],
           ),

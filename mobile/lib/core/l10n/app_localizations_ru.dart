@@ -201,6 +201,9 @@ class SRu extends S {
   String get ownerProfile => 'Профиль продавца';
 
   @override
+  String get sellerType => 'Тип продавца';
+
+  @override
   String get memberSince => 'На сайте с';
 
   @override
@@ -208,6 +211,11 @@ class SRu extends S {
 
   @override
   String get viewAllListings => 'Все объявления';
+
+  @override
+  String listingStats(int views, int favorites) {
+    return 'Просмотры: $views · В избранном: $favorites';
+  }
 
   @override
   String get conversations => 'Сообщения';
@@ -223,6 +231,11 @@ class SRu extends S {
 
   @override
   String get attachFile => 'Прикрепить файл';
+
+  @override
+  String attachmentDownloaded(Object fileName, int bytes) {
+    return 'Сохранено: $fileName ($bytes байт)';
+  }
 
   @override
   String get noMessages => 'Нет сообщений';
@@ -253,6 +266,12 @@ class SRu extends S {
 
   @override
   String get language => 'Язык';
+
+  @override
+  String get languageEnglish => 'Английский';
+
+  @override
+  String get languageRussian => 'Русский';
 
   @override
   String get phone => 'Телефон';

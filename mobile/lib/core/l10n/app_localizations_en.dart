@@ -201,6 +201,9 @@ class SEn extends S {
   String get ownerProfile => 'Seller Profile';
 
   @override
+  String get sellerType => 'Seller type';
+
+  @override
   String get memberSince => 'Member since';
 
   @override
@@ -208,6 +211,11 @@ class SEn extends S {
 
   @override
   String get viewAllListings => 'View all listings';
+
+  @override
+  String listingStats(int views, int favorites) {
+    return '$views views · $favorites favorites';
+  }
 
   @override
   String get conversations => 'Messages';
@@ -223,6 +231,11 @@ class SEn extends S {
 
   @override
   String get attachFile => 'Attach file';
+
+  @override
+  String attachmentDownloaded(Object fileName, int bytes) {
+    return 'Saved: $fileName ($bytes bytes)';
+  }
 
   @override
   String get noMessages => 'No messages yet';
@@ -253,6 +266,12 @@ class SEn extends S {
 
   @override
   String get language => 'Language';
+
+  @override
+  String get languageEnglish => 'English';
+
+  @override
+  String get languageRussian => 'Russian';
 
   @override
   String get phone => 'Phone';

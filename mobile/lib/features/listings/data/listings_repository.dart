@@ -8,6 +8,8 @@ class ListingsRepository {
   final Dio _dio;
 
   String get _baseUrl => _dio.options.baseUrl.replaceFirst('/api/v1', '');
+  final Map<int, String?> _thumbnailUrlCache = <int, String?>{};
+  final Map<int, Future<String?>> _thumbnailInFlight = <int, Future<String?>>{};
 
   String thumbnailUrl(int mediaId) =>
       '$_baseUrl/api/v1/listing-media/$mediaId/thumbnail';
@@ -23,6 +25,89 @@ class ListingsRepository {
       return '$_baseUrl$relativeOrAbsolutePath';
     }
     return '$_baseUrl/$relativeOrAbsolutePath';
+  }
+
+  String? _normalizeUrl(dynamic rawUrl) {
+    final value = rawUrl?.toString().trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return absoluteUrl(value);
+  }
+
+  String? extractThumbnailUrl(Map<String, dynamic> listing) {
+    final directCandidates = <dynamic>[
+      listing['thumbnail_url'],
+      listing['primary_thumbnail_url'],
+      listing['primary_media_thumbnail_url'],
+      listing['cover_thumbnail_url'],
+      listing['image_url'],
+    ];
+
+    for (final candidate in directCandidates) {
+      final normalized = _normalizeUrl(candidate);
+      if (normalized != null) {
+        return normalized;
+      }
+    }
+
+    final media = listing['media'];
+    if (media is List) {
+      for (final rawItem in media) {
+        if (rawItem is! Map) {
+          continue;
+        }
+        final item = Map<String, dynamic>.from(rawItem);
+        final normalized = _normalizeUrl(
+          item['thumbnail_url'] ?? item['file_url'] ?? item['url'],
+        );
+        if (normalized != null) {
+          return normalized;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  Future<String?> _fetchPrimaryThumbnailUrl(int listingId) async {
+    try {
+      final media = await getListingMedia(listingId);
+      for (final rawItem in media) {
+        if (rawItem is! Map) {
+          continue;
+        }
+        final item = Map<String, dynamic>.from(rawItem);
+        final normalized = _normalizeUrl(
+          item['thumbnail_url'] ?? item['file_url'],
+        );
+        if (normalized != null) {
+          _thumbnailUrlCache[listingId] = normalized;
+          return normalized;
+        }
+      }
+      _thumbnailUrlCache[listingId] = null;
+      return null;
+    } catch (_) {
+      return null;
+    } finally {
+      _thumbnailInFlight.remove(listingId);
+    }
+  }
+
+  Future<String?> getPrimaryThumbnailUrl(int listingId) {
+    if (_thumbnailUrlCache.containsKey(listingId)) {
+      return Future<String?>.value(_thumbnailUrlCache[listingId]);
+    }
+
+    final inFlight = _thumbnailInFlight[listingId];
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final request = _fetchPrimaryThumbnailUrl(listingId);
+    _thumbnailInFlight[listingId] = request;
+    return request;
   }
 
   Future<Map<String, dynamic>> getListings({

@@ -5,6 +5,7 @@ import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../app/theme.dart';
 import '../../favorites/data/favorites_repository.dart';
+import '../../listings/data/listings_repository.dart';
 import '../../listings/presentation/widgets/listing_card.dart';
 
 class FavoritesScreen extends ConsumerStatefulWidget {
@@ -142,6 +143,8 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   }
 
   Widget _buildBody(S l) {
+    final listingsRepo = ref.read(listingsRepositoryProvider);
+
     if (_loading && _items.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppTheme.accent),
@@ -221,6 +224,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
               final listing = _items[index];
               final listingId = (listing['id'] as num?)?.toInt() ?? 0;
               final priceRaw = listing['price'];
+              final thumbnailUrl = listingsRepo.extractThumbnailUrl(listing);
 
               return ListingCard(
                 id: listingId,
@@ -232,6 +236,10 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                 city: listing['city']?.toString() ?? '-',
                 transactionType:
                     listing['transaction_type']?.toString() ?? 'sale',
+                thumbnailUrl: thumbnailUrl,
+                thumbnailUrlFuture: thumbnailUrl == null && listingId > 0
+                    ? listingsRepo.getPrimaryThumbnailUrl(listingId)
+                    : null,
                 isPromoted: listing['is_subscription'] == true,
                 isFavorite: true,
                 onTap: () => context.push('/listing/$listingId'),

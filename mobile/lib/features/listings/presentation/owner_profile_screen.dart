@@ -5,6 +5,7 @@ import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../app/theme.dart';
 
+import '../data/listings_repository.dart';
 import '../data/public_users_repository.dart';
 import 'widgets/listing_card.dart';
 
@@ -70,9 +71,21 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
         });
   }
 
+  String _sellerTypeLabel(String sellerType, S l) {
+    switch (sellerType.toLowerCase()) {
+      case 'owner':
+        return l.sellerTypeOwner;
+      case 'company':
+        return l.sellerTypeCompany;
+      default:
+        return sellerType;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
+    final listingsRepo = ref.read(listingsRepositoryProvider);
 
     if (_loading) {
       return Scaffold(
@@ -222,8 +235,11 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                           user['seller_type'] != 'individual') ...[
                         const SizedBox(width: 24),
                         _StatItem(
-                          label: 'Type',
-                          value: (user['seller_type'] as String).toUpperCase(),
+                          label: l.sellerType,
+                          value: _sellerTypeLabel(
+                            user['seller_type'] as String,
+                            l,
+                          ),
                         ),
                       ],
                     ],
@@ -262,8 +278,13 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                 sliver: SliverGrid(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final listing = _listings[index] as Map<String, dynamic>;
+                    final listingId = listing['id'] as int;
+                    final thumbnailUrl = listingsRepo.extractThumbnailUrl(
+                      listing,
+                    );
+
                     return ListingCard(
-                      id: listing['id'] as int,
+                      id: listingId,
                       title: listing['title'] as String,
                       price: (listing['price'] is String)
                           ? double.parse(listing['price'] as String)
@@ -271,8 +292,12 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                       currency: listing['currency'] as String,
                       city: listing['city'] as String,
                       transactionType: listing['transaction_type'] as String,
+                      thumbnailUrl: thumbnailUrl,
+                      thumbnailUrlFuture: thumbnailUrl == null
+                          ? listingsRepo.getPrimaryThumbnailUrl(listingId)
+                          : null,
                       isPromoted: listing['is_subscription'] == true,
-                      onTap: () => context.push('/listing/${listing['id']}'),
+                      onTap: () => context.push('/listing/$listingId'),
                     );
                   }, childCount: _listings.length),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
