@@ -10,6 +10,7 @@ import 'package:km_marketplace/core/l10n/app_localizations.dart';
 import '../../../app/theme.dart';
 import '../../chat/data/chat_repository.dart';
 import '../../favorites/data/favorites_repository.dart';
+import '../../profile/data/profile_repository.dart';
 import '../../reports/data/reports_repository.dart';
 import '../data/listings_repository.dart';
 
@@ -31,6 +32,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
   bool _openingConversation = false;
   bool _isFavorite = false;
   bool _updatingFavorite = false;
+  int? _currentUserId;
 
   @override
   void initState() {
@@ -48,6 +50,7 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       final listing = await repo.getListing(widget.listingId);
       final media = await repo.getListingMedia(widget.listingId);
       final listingId = (listing['id'] as num?)?.toInt();
+      int? currentUserId;
 
       var isFavorite = false;
       if (listingId != null) {
@@ -59,10 +62,16 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         } catch (_) {}
       }
 
+      try {
+        final me = await ref.read(profileRepositoryProvider).getMyProfile();
+        currentUserId = (me['id'] as num?)?.toInt();
+      } catch (_) {}
+
       setState(() {
         _listing = listing;
         _media = media;
         _isFavorite = isFavorite;
+        _currentUserId = currentUserId;
         _loading = false;
       });
     } catch (e) {
@@ -98,6 +107,41 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       default:
         return tx;
     }
+  }
+
+  bool get _canPromote {
+    final listing = _listing;
+    if (listing == null) {
+      return false;
+    }
+
+    final status = listing['status']?.toString();
+    if (status != 'published') {
+      return false;
+    }
+
+    final ownerId = (listing['owner_id'] as num?)?.toInt();
+    return ownerId != null &&
+        _currentUserId != null &&
+        ownerId == _currentUserId;
+  }
+
+  Future<void> _openPromoteFlow() async {
+    final listing = _listing;
+    if (listing == null) {
+      return;
+    }
+
+    final listingId = (listing['id'] as num?)?.toInt();
+    if (listingId == null) {
+      return;
+    }
+
+    await context.push('/promote/$listingId', extra: listing);
+    if (!mounted) {
+      return;
+    }
+    await _load();
   }
 
   Future<void> _openConversation() async {
@@ -780,20 +824,26 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
           border: Border(top: BorderSide(color: AppTheme.border)),
         ),
         child: SafeArea(
-          child: ElevatedButton.icon(
-            onPressed: _openingConversation ? null : _openConversation,
-            icon: const Icon(Icons.chat_bubble_outline, size: 18),
-            label: _openingConversation
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : Text(l.contactOwner),
-          ),
+          child: _canPromote
+              ? ElevatedButton.icon(
+                  onPressed: _openPromoteFlow,
+                  icon: const Icon(Icons.bolt_outlined, size: 18),
+                  label: Text(l.promote),
+                )
+              : ElevatedButton.icon(
+                  onPressed: _openingConversation ? null : _openConversation,
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  label: _openingConversation
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(l.contactOwner),
+                ),
         ),
       ),
     );

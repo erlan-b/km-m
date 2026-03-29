@@ -474,6 +474,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               currency: listing['currency'] as String,
               city: listing['city'] as String,
               transactionType: listing['transaction_type'] as String,
+              isPromoted: listing['is_subscription'] == true,
               isFavorite: _favoriteIds.contains(listingId),
               onTap: () => context.push('/listing/$listingId'),
               onFavoriteTap: _favoriteBusyIds.contains(listingId)

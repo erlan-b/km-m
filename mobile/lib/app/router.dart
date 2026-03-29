@@ -14,7 +14,10 @@ import '../features/listings/presentation/listing_detail_screen.dart';
 import '../features/listings/presentation/my_listings_screen.dart';
 import '../features/listings/presentation/owner_profile_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
+import '../features/payments/presentation/payment_history_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/promotions/presentation/my_promotions_screen.dart';
+import '../features/promotions/presentation/promote_listing_screen.dart';
 import '../features/search/presentation/search_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -74,6 +77,29 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/notifications',
         builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/promote/:listingId',
+        builder: (context, state) {
+          final listingId = int.parse(state.pathParameters['listingId']!);
+          final extra = state.extra;
+          final initialListing = extra is Map
+              ? Map<String, dynamic>.from(extra)
+              : null;
+
+          return PromoteListingScreen(
+            listingId: listingId,
+            initialListing: initialListing,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/my-promotions',
+        builder: (context, state) => const MyPromotionsScreen(),
+      ),
+      GoRoute(
+        path: '/payments',
+        builder: (context, state) => const PaymentHistoryScreen(),
       ),
       GoRoute(
         path: '/my-listings',

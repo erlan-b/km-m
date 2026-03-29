@@ -232,6 +232,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
                 city: listing['city']?.toString() ?? '-',
                 transactionType:
                     listing['transaction_type']?.toString() ?? 'sale',
+                isPromoted: listing['is_subscription'] == true,
                 isFavorite: true,
                 onTap: () => context.push('/listing/$listingId'),
                 onFavoriteTap: _busyIds.contains(listingId)

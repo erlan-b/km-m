@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../../app/theme.dart';
 
@@ -14,6 +15,7 @@ class ListingCard extends StatelessWidget {
     required this.transactionType,
     this.thumbnailUrl,
     this.isFavorite = false,
+    this.isPromoted = false,
     this.onTap,
     this.onFavoriteTap,
   });
@@ -26,6 +28,7 @@ class ListingCard extends StatelessWidget {
   final String transactionType;
   final String? thumbnailUrl;
   final bool isFavorite;
+  final bool isPromoted;
   final VoidCallback? onTap;
   final VoidCallback? onFavoriteTap;
 
@@ -42,15 +45,21 @@ class ListingCard extends StatelessWidget {
 
   String get _transactionLabel {
     switch (transactionType) {
-      case 'sale': return 'Sale';
-      case 'rent_long': return 'Long rent';
-      case 'rent_daily': return 'Daily rent';
-      default: return transactionType;
+      case 'sale':
+        return 'Sale';
+      case 'rent_long':
+        return 'Long rent';
+      case 'rent_daily':
+        return 'Daily rent';
+      default:
+        return transactionType;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = S.of(context)!;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -73,33 +82,83 @@ class ListingCard extends StatelessWidget {
                     CachedNetworkImage(
                       imageUrl: thumbnailUrl!,
                       fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(color: AppTheme.bgMuted),
+                      placeholder: (context, url) =>
+                          Container(color: AppTheme.bgMuted),
                       errorWidget: (context, url, error) => Container(
                         color: AppTheme.bgMuted,
-                        child: const Icon(Icons.image_not_supported_outlined, color: AppTheme.textSubtle, size: 32),
+                        child: const Icon(
+                          Icons.image_not_supported_outlined,
+                          color: AppTheme.textSubtle,
+                          size: 32,
+                        ),
                       ),
                     )
                   else
                     Container(
                       color: AppTheme.bgMuted,
-                      child: const Icon(Icons.apartment_rounded, color: AppTheme.textSubtle, size: 40),
+                      child: const Icon(
+                        Icons.apartment_rounded,
+                        color: AppTheme.textSubtle,
+                        size: 40,
+                      ),
                     ),
                   // Transaction type badge
                   Positioned(
                     top: 8,
                     left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: AppTheme.accent.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         _transactionLabel,
-                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
+                  if (isPromoted)
+                    Positioned(
+                      left: 8,
+                      bottom: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.statusSuccess,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.bolt,
+                              size: 11,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              l.promotionActive,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   // Favorite button
                   Positioned(
                     top: 6,
@@ -116,7 +175,9 @@ class ListingCard extends StatelessWidget {
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_outline,
+                            isFavorite
+                                ? Icons.favorite
+                                : Icons.favorite_outline,
                             color: isFavorite ? Colors.redAccent : Colors.white,
                             size: 20,
                           ),
@@ -135,26 +196,40 @@ class ListingCard extends StatelessWidget {
                 children: [
                   Text(
                     _formattedPrice,
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppTheme.textMain),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textMain,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 14, color: AppTheme.textMain),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textMain,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 14, color: AppTheme.textSubtle),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 14,
+                        color: AppTheme.textSubtle,
+                      ),
                       const SizedBox(width: 3),
                       Expanded(
                         child: Text(
                           city,
-                          style: const TextStyle(fontSize: 12, color: AppTheme.textSubtle),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textSubtle,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

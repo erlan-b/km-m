@@ -311,6 +311,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                 transactionType: listing['transaction_type'] as String,
                 thumbnailUrl: _getThumbnailUrl(listing),
                 isFavorite: _favoriteIds.contains(listingId),
+                isPromoted: listing['is_subscription'] == true,
                 onTap: () => context.push('/listing/$listingId'),
                 onFavoriteTap: _favoriteBusyIds.contains(listingId)
                     ? null

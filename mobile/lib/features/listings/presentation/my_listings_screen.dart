@@ -138,6 +138,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
       case 'published':
         return [
           _ListingAction.edit,
+          _ListingAction.promote,
           _ListingAction.markSold,
           _ListingAction.deactivate,
           _ListingAction.archive,
@@ -161,6 +162,8 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
     switch (action) {
       case _ListingAction.edit:
         return l.editListing;
+      case _ListingAction.promote:
+        return l.promote;
       case _ListingAction.markSold:
         return l.markAsSold;
       case _ListingAction.deactivate:
@@ -193,6 +196,9 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
           if (changed == true && mounted) {
             await _refresh();
           }
+          return;
+        case _ListingAction.promote:
+          context.push('/promote/$listingId', extra: listing);
           return;
         case _ListingAction.markSold:
           await repo.updateListingStatus(listingId, 'mark_sold');
@@ -448,6 +454,7 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
 
 enum _ListingAction {
   edit,
+  promote,
   markSold,
   deactivate,
   activate,
