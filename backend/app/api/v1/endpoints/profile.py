@@ -26,6 +26,7 @@ from app.services.profile_image_service import (
 from app.services.user_metrics_service import calculate_user_response_rate, has_verified_badge
 
 router = APIRouter()
+_MAX_COMPANY_NAME_LENGTH = 255
 
 
 def normalize_company_name(company_name: str | None) -> str | None:
@@ -117,6 +118,14 @@ def update_my_profile(
 
     if "company_name" in update_data:
         update_data["company_name"] = normalize_company_name(update_data.get("company_name"))
+        if (
+            update_data["company_name"] is not None
+            and len(update_data["company_name"]) > _MAX_COMPANY_NAME_LENGTH
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"company_name must be at most {_MAX_COMPANY_NAME_LENGTH} characters",
+            )
 
     next_seller_type = update_data.get("seller_type", current_user.seller_type)
     next_company_name = update_data.get("company_name", current_user.company_name)
@@ -126,7 +135,7 @@ def update_my_profile(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="company_name is required for company seller type",
         )
-    if next_seller_type == SellerType.OWNER:
+    if next_seller_type != SellerType.COMPANY:
         update_data["company_name"] = None
 
     for field_name, field_value in update_data.items():
@@ -158,16 +167,22 @@ def create_seller_type_change_request(
         )
 
     normalized_company_name = normalize_company_name(requested_company_name)
+    if normalized_company_name is not None and len(normalized_company_name) > _MAX_COMPANY_NAME_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"company_name must be at most {_MAX_COMPANY_NAME_LENGTH} characters",
+        )
     if requested_seller_type == SellerType.COMPANY and not normalized_company_name:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="company_name is required for company seller type",
         )
-    if requested_seller_type == SellerType.OWNER:
+    if requested_seller_type != SellerType.COMPANY:
         normalized_company_name = None
 
     settings = get_settings()
-    if not files:
+    requires_documents = requested_seller_type == SellerType.COMPANY
+    if requires_documents and not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="At least one verification document is required",

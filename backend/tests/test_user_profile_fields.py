@@ -418,6 +418,106 @@ def test_user_can_submit_seller_type_change_request_with_documents(
     assert duplicate_response.status_code == 409
 
 
+def test_user_cannot_submit_seller_type_change_request_with_same_type(
+    client,
+    db_session,
+    set_current_user,
+):
+    user_role = create_role(db_session, "user")
+    user = create_user(db_session, "same-type-user@example.com", [user_role])
+
+    set_current_user(user)
+
+    response = client.post(
+        "/api/v1/profile/seller-type-change-request",
+        data={"requested_seller_type": "owner"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Requested seller type must differ from current type"
+
+
+def test_user_can_submit_seller_type_change_request_to_owner_without_documents(
+    client,
+    db_session,
+    set_current_user,
+    monkeypatch,
+    tmp_path,
+):
+    user_role = create_role(db_session, "user")
+    user = create_user(db_session, "downgrade-to-owner@example.com", [user_role])
+    user.seller_type = SellerType.COMPANY
+    user.company_name = "Current Company"
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.profile.get_settings",
+        lambda: SimpleNamespace(
+            media_root=str(tmp_path),
+            verification_documents_subdir="verification_documents",
+            verification_document_max_size_mb=5,
+            verification_document_max_files_per_request=3,
+            verification_document_allowed_mime_types=["application/pdf", "image/jpeg", "image/png", "image/webp"],
+        ),
+    )
+
+    set_current_user(user)
+
+    response = client.post(
+        "/api/v1/profile/seller-type-change-request",
+        data={
+            "requested_seller_type": "owner",
+            "note": "Please switch me to owner",
+        },
+    )
+    assert response.status_code == 201
+
+    payload = response.json()
+    assert payload["requested_seller_type"] == "owner"
+    assert payload["requested_company_name"] is None
+    assert payload["status"] == "pending"
+    assert payload["documents"] == []
+
+    db_session.refresh(user)
+    assert user.seller_type == SellerType.COMPANY
+    assert user.verification_status == VerificationStatus.PENDING
+
+
+def test_user_change_to_company_requires_documents(
+    client,
+    db_session,
+    set_current_user,
+    monkeypatch,
+    tmp_path,
+):
+    user_role = create_role(db_session, "user")
+    user = create_user(db_session, "company-doc-required@example.com", [user_role])
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.profile.get_settings",
+        lambda: SimpleNamespace(
+            media_root=str(tmp_path),
+            verification_documents_subdir="verification_documents",
+            verification_document_max_size_mb=5,
+            verification_document_max_files_per_request=3,
+            verification_document_allowed_mime_types=["application/pdf", "image/jpeg", "image/png", "image/webp"],
+        ),
+    )
+
+    set_current_user(user)
+
+    response = client.post(
+        "/api/v1/profile/seller-type-change-request",
+        data={
+            "requested_seller_type": "company",
+            "requested_company_name": "No Docs Realty",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "At least one verification document is required"
+
+
 def test_admin_can_review_seller_type_change_request_and_approve(client, db_session, set_current_user):
     admin_role = create_role(db_session, "admin")
     user_role = create_role(db_session, "user")

@@ -673,17 +673,40 @@ class _SellerTypeChangeRequestSheet extends StatefulWidget {
 
 class _SellerTypeChangeRequestSheetState
     extends State<_SellerTypeChangeRequestSheet> {
+  static const _allSellerTypes = <String>['owner', 'company'];
+
   late String _requestedSellerType;
   final TextEditingController _companyNameCtrl = TextEditingController();
   final TextEditingController _noteCtrl = TextEditingController();
   List<PlatformFile> _documents = <PlatformFile>[];
 
+  List<String> _availableSellerTypes() {
+    final normalizedCurrent = widget.currentSellerType.trim().toLowerCase();
+    return _allSellerTypes
+        .where((sellerType) => sellerType != normalizedCurrent)
+        .toList();
+  }
+
+  bool get _requiresDocuments => _requestedSellerType == 'company';
+
+  String _sellerTypeLabel(String sellerType, S l) {
+    switch (sellerType) {
+      case 'owner':
+        return l.sellerTypeOwner;
+      case 'company':
+        return l.sellerTypeCompany;
+      default:
+        return sellerType;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _requestedSellerType = widget.currentSellerType == 'company'
-        ? 'owner'
-        : 'company';
+    final availableSellerTypes = _availableSellerTypes();
+    _requestedSellerType = availableSellerTypes.isNotEmpty
+        ? availableSellerTypes.first
+        : 'owner';
   }
 
   @override
@@ -744,7 +767,7 @@ class _SellerTypeChangeRequestSheetState
         .map((file) => file.path)
         .whereType<String>()
         .toList();
-    if (documentPaths.isEmpty) {
+    if (_requiresDocuments && documentPaths.isEmpty) {
       ScaffoldMessenger.maybeOf(
         context,
       )?.showSnackBar(SnackBar(content: Text(l.verificationDocumentsRequired)));
@@ -767,6 +790,7 @@ class _SellerTypeChangeRequestSheetState
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
+    final availableSellerTypes = _availableSellerTypes();
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -793,22 +817,23 @@ class _SellerTypeChangeRequestSheetState
             DropdownButtonFormField<String>(
               initialValue: _requestedSellerType,
               decoration: InputDecoration(labelText: l.roleChangeTarget),
-              items: [
-                DropdownMenuItem(
-                  value: 'owner',
-                  child: Text(l.sellerTypeOwner),
-                ),
-                DropdownMenuItem(
-                  value: 'company',
-                  child: Text(l.sellerTypeCompany),
-                ),
-              ],
+              items: availableSellerTypes
+                  .map(
+                    (sellerType) => DropdownMenuItem(
+                      value: sellerType,
+                      child: Text(_sellerTypeLabel(sellerType, l)),
+                    ),
+                  )
+                  .toList(),
               onChanged: (value) {
                 if (value == null) {
                   return;
                 }
                 setState(() {
                   _requestedSellerType = value;
+                  if (_requestedSellerType != 'company') {
+                    _companyNameCtrl.clear();
+                  }
                 });
               },
             ),
@@ -825,60 +850,62 @@ class _SellerTypeChangeRequestSheetState
               decoration: InputDecoration(labelText: l.roleChangeComment),
               maxLines: 3,
             ),
-            const SizedBox(height: 12),
-            Text(
-              l.verificationDocuments,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _pickDocuments,
-              icon: const Icon(Icons.attach_file),
-              label: Text(l.addDocuments),
-            ),
-            if (_documents.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (var i = 0; i < _documents.length; i++)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.bgMuted,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: AppTheme.border),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 170),
-                            child: Text(
-                              _documents[i].name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          GestureDetector(
-                            onTap: () => _removeDocument(i),
-                            child: const Icon(
-                              Icons.close,
-                              size: 16,
-                              color: AppTheme.textSubtle,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
+            if (_requiresDocuments) ...[
+              const SizedBox(height: 12),
+              Text(
+                l.verificationDocuments,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _pickDocuments,
+                icon: const Icon(Icons.attach_file),
+                label: Text(l.addDocuments),
+              ),
+              if (_documents.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (var i = 0; i < _documents.length; i++)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.bgMuted,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: AppTheme.border),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 170),
+                              child: Text(
+                                _documents[i].name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: () => _removeDocument(i),
+                              child: const Icon(
+                                Icons.close,
+                                size: 16,
+                                color: AppTheme.textSubtle,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
             ],
             const SizedBox(height: 16),
             ElevatedButton(
