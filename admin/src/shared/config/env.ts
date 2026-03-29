@@ -1,4 +1,21 @@
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+function resolveLoopbackHost(): string {
+  if (typeof window === "undefined") {
+    return "localhost";
+  }
+
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1") {
+    return host;
+  }
+
+  return "localhost";
+}
+
+function defaultApiBaseUrl(): string {
+  return `http://${resolveLoopbackHost()}:8000`;
+}
+
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL ?? defaultApiBaseUrl();
 const rawApiPrefix = import.meta.env.VITE_API_PREFIX ?? "/api/v1";
 
 function trimTrailingSlash(value: string): string {
@@ -13,11 +30,11 @@ function normalizeApiBaseUrl(value: string): string {
   const trimmed = value.trim();
 
   if (!trimmed) {
-    return "http://localhost:8000";
+    return defaultApiBaseUrl();
   }
 
   if (trimmed.startsWith(":")) {
-    return `http://localhost${trimmed}`;
+    return `http://${resolveLoopbackHost()}${trimmed}`;
   }
 
   if (trimmed.startsWith("//")) {

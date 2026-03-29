@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../app/auth/AuthContext";
@@ -10,6 +10,8 @@ import { Modal } from "../common/Modal";
 type ReportStatus = "open" | "resolved" | "dismissed";
 type ReportTargetType = "listing" | "user" | "message";
 type ResolveAction = "resolve" | "dismiss";
+type ListingStatus = "draft" | "pending_review" | "published" | "rejected" | "archived" | "inactive" | "sold";
+type TransactionType = "sale" | "rent_long" | "rent_daily";
 
 type ReportAttachmentItem = {
   id: number;
@@ -53,6 +55,76 @@ type ReportResolveRequest = {
   moderation_action: string | null;
 };
 
+type ListingItem = {
+  id: number;
+  owner_id: number;
+  category_id: number;
+  transaction_type: TransactionType;
+  title: string;
+  description: string;
+  price: string | number;
+  currency: string;
+  city: string;
+  address_line: string | null;
+  status: ListingStatus;
+  view_count: number;
+  favorite_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type ListingListResponse = {
+  items: ListingItem[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+};
+
+type ListingMediaItem = {
+  id: number;
+  listing_id: number;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  sort_order: number;
+  is_primary: boolean;
+  created_at: string;
+  file_url: string;
+  thumbnail_url: string | null;
+};
+
+type ListingMediaListResponse = {
+  items: ListingMediaItem[];
+};
+
+type MessageItem = {
+  id: number;
+  conversation_id: number;
+  sender_id: number;
+  message_type: string;
+  text_body: string | null;
+  is_read: boolean;
+  sent_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+  attachments: unknown[];
+};
+
+type MessageListResponse = {
+  items: MessageItem[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+};
+
+type AdminUserDetailResponse = {
+  id: number;
+  full_name: string;
+  email: string;
+};
+
 function statusLabel(status: ReportStatus, t: (key: string, fallback: string) => string): string {
   if (status === "open") {
     return t("status_open", "Open");
@@ -61,6 +133,38 @@ function statusLabel(status: ReportStatus, t: (key: string, fallback: string) =>
     return t("status_resolved", "Resolved");
   }
   return t("status_dismissed", "Dismissed");
+}
+
+function listingStatusLabel(status: ListingStatus, t: (key: string, fallback: string) => string): string {
+  if (status === "pending_review") {
+    return t("status_pending_review", "Pending review");
+  }
+  if (status === "published") {
+    return t("status_published", "Published");
+  }
+  if (status === "rejected") {
+    return t("status_rejected", "Rejected");
+  }
+  if (status === "inactive") {
+    return t("status_inactive", "Inactive");
+  }
+  if (status === "sold") {
+    return t("status_sold", "Sold");
+  }
+  if (status === "archived") {
+    return t("status_archived", "Archived");
+  }
+  return t("status_draft", "Draft");
+}
+
+function transactionLabel(value: TransactionType, t: (key: string, fallback: string) => string): string {
+  if (value === "sale") {
+    return t("transaction_sale", "Sale");
+  }
+  if (value === "rent_long") {
+    return t("transaction_rent_long", "Long rent");
+  }
+  return t("transaction_rent_daily", "Daily rent");
 }
 
 function extractErrorMessage(error: unknown): string {
@@ -80,6 +184,14 @@ function targetTypeLabel(targetType: ReportTargetType, t: (key: string, fallback
   return t("target_message", "Message");
 }
 
+function formatPrice(value: string | number, currency: string, language: "en" | "ru"): string {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) {
+    return `${value} ${currency}`;
+  }
+  return `${formatInteger(numeric, language)} ${currency}`;
+}
+
 function formatFileSize(bytes: number, language: "en" | "ru"): string {
   if (!Number.isFinite(bytes) || bytes < 1024) {
     return `${Math.max(0, Math.floor(bytes || 0))} B`;
@@ -92,10 +204,6 @@ function formatFileSize(bytes: number, language: "en" | "ru"): string {
   return `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(mb)} MB`;
 }
 
-function isImageAttachment(attachment: ReportAttachmentItem): boolean {
-  return attachment.mime_type.toLowerCase().startsWith("image/");
-}
-
 function getReportListingId(report: ReportItem): number | null {
   if (report.target_listing_id !== null) {
     return report.target_listing_id;
@@ -104,6 +212,25 @@ function getReportListingId(report: ReportItem): number | null {
     return report.target_id;
   }
   return null;
+}
+
+function isImageMedia(item: ListingMediaItem): boolean {
+  return item.mime_type.toLowerCase().startsWith("image/");
+}
+
+async function getApiErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+    if (typeof payload?.error?.message === "string") {
+      return payload.error.message;
+    }
+    if (typeof payload?.detail === "string") {
+      return payload.detail;
+    }
+  } catch {
+    return fallback;
+  }
+  return fallback;
 }
 
 export function ReportsPage() {
@@ -126,14 +253,42 @@ export function ReportsPage() {
   const [moderationAction, setModerationAction] = useState("");
   const [resolutionNote, setResolutionNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<number | null>(null);
-  const [previewUrls, setPreviewUrls] = useState<Record<number, string>>({});
-  const [previewLoadingIds, setPreviewLoadingIds] = useState<number[]>([]);
-  const [previewFailedIds, setPreviewFailedIds] = useState<number[]>([]);
-  const previewUrlsRef = useRef<Record<number, string>>({});
-  const [reportImagePreviewAttachment, setReportImagePreviewAttachment] = useState<ReportAttachmentItem | null>(null);
-  const [reportImagePreviewUrl, setReportImagePreviewUrl] = useState<string | null>(null);
-  const [openingImagePreviewId, setOpeningImagePreviewId] = useState<number | null>(null);
+
+  const [listingContext, setListingContext] = useState<ListingItem | null>(null);
+  const [isListingContextLoading, setIsListingContextLoading] = useState(false);
+  const [listingContextError, setListingContextError] = useState<string | null>(null);
+  const [listingMedia, setListingMedia] = useState<ListingMediaItem[]>([]);
+  const [isListingMediaLoading, setIsListingMediaLoading] = useState(false);
+  const [listingMediaError, setListingMediaError] = useState<string | null>(null);
+  const [listingMediaPreviewUrls, setListingMediaPreviewUrls] = useState<Record<number, string>>({});
+  const [listingMediaPreviewLoadingIds, setListingMediaPreviewLoadingIds] = useState<number[]>([]);
+  const [listingMediaPreviewFailedIds, setListingMediaPreviewFailedIds] = useState<number[]>([]);
+  const [openingListingImageId, setOpeningListingImageId] = useState<number | null>(null);
+  const [listingImagePreviewItem, setListingImagePreviewItem] = useState<ListingMediaItem | null>(null);
+  const [listingImagePreviewUrl, setListingImagePreviewUrl] = useState<string | null>(null);
+  const [downloadingListingMediaId, setDownloadingListingMediaId] = useState<number | null>(null);
+
+  const [messageContext, setMessageContext] = useState<MessageItem | null>(null);
+  const [isMessageContextLoading, setIsMessageContextLoading] = useState(false);
+  const [messageContextError, setMessageContextError] = useState<string | null>(null);
+  const [messageSender, setMessageSender] = useState<AdminUserDetailResponse | null>(null);
+  const [isMessageSenderLoading, setIsMessageSenderLoading] = useState(false);
+  const [messageSenderError, setMessageSenderError] = useState<string | null>(null);
+
+  const closeListingImagePreview = useCallback(() => {
+    setListingImagePreviewItem(null);
+    setListingImagePreviewUrl((previousUrl) => {
+      if (previousUrl) {
+        window.URL.revokeObjectURL(previousUrl);
+      }
+      return null;
+    });
+  }, []);
+
+  const closeReviewModal = () => {
+    setIsReviewModalOpen(false);
+    closeListingImagePreview();
+  };
 
   const loadReports = useCallback(async () => {
     setIsLoading(true);
@@ -194,6 +349,107 @@ export function ReportsPage() {
     return reports.items.find((item) => item.id === selectedReportId) ?? null;
   }, [reports, selectedReportId]);
 
+  const loadListingMediaThumbnail = useCallback(
+    async (mediaItem: ListingMediaItem) => {
+      if (!isImageMedia(mediaItem)) {
+        return;
+      }
+
+      if (listingMediaPreviewUrls[mediaItem.id] || listingMediaPreviewLoadingIds.includes(mediaItem.id)) {
+        return;
+      }
+
+      setListingMediaPreviewLoadingIds((previous) => (
+        previous.includes(mediaItem.id) ? previous : [...previous, mediaItem.id]
+      ));
+
+      try {
+        const response = await authFetch(`/listing-media/${mediaItem.id}/thumbnail/my`);
+        if (!response.ok) {
+          throw new Error("Failed to load thumbnail");
+        }
+
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        setListingMediaPreviewUrls((previous) => {
+          const previousUrl = previous[mediaItem.id];
+          if (previousUrl) {
+            window.URL.revokeObjectURL(previousUrl);
+          }
+          return { ...previous, [mediaItem.id]: objectUrl };
+        });
+        setListingMediaPreviewFailedIds((previous) => previous.filter((value) => value !== mediaItem.id));
+      } catch {
+        setListingMediaPreviewFailedIds((previous) => (
+          previous.includes(mediaItem.id) ? previous : [...previous, mediaItem.id]
+        ));
+      } finally {
+        setListingMediaPreviewLoadingIds((previous) => previous.filter((value) => value !== mediaItem.id));
+      }
+    },
+    [authFetch, listingMediaPreviewLoadingIds, listingMediaPreviewUrls],
+  );
+
+  const downloadListingMedia = useCallback(async (mediaItem: ListingMediaItem) => {
+    setDownloadingListingMediaId(mediaItem.id);
+    setListingMediaError(null);
+
+    try {
+      const response = await authFetch(`/listing-media/${mediaItem.id}/download/my`);
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, "Failed to download listing media");
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = mediaItem.original_name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setListingMediaError(extractErrorMessage(downloadError));
+    } finally {
+      setDownloadingListingMediaId(null);
+    }
+  }, [authFetch]);
+
+  const openListingImagePreview = useCallback(async (mediaItem: ListingMediaItem) => {
+    if (!isImageMedia(mediaItem)) {
+      void downloadListingMedia(mediaItem);
+      return;
+    }
+
+    setOpeningListingImageId(mediaItem.id);
+    setListingMediaError(null);
+
+    try {
+      const response = await authFetch(`/listing-media/${mediaItem.id}/download/my`);
+      if (!response.ok) {
+        const message = await getApiErrorMessage(response, "Failed to load listing image");
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+
+      setListingImagePreviewUrl((previousUrl) => {
+        if (previousUrl) {
+          window.URL.revokeObjectURL(previousUrl);
+        }
+        return objectUrl;
+      });
+      setListingImagePreviewItem(mediaItem);
+    } catch (previewError) {
+      setListingMediaError(extractErrorMessage(previewError));
+    } finally {
+      setOpeningListingImageId(null);
+    }
+  }, [authFetch, downloadListingMedia]);
+
   useEffect(() => {
     setResolveAction("resolve");
     setModerationAction("");
@@ -201,69 +457,234 @@ export function ReportsPage() {
   }, [selectedReport?.id, selectedReport?.resolution_note]);
 
   useEffect(() => {
-    previewUrlsRef.current = previewUrls;
-  }, [previewUrls]);
-
-  useEffect(() => {
-    return () => {
-      for (const previewUrl of Object.values(previewUrlsRef.current)) {
-        window.URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    setPreviewUrls((previous) => {
-      for (const previewUrl of Object.values(previous)) {
-        window.URL.revokeObjectURL(previewUrl);
-      }
-      return {};
-    });
-    setPreviewLoadingIds([]);
-    setPreviewFailedIds([]);
-  }, [selectedReport?.id]);
-
-  const loadAttachmentPreview = useCallback(
-    async (attachment: ReportAttachmentItem) => {
-      if (!isImageAttachment(attachment)) {
-        return;
-      }
-
-      if (previewUrls[attachment.id] || previewLoadingIds.includes(attachment.id)) {
-        return;
-      }
-
-      setPreviewLoadingIds((previous) => (previous.includes(attachment.id) ? previous : [...previous, attachment.id]));
-
-      try {
-        const response = await authFetch(`/reports/attachments/${attachment.id}/preview`);
-        if (!response.ok) {
-          throw new Error("Failed to load preview");
+    if (!isReviewModalOpen || !selectedReport || selectedReport.target_type !== "listing") {
+      setListingContext(null);
+      setIsListingContextLoading(false);
+      setListingContextError(null);
+      setListingMedia([]);
+      setIsListingMediaLoading(false);
+      setListingMediaError(null);
+      setListingMediaPreviewLoadingIds([]);
+      setListingMediaPreviewFailedIds([]);
+      setListingMediaPreviewUrls((previous) => {
+        for (const previewUrl of Object.values(previous)) {
+          window.URL.revokeObjectURL(previewUrl);
         }
-
-        const blob = await response.blob();
-        const objectUrl = window.URL.createObjectURL(blob);
-        setPreviewUrls((previous) => ({ ...previous, [attachment.id]: objectUrl }));
-        setPreviewFailedIds((previous) => previous.filter((value) => value !== attachment.id));
-      } catch {
-        setPreviewFailedIds((previous) => (previous.includes(attachment.id) ? previous : [...previous, attachment.id]));
-      } finally {
-        setPreviewLoadingIds((previous) => previous.filter((value) => value !== attachment.id));
-      }
-    },
-    [authFetch, previewLoadingIds, previewUrls],
-  );
-
-  useEffect(() => {
-    if (!isReviewModalOpen || !selectedReport) {
+        return {};
+      });
+      setOpeningListingImageId(null);
+      setDownloadingListingMediaId(null);
+      closeListingImagePreview();
       return;
     }
 
-    const imageAttachments = selectedReport.attachments.filter((attachment) => isImageAttachment(attachment));
-    for (const attachment of imageAttachments) {
-      void loadAttachmentPreview(attachment);
+    const listingId = getReportListingId(selectedReport);
+    if (listingId === null) {
+      setListingContextError(t("error_listing_context_missing", "Listing context is missing for this report"));
+      return;
     }
-  }, [isReviewModalOpen, loadAttachmentPreview, selectedReport]);
+
+    let cancelled = false;
+
+    const load = async () => {
+      setListingContext(null);
+      setIsListingContextLoading(true);
+      setListingContextError(null);
+      setListingMedia([]);
+      setIsListingMediaLoading(true);
+      setListingMediaError(null);
+      setListingMediaPreviewLoadingIds([]);
+      setListingMediaPreviewFailedIds([]);
+      setListingMediaPreviewUrls((previous) => {
+        for (const previewUrl of Object.values(previous)) {
+          window.URL.revokeObjectURL(previewUrl);
+        }
+        return {};
+      });
+      setOpeningListingImageId(null);
+      setDownloadingListingMediaId(null);
+      closeListingImagePreview();
+
+      try {
+        const listingParams = new URLSearchParams();
+        listingParams.set("listing_id", String(listingId));
+        listingParams.set("page", "1");
+        listingParams.set("page_size", "1");
+
+        const listingResponse = await authFetch(`/listings/admin/moderation?${listingParams.toString()}`);
+        if (!listingResponse.ok) {
+          const message = await getApiErrorMessage(listingResponse, "Failed to load listing context");
+          throw new Error(message);
+        }
+
+        const listingPayload = (await listingResponse.json()) as ListingListResponse;
+        const listingItem = listingPayload.items[0] ?? null;
+        if (listingItem === null) {
+          throw new Error(t("error_listing_not_found", "Listing not found"));
+        }
+
+        if (!cancelled) {
+          setListingContext(listingItem);
+        }
+      } catch (contextError) {
+        if (!cancelled) {
+          setListingContextError(extractErrorMessage(contextError));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsListingContextLoading(false);
+        }
+      }
+
+      try {
+        const mediaResponse = await authFetch(`/listing-media/listings/${listingId}/my`);
+        if (!mediaResponse.ok) {
+          const message = await getApiErrorMessage(mediaResponse, "Failed to load listing photos");
+          throw new Error(message);
+        }
+
+        const mediaPayload = (await mediaResponse.json()) as ListingMediaListResponse;
+        if (!cancelled) {
+          setListingMedia(mediaPayload.items);
+        }
+      } catch (mediaError) {
+        if (!cancelled) {
+          setListingMediaError(extractErrorMessage(mediaError));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsListingMediaLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, closeListingImagePreview, isReviewModalOpen, selectedReport, t]);
+
+  useEffect(() => {
+    if (!isReviewModalOpen || selectedReport?.target_type !== "listing" || listingMedia.length === 0) {
+      return;
+    }
+
+    for (const mediaItem of listingMedia) {
+      if (isImageMedia(mediaItem)) {
+        void loadListingMediaThumbnail(mediaItem);
+      }
+    }
+  }, [isReviewModalOpen, listingMedia, loadListingMediaThumbnail, selectedReport?.target_type]);
+
+  useEffect(() => {
+    return () => {
+      for (const previewUrl of Object.values(listingMediaPreviewUrls)) {
+        window.URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [listingMediaPreviewUrls]);
+
+  useEffect(() => {
+    return () => {
+      if (listingImagePreviewUrl) {
+        window.URL.revokeObjectURL(listingImagePreviewUrl);
+      }
+    };
+  }, [listingImagePreviewUrl]);
+
+  useEffect(() => {
+    if (!isReviewModalOpen || !selectedReport || selectedReport.target_type !== "message") {
+      setMessageContext(null);
+      setIsMessageContextLoading(false);
+      setMessageContextError(null);
+      setMessageSender(null);
+      setIsMessageSenderLoading(false);
+      setMessageSenderError(null);
+      return;
+    }
+
+    if (selectedReport.target_conversation_id === null) {
+      setMessageContext(null);
+      setMessageContextError(t("error_conversation_missing", "Conversation context is missing for this message report"));
+      setMessageSender(null);
+      setMessageSenderError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      setMessageContext(null);
+      setIsMessageContextLoading(true);
+      setMessageContextError(null);
+      setMessageSender(null);
+      setIsMessageSenderLoading(false);
+      setMessageSenderError(null);
+
+      try {
+        const params = new URLSearchParams();
+        params.set("conversation_id", String(selectedReport.target_conversation_id));
+        params.set("page", "1");
+        params.set("page_size", "30");
+        params.set("message_id", String(selectedReport.target_id));
+
+        const messageResponse = await authFetch(`/admin/messages?${params.toString()}`);
+        if (!messageResponse.ok) {
+          const message = await getApiErrorMessage(messageResponse, "Failed to load message context");
+          throw new Error(message);
+        }
+
+        const messagePayload = (await messageResponse.json()) as MessageListResponse;
+        const targetMessage = messagePayload.items.find((item) => item.id === selectedReport.target_id) ?? null;
+        if (targetMessage === null) {
+          throw new Error(t("error_message_not_found", "Reported message not found in conversation"));
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setMessageContext(targetMessage);
+        setIsMessageSenderLoading(true);
+
+        try {
+          const senderResponse = await authFetch(`/admin/users/${targetMessage.sender_id}`);
+          if (!senderResponse.ok) {
+            const message = await getApiErrorMessage(senderResponse, "Failed to load sender info");
+            throw new Error(message);
+          }
+
+          const senderPayload = (await senderResponse.json()) as AdminUserDetailResponse;
+          if (!cancelled) {
+            setMessageSender(senderPayload);
+          }
+        } catch (senderError) {
+          if (!cancelled) {
+            setMessageSenderError(extractErrorMessage(senderError));
+          }
+        } finally {
+          if (!cancelled) {
+            setIsMessageSenderLoading(false);
+          }
+        }
+      } catch (contextError) {
+        if (!cancelled) {
+          setMessageContextError(extractErrorMessage(contextError));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsMessageContextLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, isReviewModalOpen, selectedReport, t]);
 
   const onApplyFilters = () => {
     if (page !== 1) {
@@ -302,17 +723,7 @@ export function ReportsPage() {
       });
 
       if (!response.ok) {
-        let message = t("error_process_report", "Failed to process report");
-        try {
-          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
-          if (typeof payload?.error?.message === "string") {
-            message = payload.error.message;
-          } else if (typeof payload?.detail === "string") {
-            message = payload.detail;
-          }
-        } catch {
-          message = t("error_process_report", "Failed to process report");
-        }
+        const message = await getApiErrorMessage(response, t("error_process_report", "Failed to process report"));
         throw new Error(message);
       }
 
@@ -335,90 +746,6 @@ export function ReportsPage() {
       setIsSubmitting(false);
     }
   };
-
-  const downloadAttachment = async (attachment: ReportAttachmentItem) => {
-    setDownloadingAttachmentId(attachment.id);
-
-    try {
-      const response = await authFetch(`/reports/attachments/${attachment.id}/download`);
-      if (!response.ok) {
-        let message = t("error_download_attachment", "Failed to download attachment");
-        try {
-          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
-          if (typeof payload?.error?.message === "string") {
-            message = payload.error.message;
-          } else if (typeof payload?.detail === "string") {
-            message = payload.detail;
-          }
-        } catch {
-          message = t("error_download_attachment", "Failed to download attachment");
-        }
-        throw new Error(message);
-      }
-
-      const blob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = attachment.original_name || attachment.file_name;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      window.URL.revokeObjectURL(objectUrl);
-    } catch (downloadError) {
-      setError(extractErrorMessage(downloadError));
-    } finally {
-      setDownloadingAttachmentId(null);
-    }
-  };
-
-  const openImageAttachmentPreview = async (attachment: ReportAttachmentItem) => {
-    if (!isImageAttachment(attachment)) {
-      void downloadAttachment(attachment);
-      return;
-    }
-
-    setOpeningImagePreviewId(attachment.id);
-
-    try {
-      const response = await authFetch(`/reports/attachments/${attachment.id}/preview`);
-      if (!response.ok) {
-        throw new Error(t("error_load_preview", "Failed to load preview"));
-      }
-
-      const blob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
-      setReportImagePreviewUrl((previousUrl) => {
-        if (previousUrl) {
-          window.URL.revokeObjectURL(previousUrl);
-        }
-        return objectUrl;
-      });
-      setReportImagePreviewAttachment(attachment);
-    } catch (previewError) {
-      setError(extractErrorMessage(previewError));
-    } finally {
-      setOpeningImagePreviewId(null);
-    }
-  };
-
-  const closeImageAttachmentPreview = () => {
-    setReportImagePreviewAttachment(null);
-    setReportImagePreviewUrl((previousUrl) => {
-      if (previousUrl) {
-        window.URL.revokeObjectURL(previousUrl);
-      }
-      return null;
-    });
-  };
-
-  useEffect(() => {
-    return () => {
-      if (reportImagePreviewUrl) {
-        window.URL.revokeObjectURL(reportImagePreviewUrl);
-      }
-    };
-  }, [reportImagePreviewUrl]);
 
   const openReportMessageInMessages = (report: ReportItem) => {
     if (report.target_type !== "message" || report.target_conversation_id === null) {
@@ -602,7 +929,7 @@ export function ReportsPage() {
                       <div className="users-name-cell">
                         <strong>{targetTypeLabel(report.target_type, t)}</strong>
                         <span>{t("reporter", "Reporter")} #{formatInteger(report.reporter_user_id, language)}</span>
-                        <span>{t("target", "target")} #{formatInteger(report.target_id, language)}</span>
+                        <span>{t("target", "Target")} #{formatInteger(report.target_id, language)}</span>
                         {getReportListingId(report) !== null ? (
                           <span>
                             {t("listing_context", "Listing")} #{formatInteger(getReportListingId(report) ?? 0, language)}
@@ -614,34 +941,6 @@ export function ReportsPage() {
                       <div className="users-name-cell">
                         <strong>{report.reason_code}</strong>
                         <span>{report.reason_text ?? t("no_reason_text", "No text provided")}</span>
-                        {report.attachments.length > 0 ? (
-                          <div className="reports-attachments-list">
-                            {report.attachments.map((attachment) => (
-                              <button
-                                key={attachment.id}
-                                type="button"
-                                className="btn btn-ghost messages-attachment-btn"
-                                disabled={
-                                  downloadingAttachmentId === attachment.id ||
-                                  openingImagePreviewId === attachment.id
-                                }
-                                onClick={() => {
-                                  if (isImageAttachment(attachment)) {
-                                    void openImageAttachmentPreview(attachment);
-                                    return;
-                                  }
-                                  void downloadAttachment(attachment);
-                                }}
-                              >
-                                {downloadingAttachmentId === attachment.id
-                                  ? t("downloading", "Downloading...")
-                                  : openingImagePreviewId === attachment.id
-                                    ? t("loading_preview", "Loading preview...")
-                                    : `${t("evidence", "Evidence")}: ${attachment.original_name}`}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
                       </div>
                     </td>
                     <td>
@@ -700,7 +999,7 @@ export function ReportsPage() {
 
       <Modal
         open={isReviewModalOpen}
-        onClose={() => setIsReviewModalOpen(false)}
+        onClose={closeReviewModal}
         title={t("moderation_action", "Moderation action")}
         subtitle={selectedReport ? `${t("report", "Report")} #${formatInteger(selectedReport.id, language)}` : t("no_report_selected", "No report selected")}
       >
@@ -743,116 +1042,179 @@ export function ReportsPage() {
                 </article>
               </div>
 
-              {selectedReport.target_type === "message" && selectedReport.target_conversation_id !== null || getReportListingId(selectedReport) !== null ? (
-                <article className="dashboard-stat-group reports-related-actions-card">
-                  <h3>{t("related_sections", "Related sections")}</h3>
-                  <div className="reports-related-actions">
-                    {selectedReport.target_type === "message" && selectedReport.target_conversation_id !== null ? (
-                      <div className="reports-related-action-item">
-                        <p>{t("messages_history", "Messages history")}</p>
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          onClick={() => openReportMessageInMessages(selectedReport)}
-                        >
-                          {t("open_in_messages", "Open in messages")}
-                        </button>
-                      </div>
-                    ) : null}
+              {selectedReport.target_type === "listing" ? (
+                <article className="dashboard-stat-group reports-context-card">
+                  <div className="reports-context-head">
+                    <h3>{t("listing_context_details", "Listing context")}</h3>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={getReportListingId(selectedReport) === null}
+                      onClick={() => openReportListingInModeration(selectedReport)}
+                    >
+                      {t("open_listing", "Open listing")}
+                    </button>
+                  </div>
 
-                    {getReportListingId(selectedReport) !== null ? (
-                      <div className="reports-related-action-item">
-                        <p>{t("listings_moderation", "Listings moderation")}</p>
-                        <button
-                          type="button"
-                          className="btn btn-ghost"
-                          onClick={() => openReportListingInModeration(selectedReport)}
-                        >
-                          {t("open_in_listings", "Open in listings")}
-                        </button>
+                  {listingContextError ? <p className="reports-no-evidence">{listingContextError}</p> : null}
+
+                  {isListingContextLoading ? (
+                    <p className="reports-no-evidence">{t("loading_listing_context", "Loading listing context...")}</p>
+                  ) : null}
+
+                  {listingContext ? (
+                    <>
+                      <div className="reports-context-meta">
+                        <p>{t("title_label", "Title")}: <strong>{listingContext.title}</strong></p>
+                        <p>{t("status", "Status")}: <strong>{listingStatusLabel(listingContext.status, t)}</strong></p>
+                        <p>{t("transaction", "Transaction")}: <strong>{transactionLabel(listingContext.transaction_type, t)}</strong></p>
+                        <p>{t("price", "Price")}: <strong>{formatPrice(listingContext.price, listingContext.currency, language)}</strong></p>
+                        <p>{t("owner", "Owner")}: <strong>#{formatInteger(listingContext.owner_id, language)}</strong></p>
+                        <p>{t("category", "Category")}: <strong>#{formatInteger(listingContext.category_id, language)}</strong></p>
+                        <p>{t("location", "Location")}: <strong>{listingContext.city}{listingContext.address_line ? `, ${listingContext.address_line}` : ""}</strong></p>
+                        <p>{t("views", "Views")}: <strong>{formatInteger(listingContext.view_count, language)}</strong></p>
+                        <p>{t("favorites", "Favorites")}: <strong>{formatInteger(listingContext.favorite_count, language)}</strong></p>
                       </div>
-                    ) : null}
+
+                      <p className="reports-context-description">{listingContext.description}</p>
+                    </>
+                  ) : null}
+
+                  <div className="listings-media-block">
+                    <h4>{t("photos", "Photos")}</h4>
+
+                    {listingMediaError ? <p className="reports-no-evidence">{listingMediaError}</p> : null}
+
+                    {isListingMediaLoading ? (
+                      <p className="reports-no-evidence">{t("loading_photos", "Loading photos...")}</p>
+                    ) : listingMedia.length === 0 ? (
+                      <p className="reports-no-evidence">{t("no_photos", "No photos attached")}</p>
+                    ) : (
+                      <div className="listings-media-grid">
+                        {listingMedia.map((mediaItem) => {
+                          const previewUrl = listingMediaPreviewUrls[mediaItem.id];
+                          const previewLoading = listingMediaPreviewLoadingIds.includes(mediaItem.id);
+                          const previewFailed = listingMediaPreviewFailedIds.includes(mediaItem.id);
+
+                          return (
+                            <article key={mediaItem.id} className="listings-media-item">
+                              <div className="listings-media-thumb">
+                                {isImageMedia(mediaItem) ? (
+                                  previewUrl ? (
+                                    <button
+                                      type="button"
+                                      className="listings-media-thumb-btn"
+                                      onClick={() => void openListingImagePreview(mediaItem)}
+                                    >
+                                      <img src={previewUrl} alt={mediaItem.original_name} loading="lazy" />
+                                    </button>
+                                  ) : previewLoading ? (
+                                    <span>{t("loading_preview", "Loading preview...")}</span>
+                                  ) : previewFailed ? (
+                                    <button
+                                      type="button"
+                                      className="btn btn-ghost"
+                                      onClick={() => void loadListingMediaThumbnail(mediaItem)}
+                                    >
+                                      {t("retry_preview", "Retry preview")}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="btn btn-ghost"
+                                      onClick={() => void loadListingMediaThumbnail(mediaItem)}
+                                    >
+                                      {t("load_preview", "Load preview")}
+                                    </button>
+                                  )
+                                ) : (
+                                  <span>{mediaItem.mime_type}</span>
+                                )}
+                              </div>
+
+                              <div className="listings-media-meta">
+                                <strong>{mediaItem.original_name}</strong>
+                                <span>{t("size", "Size")}: {formatFileSize(mediaItem.file_size, language)}</span>
+                                <span>{t("uploaded", "Uploaded")}: {formatDateTime(mediaItem.created_at, language)}</span>
+                              </div>
+
+                              <div className="users-actions-cell">
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  disabled={openingListingImageId === mediaItem.id || downloadingListingMediaId === mediaItem.id}
+                                  onClick={() => {
+                                    if (isImageMedia(mediaItem)) {
+                                      void openListingImagePreview(mediaItem);
+                                      return;
+                                    }
+                                    void downloadListingMedia(mediaItem);
+                                  }}
+                                >
+                                  {openingListingImageId === mediaItem.id
+                                    ? t("loading_photo", "Loading photo...")
+                                    : downloadingListingMediaId === mediaItem.id
+                                      ? t("downloading", "Downloading...")
+                                      : isImageMedia(mediaItem)
+                                        ? t("open_image", "Open image")
+                                        : t("download", "Download")}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  disabled={downloadingListingMediaId === mediaItem.id}
+                                  onClick={() => void downloadListingMedia(mediaItem)}
+                                >
+                                  {downloadingListingMediaId === mediaItem.id ? t("downloading", "Downloading...") : t("download", "Download")}
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </article>
               ) : null}
 
-              <article className="dashboard-stat-group reports-evidence-card">
-                <h3>{t("evidence_files", "Evidence files")}</h3>
-                {selectedReport.attachments.length === 0 ? (
-                  <p className="reports-no-evidence">{t("no_evidence", "No evidence files attached")}</p>
-                ) : (
-                  <div className="reports-evidence-grid">
-                    {selectedReport.attachments.map((attachment) => {
-                      const previewUrl = previewUrls[attachment.id];
-                      const previewLoading = previewLoadingIds.includes(attachment.id);
-                      const previewFailed = previewFailedIds.includes(attachment.id);
-
-                      return (
-                        <article key={attachment.id} className="reports-evidence-item">
-                          <div className="reports-evidence-preview">
-                            {isImageAttachment(attachment) ? (
-                              previewUrl ? (
-                                <button
-                                  type="button"
-                                  className="reports-evidence-preview-button"
-                                  onClick={() => void openImageAttachmentPreview(attachment)}
-                                >
-                                  <img src={previewUrl} alt={attachment.original_name} loading="lazy" />
-                                </button>
-                              ) : previewLoading ? (
-                                <span>{t("loading_preview", "Loading preview...")}</span>
-                              ) : previewFailed ? (
-                                <span>{t("preview_unavailable", "Preview unavailable")}</span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="btn btn-ghost"
-                                  onClick={() => void loadAttachmentPreview(attachment)}
-                                >
-                                  {t("load_preview", "Load preview")}
-                                </button>
-                              )
-                            ) : (
-                              <span>{attachment.mime_type}</span>
-                            )}
-                          </div>
-
-                          <div className="reports-evidence-meta">
-                            <strong>{attachment.original_name}</strong>
-                            <span>{t("mime_type", "MIME")}: {attachment.mime_type}</span>
-                            <span>{t("size", "Size")}: {formatFileSize(attachment.file_size, language)}</span>
-                            <span>{t("uploaded", "Uploaded")}: {formatDateTime(attachment.created_at, language)}</span>
-                          </div>
-
-                          <button
-                            type="button"
-                            className="btn btn-ghost messages-attachment-btn"
-                            disabled={
-                              downloadingAttachmentId === attachment.id ||
-                              openingImagePreviewId === attachment.id
-                            }
-                            onClick={() => {
-                              if (isImageAttachment(attachment)) {
-                                void openImageAttachmentPreview(attachment);
-                                return;
-                              }
-                              void downloadAttachment(attachment);
-                            }}
-                          >
-                            {downloadingAttachmentId === attachment.id
-                              ? t("downloading", "Downloading...")
-                              : openingImagePreviewId === attachment.id
-                                ? t("loading_preview", "Loading preview...")
-                                : isImageAttachment(attachment)
-                                  ? t("open_image", "Open image")
-                                  : t("download", "Download")}
-                          </button>
-                        </article>
-                      );
-                    })}
+              {selectedReport.target_type === "message" ? (
+                <article className="dashboard-stat-group reports-context-card">
+                  <div className="reports-context-head">
+                    <h3>{t("message_context", "Message context")}</h3>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={selectedReport.target_conversation_id === null}
+                      onClick={() => openReportMessageInMessages(selectedReport)}
+                    >
+                      {t("open_in_messages", "Open in messages")}
+                    </button>
                   </div>
-                )}
-              </article>
+
+                  {messageContextError ? <p className="reports-no-evidence">{messageContextError}</p> : null}
+
+                  {isMessageContextLoading ? (
+                    <p className="reports-no-evidence">{t("loading_message_context", "Loading message context...")}</p>
+                  ) : null}
+
+                  {messageContext ? (
+                    <>
+                      <div className="reports-context-meta">
+                        <p>
+                          {t("sender", "Sender")}: <strong>{messageSender ? `${messageSender.full_name} (#${formatInteger(messageContext.sender_id, language)})` : `#${formatInteger(messageContext.sender_id, language)}`}</strong>
+                        </p>
+                        {messageSender?.email ? (
+                          <p>{t("email", "Email")}: <strong>{messageSender.email}</strong></p>
+                        ) : null}
+                        {isMessageSenderLoading ? <p>{t("loading_sender", "Loading sender...")}</p> : null}
+                        {messageSenderError ? <p>{messageSenderError}</p> : null}
+                        <p>{t("sent_at", "Sent at")}: <strong>{formatDateTime(messageContext.sent_at, language)}</strong></p>
+                      </div>
+                      <p className="reports-message-body">{messageContext.text_body ?? t("no_message_text", "Message has no text")}</p>
+                    </>
+                  ) : null}
+                </article>
+              ) : null}
 
               {chatAbusePresets.length > 0 ? (
                 <article className="dashboard-stat-group reports-presets-card">
@@ -948,22 +1310,22 @@ export function ReportsPage() {
       </Modal>
 
       <ImagePreviewOverlay
-        open={reportImagePreviewAttachment !== null && reportImagePreviewUrl !== null}
-        imageSrc={reportImagePreviewUrl}
-        imageAlt={reportImagePreviewAttachment?.original_name ?? t("image_preview", "Image preview")}
-        onClose={closeImageAttachmentPreview}
+        open={listingImagePreviewItem !== null && listingImagePreviewUrl !== null}
+        imageSrc={listingImagePreviewUrl}
+        imageAlt={listingImagePreviewItem?.original_name ?? t("image_preview", "Image preview")}
+        onClose={closeListingImagePreview}
         onDownload={() => {
-          if (!reportImagePreviewAttachment) {
+          if (!listingImagePreviewItem) {
             return;
           }
-          void downloadAttachment(reportImagePreviewAttachment);
+          void downloadListingMedia(listingImagePreviewItem);
         }}
         downloadLabel={t("download", "Download")}
         downloadingLabel={t("downloading", "Downloading...")}
         closeLabel={t("close", "Close")}
         isDownloading={
-          reportImagePreviewAttachment !== null &&
-          downloadingAttachmentId === reportImagePreviewAttachment.id
+          listingImagePreviewItem !== null &&
+          downloadingListingMediaId === listingImagePreviewItem.id
         }
       />
     </section>

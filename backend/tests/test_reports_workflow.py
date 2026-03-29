@@ -1,7 +1,5 @@
 from decimal import Decimal
-from pathlib import Path
 
-from app.core.config import get_settings
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.category import Category
 from app.models.conversation import Conversation
@@ -108,6 +106,26 @@ def test_non_admin_cannot_access_report_admin_endpoints(client, db_session, set_
         json={"action": "resolve", "resolution_note": "x"},
     )
     assert resolve_response.status_code == 403
+
+
+def test_create_report_requires_reason_text(client, db_session, set_current_user):
+    user_role = create_role(db_session, "user")
+
+    reporter = create_user(db_session, "reporter-empty-reason@example.com", [user_role])
+    reported_user = create_user(db_session, "target-empty-reason@example.com", [user_role])
+
+    set_current_user(reporter)
+    create_report_response = client.post(
+        "/api/v1/reports",
+        json={
+            "target_type": "user",
+            "target_id": reported_user.id,
+            "reason_code": "abuse",
+            "reason_text": "   ",
+        },
+    )
+    assert create_report_response.status_code == 400
+    assert create_report_response.json().get("detail") == "Report reason text is required"
 
 
 def test_admin_resolve_listing_report_with_moderation_updates_entities(client, db_session, set_current_user):
@@ -372,68 +390,3 @@ def test_create_message_report_requires_conversation_participation(client, db_se
     assert create_response.status_code == 403
 
 
-def test_create_report_with_evidence_and_admin_download(client, db_session, set_current_user):
-    user_role = create_role(db_session, "user")
-    admin_role = create_role(db_session, "admin")
-
-    reporter = create_user(db_session, "reporter-evidence@example.com", [user_role])
-    target_user = create_user(db_session, "target-evidence@example.com", [user_role])
-    admin_user = create_user(db_session, "admin-evidence@example.com", [admin_role])
-
-    settings = get_settings()
-    saved_file_path: Path | None = None
-
-    try:
-        set_current_user(reporter)
-        create_response = client.post(
-            "/api/v1/reports/with-evidence",
-            data={
-                "target_type": "user",
-                "target_id": str(target_user.id),
-                "reason_code": "scam",
-                "reason_text": "Evidence attached",
-            },
-            files=[("files", ("evidence.png", b"fake-image-content", "image/png"))],
-        )
-        assert create_response.status_code == 201
-        payload = create_response.json()
-        assert len(payload["attachments"]) == 1
-
-        attachment_id = payload["attachments"][0]["id"]
-        saved_file_path = Path(settings.media_root) / payload["attachments"][0]["file_path"]
-
-        set_current_user(admin_user)
-        preview_response = client.get(f"/api/v1/reports/attachments/{attachment_id}/preview")
-        assert preview_response.status_code == 200
-        assert preview_response.content == b"fake-image-content"
-        assert preview_response.headers.get("content-type", "").startswith("image/")
-
-        preview_audit = db_session.scalar(
-            select(AdminAuditLog)
-            .where(
-                AdminAuditLog.target_type == "report_attachment",
-                AdminAuditLog.target_id == attachment_id,
-                AdminAuditLog.action == "report_attachment_download",
-            )
-            .order_by(AdminAuditLog.id.desc())
-        )
-        assert preview_audit is None
-
-        download_response = client.get(f"/api/v1/reports/attachments/{attachment_id}/download")
-        assert download_response.status_code == 200
-        assert download_response.content == b"fake-image-content"
-        assert "attachment" in download_response.headers.get("content-disposition", "").lower()
-
-        download_audit = db_session.scalar(
-            select(AdminAuditLog)
-            .where(
-                AdminAuditLog.target_type == "report_attachment",
-                AdminAuditLog.target_id == attachment_id,
-                AdminAuditLog.action == "report_attachment_download",
-            )
-            .order_by(AdminAuditLog.id.desc())
-        )
-        assert download_audit is not None
-    finally:
-        if saved_file_path is not None:
-            saved_file_path.unlink(missing_ok=True)

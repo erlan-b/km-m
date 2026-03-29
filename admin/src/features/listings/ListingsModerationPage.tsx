@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
 import { formatDateTime, formatInteger } from "../../shared/i18n/format";
+import { ImagePreviewOverlay } from "../common/ImagePreviewOverlay";
 import { Modal } from "../common/Modal";
 
 type ListingStatus = "draft" | "pending_review" | "published" | "rejected" | "archived" | "inactive" | "sold";
@@ -40,6 +41,23 @@ type ListingStatusUpdateResponse = {
   listing_id: number;
   status: ListingStatus;
   note: string | null;
+};
+
+type ListingMediaItem = {
+  id: number;
+  listing_id: number;
+  original_name: string;
+  mime_type: string;
+  file_size: number;
+  sort_order: number;
+  is_primary: boolean;
+  created_at: string;
+  file_url: string;
+  thumbnail_url: string | null;
+};
+
+type ListingMediaListResponse = {
+  items: ListingMediaItem[];
 };
 
 const ACTIONS_BY_STATUS: Record<ListingStatus, string[]> = {
@@ -131,6 +149,10 @@ function statusBadgeClass(status: ListingStatus): string {
   return "users-status-pending_verification";
 }
 
+function isImageMedia(item: ListingMediaItem): boolean {
+  return item.mime_type.toLowerCase().startsWith("image/");
+}
+
 export function ListingsModerationPage() {
   const { authFetch, canModerateContent } = useAuth();
   const { t, language } = usePageI18n("listings");
@@ -166,6 +188,16 @@ export function ListingsModerationPage() {
   const [action, setAction] = useState("");
   const [note, setNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [listingMedia, setListingMedia] = useState<ListingMediaItem[]>([]);
+  const [isListingMediaLoading, setIsListingMediaLoading] = useState(false);
+  const [listingMediaError, setListingMediaError] = useState<string | null>(null);
+  const [listingMediaPreviewUrls, setListingMediaPreviewUrls] = useState<Record<number, string>>({});
+  const [listingMediaPreviewLoadingIds, setListingMediaPreviewLoadingIds] = useState<number[]>([]);
+  const [listingMediaPreviewFailedIds, setListingMediaPreviewFailedIds] = useState<number[]>([]);
+  const [listingImagePreviewItem, setListingImagePreviewItem] = useState<ListingMediaItem | null>(null);
+  const [listingImagePreviewUrl, setListingImagePreviewUrl] = useState<string | null>(null);
+  const [openingListingImageId, setOpeningListingImageId] = useState<number | null>(null);
+  const [downloadingListingMediaId, setDownloadingListingMediaId] = useState<number | null>(null);
 
   const loadListings = useCallback(async () => {
     setIsLoading(true);
@@ -326,6 +358,241 @@ export function ListingsModerationPage() {
       setIsSubmitting(false);
     }
   };
+
+  const loadListingMediaThumbnail = useCallback(
+    async (mediaItem: ListingMediaItem) => {
+      if (!isImageMedia(mediaItem)) {
+        return;
+      }
+
+      if (listingMediaPreviewUrls[mediaItem.id] || listingMediaPreviewLoadingIds.includes(mediaItem.id)) {
+        return;
+      }
+
+      setListingMediaPreviewLoadingIds((previous) => (
+        previous.includes(mediaItem.id) ? previous : [...previous, mediaItem.id]
+      ));
+
+      try {
+        const response = await authFetch(`/listing-media/${mediaItem.id}/thumbnail/my`);
+        if (!response.ok) {
+          throw new Error("Failed to load thumbnail");
+        }
+
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        setListingMediaPreviewUrls((previous) => {
+          const previousUrl = previous[mediaItem.id];
+          if (previousUrl) {
+            window.URL.revokeObjectURL(previousUrl);
+          }
+          return { ...previous, [mediaItem.id]: objectUrl };
+        });
+        setListingMediaPreviewFailedIds((previous) => previous.filter((value) => value !== mediaItem.id));
+      } catch {
+        setListingMediaPreviewFailedIds((previous) => (
+          previous.includes(mediaItem.id) ? previous : [...previous, mediaItem.id]
+        ));
+      } finally {
+        setListingMediaPreviewLoadingIds((previous) => previous.filter((value) => value !== mediaItem.id));
+      }
+    },
+    [authFetch, listingMediaPreviewLoadingIds, listingMediaPreviewUrls],
+  );
+
+  const downloadListingMedia = async (mediaItem: ListingMediaItem) => {
+    setDownloadingListingMediaId(mediaItem.id);
+    setListingMediaError(null);
+
+    try {
+      const response = await authFetch(`/listing-media/${mediaItem.id}/download/my`);
+      if (!response.ok) {
+        let message = t("error_download_listing_media", "Failed to download listing media");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_download_listing_media", "Failed to download listing media");
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = mediaItem.original_name;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setListingMediaError(extractErrorMessage(downloadError));
+    } finally {
+      setDownloadingListingMediaId(null);
+    }
+  };
+
+  const openListingImagePreview = async (mediaItem: ListingMediaItem) => {
+    if (!isImageMedia(mediaItem)) {
+      void downloadListingMedia(mediaItem);
+      return;
+    }
+
+    setOpeningListingImageId(mediaItem.id);
+    setListingMediaError(null);
+
+    try {
+      const response = await authFetch(`/listing-media/${mediaItem.id}/download/my`);
+      if (!response.ok) {
+        let message = t("error_load_listing_image", "Failed to load listing image");
+        try {
+          const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+          if (typeof payload?.error?.message === "string") {
+            message = payload.error.message;
+          } else if (typeof payload?.detail === "string") {
+            message = payload.detail;
+          }
+        } catch {
+          message = t("error_load_listing_image", "Failed to load listing image");
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+
+      setListingImagePreviewUrl((previousUrl) => {
+        if (previousUrl) {
+          window.URL.revokeObjectURL(previousUrl);
+        }
+        return objectUrl;
+      });
+      setListingImagePreviewItem(mediaItem);
+    } catch (previewError) {
+      setListingMediaError(extractErrorMessage(previewError));
+    } finally {
+      setOpeningListingImageId(null);
+    }
+  };
+
+  const closeListingImagePreview = () => {
+    setListingImagePreviewItem(null);
+    setListingImagePreviewUrl((previousUrl) => {
+      if (previousUrl) {
+        window.URL.revokeObjectURL(previousUrl);
+      }
+      return null;
+    });
+  };
+
+  const closeReviewModal = () => {
+    setIsReviewModalOpen(false);
+    closeListingImagePreview();
+  };
+
+  useEffect(() => {
+    if (!isReviewModalOpen || !selectedListing) {
+      setListingMedia([]);
+      setListingMediaError(null);
+      setIsListingMediaLoading(false);
+      setListingMediaPreviewLoadingIds([]);
+      setListingMediaPreviewFailedIds([]);
+      setListingMediaPreviewUrls((previous) => {
+        for (const previewUrl of Object.values(previous)) {
+          window.URL.revokeObjectURL(previewUrl);
+        }
+        return {};
+      });
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      setIsListingMediaLoading(true);
+      setListingMediaError(null);
+      setListingMedia([]);
+      setListingMediaPreviewLoadingIds([]);
+      setListingMediaPreviewFailedIds([]);
+      setListingMediaPreviewUrls((previous) => {
+        for (const previewUrl of Object.values(previous)) {
+          window.URL.revokeObjectURL(previewUrl);
+        }
+        return {};
+      });
+
+      try {
+        const response = await authFetch(`/listing-media/listings/${selectedListing.id}/my`);
+        if (!response.ok) {
+          let message = t("error_load_listing_media", "Failed to load listing photos");
+          try {
+            const payload = (await response.json()) as { error?: { message?: string }; detail?: unknown };
+            if (typeof payload?.error?.message === "string") {
+              message = payload.error.message;
+            } else if (typeof payload?.detail === "string") {
+              message = payload.detail;
+            }
+          } catch {
+            message = t("error_load_listing_media", "Failed to load listing photos");
+          }
+          throw new Error(message);
+        }
+
+        const payload = (await response.json()) as ListingMediaListResponse;
+        if (cancelled) {
+          return;
+        }
+        setListingMedia(payload.items);
+      } catch (mediaError) {
+        if (!cancelled) {
+          setListingMediaError(extractErrorMessage(mediaError));
+        }
+      } finally {
+        if (!cancelled) {
+          setIsListingMediaLoading(false);
+        }
+      }
+    };
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authFetch, isReviewModalOpen, selectedListing, t]);
+
+  useEffect(() => {
+    if (!isReviewModalOpen || listingMedia.length === 0) {
+      return;
+    }
+
+    for (const mediaItem of listingMedia) {
+      if (isImageMedia(mediaItem)) {
+        void loadListingMediaThumbnail(mediaItem);
+      }
+    }
+  }, [isReviewModalOpen, listingMedia, loadListingMediaThumbnail]);
+
+  useEffect(() => {
+    return () => {
+      for (const previewUrl of Object.values(listingMediaPreviewUrls)) {
+        window.URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [listingMediaPreviewUrls]);
+
+  useEffect(() => {
+    return () => {
+      if (listingImagePreviewUrl) {
+        window.URL.revokeObjectURL(listingImagePreviewUrl);
+      }
+    };
+  }, [listingImagePreviewUrl]);
 
   const rows = listings?.items ?? [];
   const totalPages = listings?.total_pages ?? 0;
@@ -513,7 +780,7 @@ export function ListingsModerationPage() {
 
       <Modal
         open={isReviewModalOpen}
-        onClose={() => setIsReviewModalOpen(false)}
+        onClose={closeReviewModal}
         title={t("moderation_action", "Moderation action")}
         subtitle={selectedListing ? `${t("listing", "Listing")} #${selectedListing.id}` : t("no_listing_selected", "No listing selected")}
       >
@@ -546,6 +813,100 @@ export function ListingsModerationPage() {
                   {t("location", "Location")}: <strong>{selectedListing.city}</strong>
                   {selectedListing.address_line ? `, ${selectedListing.address_line}` : ""}
                 </p>
+              </article>
+
+              <article className="dashboard-stat-group listings-media-block">
+                <h3>{t("photos", "Photos")}</h3>
+
+                {listingMediaError ? <p className="reports-no-evidence">{listingMediaError}</p> : null}
+
+                {isListingMediaLoading ? (
+                  <p className="reports-no-evidence">{t("loading_photos", "Loading photos...")}</p>
+                ) : listingMedia.length === 0 ? (
+                  <p className="reports-no-evidence">{t("no_photos", "No photos attached")}</p>
+                ) : (
+                  <div className="listings-media-grid">
+                    {listingMedia.map((mediaItem) => {
+                      const previewUrl = listingMediaPreviewUrls[mediaItem.id];
+                      const previewLoading = listingMediaPreviewLoadingIds.includes(mediaItem.id);
+                      const previewFailed = listingMediaPreviewFailedIds.includes(mediaItem.id);
+
+                      return (
+                        <article key={mediaItem.id} className="listings-media-item">
+                          <div className="listings-media-thumb">
+                            {isImageMedia(mediaItem) ? (
+                              previewUrl ? (
+                                <button
+                                  type="button"
+                                  className="listings-media-thumb-btn"
+                                  onClick={() => void openListingImagePreview(mediaItem)}
+                                >
+                                  <img src={previewUrl} alt={mediaItem.original_name} loading="lazy" />
+                                </button>
+                              ) : previewLoading ? (
+                                <span>{t("loading_preview", "Loading preview...")}</span>
+                              ) : previewFailed ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  onClick={() => void loadListingMediaThumbnail(mediaItem)}
+                                >
+                                  {t("retry_preview", "Retry preview")}
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost"
+                                  onClick={() => void loadListingMediaThumbnail(mediaItem)}
+                                >
+                                  {t("load_preview", "Load preview")}
+                                </button>
+                              )
+                            ) : (
+                              <span>{mediaItem.mime_type}</span>
+                            )}
+                          </div>
+
+                          <div className="listings-media-meta">
+                            <strong>{mediaItem.original_name}</strong>
+                            <span>{t("uploaded", "Uploaded")}: {formatDateTime(mediaItem.created_at, language)}</span>
+                          </div>
+
+                          <div className="users-actions-cell">
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              disabled={openingListingImageId === mediaItem.id || downloadingListingMediaId === mediaItem.id}
+                              onClick={() => {
+                                if (isImageMedia(mediaItem)) {
+                                  void openListingImagePreview(mediaItem);
+                                  return;
+                                }
+                                void downloadListingMedia(mediaItem);
+                              }}
+                            >
+                              {openingListingImageId === mediaItem.id
+                                ? t("loading_photo", "Loading photo...")
+                                : downloadingListingMediaId === mediaItem.id
+                                  ? t("downloading", "Downloading...")
+                                  : isImageMedia(mediaItem)
+                                    ? t("open_image", "Open image")
+                                    : t("download", "Download")}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost"
+                              disabled={downloadingListingMediaId === mediaItem.id}
+                              onClick={() => void downloadListingMedia(mediaItem)}
+                            >
+                              {downloadingListingMediaId === mediaItem.id ? t("downloading", "Downloading...") : t("download", "Download")}
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
               </article>
 
               <form className="reports-form" onSubmit={onModerateSubmit}>
@@ -621,6 +982,26 @@ export function ListingsModerationPage() {
           ) : null}
         </div>
       </Modal>
+
+      <ImagePreviewOverlay
+        open={listingImagePreviewItem !== null && listingImagePreviewUrl !== null}
+        imageSrc={listingImagePreviewUrl}
+        imageAlt={listingImagePreviewItem?.original_name ?? t("image_preview", "Image preview")}
+        onClose={closeListingImagePreview}
+        onDownload={() => {
+          if (!listingImagePreviewItem) {
+            return;
+          }
+          void downloadListingMedia(listingImagePreviewItem);
+        }}
+        downloadLabel={t("download", "Download")}
+        downloadingLabel={t("downloading", "Downloading...")}
+        closeLabel={t("close", "Close")}
+        isDownloading={
+          listingImagePreviewItem !== null &&
+          downloadingListingMediaId === listingImagePreviewItem.id
+        }
+      />
     </section>
   );
 }

@@ -13,7 +13,6 @@ from app.models.payment import Payment, PaymentStatus
 from app.models.promotion import Promotion, PromotionPackage, PromotionStatus
 from app.models.refresh_token import RefreshToken
 from app.models.report import Report, ReportStatus, ReportTargetType
-from app.models.report_attachment import ReportAttachment
 from app.models.role import Role
 from app.models.seller_type_change_document import SellerTypeChangeDocument
 from app.models.seller_type_change_request import SellerTypeChangeRequest, SellerTypeChangeRequestStatus
@@ -42,7 +41,6 @@ __all__ = [
 	"PromotionStatus",
 	"RefreshToken",
 	"Report",
-	"ReportAttachment",
 	"ReportStatus",
 	"ReportTargetType",
 	"Role",

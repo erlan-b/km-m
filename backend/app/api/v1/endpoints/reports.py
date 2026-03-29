@@ -1,13 +1,10 @@
 from math import ceil
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
-from app.api.deps import ADMIN_PANEL_ACCESS_ROLES, get_current_user, require_admin_panel_access, require_moderation_access, user_has_role
-from app.core.config import get_settings
+from app.api.deps import get_current_user, require_admin_panel_access, require_moderation_access
 from app.db.session import get_db
 from app.core.utils import utc_now
 from app.models.admin_audit_log import AdminAuditLog
@@ -16,7 +13,6 @@ from app.models.listing import Listing, ListingStatus
 from app.models.message import Message
 from app.models.notification import NotificationType
 from app.models.report import Report, ReportStatus, ReportTargetType
-from app.models.report_attachment import ReportAttachment
 from app.models.user import AccountStatus, User
 from app.schemas.report import (
     ReportCreateRequest,
@@ -24,7 +20,6 @@ from app.schemas.report import (
     ReportResolveRequest,
     ReportResponse,
 )
-from app.services.attachment_service import save_upload_file
 from app.services.notification_service import create_notification
 
 router = APIRouter()
@@ -50,11 +45,11 @@ def validate_reason_code(reason_code: str) -> str:
     return normalized
 
 
-def ensure_report_has_text_or_attachments(reason_text: str | None, attachment_count: int) -> None:
-    if reason_text is None and attachment_count == 0:
+def ensure_report_has_reason_text(reason_text: str | None) -> None:
+    if reason_text is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Report must include reason text or at least one attachment",
+            detail="Report reason text is required",
         )
 
 
@@ -132,11 +127,7 @@ def enrich_reports_with_listing_context(db: Session, reports: list[Report]) -> N
 
 
 def build_report_response(db: Session, report_id: int) -> ReportResponse:
-    report = db.scalar(
-        select(Report)
-        .where(Report.id == report_id)
-        .options(joinedload(Report.attachments))
-    )
+    report = db.scalar(select(Report).where(Report.id == report_id))
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
@@ -176,39 +167,6 @@ def create_report_record(
     return report
 
 
-def save_report_attachments(
-    db: Session,
-    *,
-    report_id: int,
-    files: list[UploadFile],
-) -> list[Path]:
-    settings = get_settings()
-    base_dir = Path(settings.media_root)
-    saved_absolute_paths: list[Path] = []
-
-    for upload_file in files:
-        saved_file = save_upload_file(
-            upload_file,
-            base_dir=base_dir,
-            sub_dir=settings.report_attachments_subdir,
-            max_size_bytes=settings.report_attachment_max_size_mb * 1024 * 1024,
-            allowed_mime_types=set(settings.report_attachment_allowed_mime_types),
-        )
-        saved_absolute_paths.append(saved_file.absolute_path)
-        db.add(
-            ReportAttachment(
-                report_id=report_id,
-                file_name=saved_file.stored_name,
-                original_name=saved_file.original_name,
-                mime_type=saved_file.mime_type,
-                file_size=saved_file.file_size,
-                file_path=saved_file.relative_path,
-            )
-        )
-
-    return saved_absolute_paths
-
-
 def write_audit_log(
     db: Session,
     admin_user_id: int | None,
@@ -228,43 +186,6 @@ def write_audit_log(
     )
 
 
-def get_report_attachment_for_user(
-    *,
-    db: Session,
-    attachment_id: int,
-    current_user: User,
-) -> tuple[ReportAttachment, bool]:
-    attachment = db.scalar(
-        select(ReportAttachment)
-        .where(ReportAttachment.id == attachment_id)
-        .options(joinedload(ReportAttachment.report))
-    )
-    if attachment is None or attachment.report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
-
-    is_admin_panel_operator = user_has_role(current_user, ADMIN_PANEL_ACCESS_ROLES)
-    if not is_admin_panel_operator and attachment.report.reporter_user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
-
-    return attachment, is_admin_panel_operator
-
-
-def resolve_report_attachment_path(attachment: ReportAttachment) -> Path:
-    settings = get_settings()
-    base_dir = Path(settings.media_root).resolve()
-    absolute_path = (base_dir / attachment.file_path).resolve()
-
-    try:
-        absolute_path.relative_to(base_dir)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid attachment path") from exc
-
-    if not absolute_path.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file is missing")
-
-    return absolute_path
-
-
 @router.post("", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
 def create_report(
     payload: ReportCreateRequest,
@@ -275,7 +196,7 @@ def create_report(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
     normalized_reason_text = normalize_reason_text(payload.reason_text)
-    ensure_report_has_text_or_attachments(normalized_reason_text, attachment_count=0)
+    ensure_report_has_reason_text(normalized_reason_text)
 
     report = create_report_record(
         db,
@@ -287,55 +208,6 @@ def create_report(
     )
 
     db.commit()
-    return build_report_response(db, report.id)
-
-
-@router.post("/with-evidence", response_model=ReportResponse, status_code=status.HTTP_201_CREATED)
-def create_report_with_evidence(
-    target_type: ReportTargetType = Form(...),
-    target_id: int = Form(..., gt=0),
-    reason_code: str = Form(...),
-    reason_text: str | None = Form(default=None),
-    files: list[UploadFile] | None = File(default=None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> ReportResponse:
-    if current_user.account_status != AccountStatus.ACTIVE:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
-
-    attachments = files or []
-    settings = get_settings()
-    if len(attachments) > settings.report_attachment_max_files_per_report:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Too many attachments for one report. "
-                f"Max: {settings.report_attachment_max_files_per_report}"
-            ),
-        )
-
-    normalized_reason_text = normalize_reason_text(reason_text)
-    ensure_report_has_text_or_attachments(normalized_reason_text, attachment_count=len(attachments))
-
-    report = create_report_record(
-        db,
-        reporter_user_id=current_user.id,
-        target_type=target_type,
-        target_id=target_id,
-        reason_code=reason_code,
-        reason_text=normalized_reason_text,
-    )
-
-    saved_paths: list[Path] = []
-    try:
-        saved_paths = save_report_attachments(db, report_id=report.id, files=attachments)
-        db.commit()
-    except Exception:
-        db.rollback()
-        for saved_path in saved_paths:
-            saved_path.unlink(missing_ok=True)
-        raise
-
     return build_report_response(db, report.id)
 
 
@@ -353,13 +225,12 @@ def list_my_reports(
 
     stmt = (
         select(Report)
-        .options(joinedload(Report.attachments))
         .where(*filters)
         .order_by(Report.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    reports = db.scalars(stmt).unique().all()
+    reports = db.scalars(stmt).all()
     enrich_reports_with_listing_context(db, reports)
 
     return ReportListResponse(
@@ -391,13 +262,12 @@ def list_reports_admin_queue(
 
     stmt = (
         select(Report)
-        .options(joinedload(Report.attachments))
         .where(*filters)
         .order_by(Report.created_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    reports = db.scalars(stmt).unique().all()
+    reports = db.scalars(stmt).all()
     enrich_reports_with_listing_context(db, reports)
 
     return ReportListResponse(
@@ -416,11 +286,7 @@ def resolve_report(
     db: Session = Depends(get_db),
     admin_user: User = Depends(require_moderation_access),
 ) -> ReportResponse:
-    report = db.scalar(
-        select(Report)
-        .where(Report.id == report_id)
-        .options(joinedload(Report.attachments))
-    )
+    report = db.scalar(select(Report).where(Report.id == report_id))
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
@@ -538,56 +404,3 @@ def resolve_report(
 
     db.commit()
     return build_report_response(db, report.id)
-
-
-@router.get("/attachments/{attachment_id}/download")
-def download_report_attachment(
-    attachment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> FileResponse:
-    attachment, is_admin_or_moderator = get_report_attachment_for_user(
-        db=db,
-        attachment_id=attachment_id,
-        current_user=current_user,
-    )
-    absolute_path = resolve_report_attachment_path(attachment)
-
-    if is_admin_or_moderator:
-        write_audit_log(
-            db,
-            admin_user_id=current_user.id,
-            action="report_attachment_download",
-            target_type="report_attachment",
-            target_id=attachment.id,
-            details=f"report_id={attachment.report_id}",
-        )
-        db.commit()
-
-    return FileResponse(
-        path=absolute_path,
-        media_type=attachment.mime_type,
-        filename=attachment.original_name,
-    )
-
-
-@router.get("/attachments/{attachment_id}/preview")
-def preview_report_attachment(
-    attachment_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> FileResponse:
-    attachment, _ = get_report_attachment_for_user(
-        db=db,
-        attachment_id=attachment_id,
-        current_user=current_user,
-    )
-
-    if not attachment.mime_type.lower().startswith("image/"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Preview is supported only for image attachments")
-
-    absolute_path = resolve_report_attachment_path(attachment)
-    return FileResponse(
-        path=absolute_path,
-        media_type=attachment.mime_type,
-    )

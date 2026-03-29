@@ -18,19 +18,6 @@ class ReportResolveRequest(BaseModel):
     moderation_action: str | None = Field(default=None, max_length=40)
 
 
-class ReportAttachmentItem(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    report_id: int
-    file_name: str
-    original_name: str
-    mime_type: str
-    file_size: int
-    file_path: str
-    created_at: datetime
-
-
 class ReportResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -42,7 +29,6 @@ class ReportResponse(BaseModel):
     target_listing_id: int | None = None
     reason_code: str
     reason_text: str | None
-    attachments: list[ReportAttachmentItem]
     status: ReportStatus
     resolution_note: str | None
     reviewed_by_admin_id: int | None
