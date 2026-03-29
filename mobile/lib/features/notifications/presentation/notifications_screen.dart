@@ -20,6 +20,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   bool _loading = true;
   bool _loadingMore = false;
+  bool _clearingAll = false;
   String? _error;
 
   int _page = 1;
@@ -28,7 +29,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadInitial();
+  }
+
+  Future<void> _loadInitial() async {
+    await _load();
+    await _markAllAsRead();
   }
 
   Future<void> _load({bool append = false}) async {
@@ -88,6 +94,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Future<void> _refresh() async {
     _page = 1;
     await _load();
+    await _markAllAsRead();
   }
 
   void _loadMore() {
@@ -112,38 +119,108 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return DateFormat('dd.MM HH:mm').format(parsed.toLocal());
   }
 
-  Future<void> _markAsRead(Map<String, dynamic> item) async {
-    final id = (item['id'] as num?)?.toInt();
-    if (id == null) {
+  Future<void> _markAllAsRead() async {
+    if (_items.isEmpty) {
       return;
     }
 
-    if (item['is_read'] == true) {
+    final hasUnread = _items.any((item) => item['is_read'] != true);
+    if (!hasUnread) {
       return;
     }
 
     try {
-      final updated = await ref
-          .read(notificationsRepositoryProvider)
-          .markAsRead(id);
+      await ref.read(notificationsRepositoryProvider).markAllAsRead();
+
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _items = _items.map((current) {
-          if (current['id'] == id) {
-            return Map<String, dynamic>.from(updated);
-          }
-          return current;
+        _items = _items.map((item) {
+          final updated = Map<String, dynamic>.from(item);
+          updated['is_read'] = true;
+          return updated;
         }).toList();
       });
     } catch (_) {}
   }
 
-  Future<void> _openNotification(Map<String, dynamic> item) async {
-    await _markAsRead(item);
+  Future<bool> _deleteNotification(int notificationId, S l) async {
+    try {
+      await ref
+          .read(notificationsRepositoryProvider)
+          .deleteNotification(notificationId);
+      return true;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l.errorOccurred)));
+      }
+      return false;
+    }
+  }
 
+  Future<void> _clearAllNotifications(S l) async {
+    if (_items.isEmpty || _clearingAll) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l.delete),
+        content: Text(l.notifications),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l.delete),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _clearingAll = true;
+    });
+
+    try {
+      await ref.read(notificationsRepositoryProvider).deleteAllNotifications();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _items = [];
+        _page = 1;
+        _totalPages = 1;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l.errorOccurred)));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _clearingAll = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openNotification(Map<String, dynamic> item) async {
     final entityType = item['related_entity_type']?.toString();
     final entityId = (item['related_entity_id'] as num?)?.toInt();
     if (entityId == null || !mounted) {
@@ -166,7 +243,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final l = S.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l.notifications)),
+      appBar: AppBar(
+        title: Text(l.notifications),
+        actions: [
+          if (_items.isNotEmpty)
+            IconButton(
+              tooltip: l.delete,
+              onPressed: _clearingAll ? null : () => _clearAllNotifications(l),
+              icon: _clearingAll
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.delete_sweep_outlined),
+            ),
+        ],
+      ),
       body: _buildBody(l),
     );
   }
@@ -246,107 +339,120 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             }
 
             final item = _items[index];
+            final notificationId = (item['id'] as num?)?.toInt();
             final isRead = item['is_read'] == true;
 
-            return Material(
-              color: AppTheme.bgSurface,
-              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-              child: InkWell(
+            if (notificationId == null) {
+              return const SizedBox.shrink();
+            }
+
+            return Dismissible(
+              key: ValueKey('notification-$notificationId'),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: AppTheme.statusError,
+                  borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                ),
+                child: const Icon(Icons.delete_outline, color: Colors.white),
+              ),
+              confirmDismiss: (_) => _deleteNotification(notificationId, l),
+              onDismissed: (_) {
+                if (!mounted) {
+                  return;
+                }
+                setState(() {
+                  _items.removeWhere(
+                    (current) =>
+                        (current['id'] as num?)?.toInt() == notificationId,
+                  );
+                });
+              },
+              child: Material(
+                color: AppTheme.bgSurface,
                 borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-                onTap: () => _openNotification(item),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-                    border: Border.all(color: AppTheme.border),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isRead
-                              ? AppTheme.bgMuted
-                              : AppTheme.accent.withValues(alpha: 0.15),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                  onTap: () => _openNotification(item),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                      border: Border.all(color: AppTheme.border),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isRead
+                                ? AppTheme.bgMuted
+                                : AppTheme.accent.withValues(alpha: 0.15),
+                          ),
+                          child: Icon(
+                            isRead
+                                ? Icons.notifications_none
+                                : Icons.notifications_active_outlined,
+                            color: isRead
+                                ? AppTheme.textSubtle
+                                : AppTheme.accent,
+                          ),
                         ),
-                        child: Icon(
-                          isRead
-                              ? Icons.notifications_none
-                              : Icons.notifications_active_outlined,
-                          color: isRead ? AppTheme.textSubtle : AppTheme.accent,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    item['title']?.toString() ?? '-',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: isRead
-                                          ? FontWeight.w600
-                                          : FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                if (!isRead)
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppTheme.accent,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              item['body']?.toString() ?? '',
-                              style: const TextStyle(
-                                color: AppTheme.textSubtle,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  _timeLabel(item),
-                                  style: const TextStyle(
-                                    color: AppTheme.textSubtle,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                                if (!isRead)
-                                  TextButton(
-                                    onPressed: () => _markAsRead(item),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 0,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item['title']?.toString() ?? '-',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: isRead
+                                            ? FontWeight.w600
+                                            : FontWeight.w700,
                                       ),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
                                     ),
-                                    child: Text(l.markAsRead),
                                   ),
-                              ],
-                            ),
-                          ],
+                                  if (!isRead)
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: AppTheme.accent,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                item['body']?.toString() ?? '',
+                                style: const TextStyle(
+                                  color: AppTheme.textSubtle,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                _timeLabel(item),
+                                style: const TextStyle(
+                                  color: AppTheme.textSubtle,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

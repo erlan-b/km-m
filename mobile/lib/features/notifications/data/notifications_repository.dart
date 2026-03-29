@@ -33,6 +33,20 @@ class NotificationsRepository {
     final response = await _dio.post('/notifications/$notificationId/read');
     return response.data as Map<String, dynamic>;
   }
+
+  Future<Map<String, dynamic>> markAllAsRead() async {
+    final response = await _dio.post('/notifications/read-all');
+    return response.data as Map<String, dynamic>;
+  }
+
+  Future<void> deleteNotification(int notificationId) async {
+    await _dio.delete('/notifications/$notificationId');
+  }
+
+  Future<Map<String, dynamic>> deleteAllNotifications() async {
+    final response = await _dio.delete('/notifications');
+    return response.data as Map<String, dynamic>;
+  }
 }
 
 final notificationsRepositoryProvider = Provider<NotificationsRepository>((

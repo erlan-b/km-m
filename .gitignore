@@ -67,6 +67,7 @@ RUN_COMMANDS.md
 admin-functional-blueprint.md
 TODO_PDF_GAPS.md
 implementation_plan.md.resolved
+TODO.md
 
 # Local AI/agent artifacts (machine-specific)
 .gemini/

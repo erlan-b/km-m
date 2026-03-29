@@ -10,8 +10,10 @@ from app.db.session import get_db
 from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.notification import (
+    NotificationDeleteManyResponse,
     NotificationItem,
     NotificationListResponse,
+    NotificationMarkAllReadResponse,
     NotificationUnreadCountResponse,
 )
 
@@ -84,3 +86,67 @@ def mark_notification_read(
         db.refresh(notification)
 
     return NotificationItem.model_validate(notification)
+
+
+@router.post("/read-all", response_model=NotificationMarkAllReadResponse)
+def mark_all_notifications_read(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> NotificationMarkAllReadResponse:
+    unread_items = db.scalars(
+        select(Notification).where(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(False),
+        )
+    ).all()
+
+    if not unread_items:
+        return NotificationMarkAllReadResponse(marked_count=0)
+
+    now = utc_now()
+    for notification in unread_items:
+        notification.is_read = True
+        notification.read_at = now
+        db.add(notification)
+
+    db.commit()
+
+    return NotificationMarkAllReadResponse(marked_count=len(unread_items))
+
+
+@router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_notification(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    notification = db.scalar(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    if notification is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
+
+    db.delete(notification)
+    db.commit()
+
+
+@router.delete("", response_model=NotificationDeleteManyResponse)
+def delete_all_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> NotificationDeleteManyResponse:
+    items = db.scalars(
+        select(Notification).where(Notification.user_id == current_user.id)
+    ).all()
+
+    if not items:
+        return NotificationDeleteManyResponse(deleted_count=0)
+
+    for item in items:
+        db.delete(item)
+
+    db.commit()
+    return NotificationDeleteManyResponse(deleted_count=len(items))
