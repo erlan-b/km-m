@@ -82,6 +82,24 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
     }
   }
 
+  double? _parseResponseRate(dynamic rawRate) {
+    if (rawRate == null) {
+      return null;
+    }
+    if (rawRate is num) {
+      return rawRate.toDouble();
+    }
+    return double.tryParse(rawRate.toString());
+  }
+
+  String _formatPercent(double value) {
+    final normalized = value.clamp(0, 100).toDouble();
+    final hasFraction = normalized != normalized.truncateToDouble();
+    return hasFraction
+        ? '${normalized.toStringAsFixed(1)}%'
+        : '${normalized.toStringAsFixed(0)}%';
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
@@ -113,7 +131,17 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
     }
 
     final user = _user!;
+    final fullName = (user['full_name'] as String? ?? '').trim();
     final createdAt = DateTime.tryParse(user['created_at'] as String? ?? '');
+    final sellerTypeRaw = user['seller_type']?.toString() ?? 'owner';
+    final companyName = user['company_name']?.toString().trim();
+    final hasCompanyName = companyName != null && companyName.isNotEmpty;
+    final responseRate = _parseResponseRate(user['response_rate']);
+    final profileImagePath = user['profile_image_url']?.toString().trim();
+    final profileImageUrl =
+        (profileImagePath == null || profileImagePath.isEmpty)
+        ? null
+        : listingsRepo.absoluteUrl(profileImagePath);
 
     return Scaffold(
       appBar: AppBar(title: Text(l.ownerProfile)),
@@ -136,14 +164,21 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                     CircleAvatar(
                       radius: 36,
                       backgroundColor: AppTheme.accent,
-                      child: Text(
-                        (user['full_name'] as String? ?? '?')[0].toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      backgroundImage: profileImageUrl == null
+                          ? null
+                          : NetworkImage(profileImageUrl),
+                      child: profileImageUrl != null
+                          ? null
+                          : Text(
+                              fullName.isNotEmpty
+                                  ? fullName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -154,7 +189,7 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                             children: [
                               Flexible(
                                 child: Text(
-                                  user['full_name'] as String? ?? '',
+                                  fullName,
                                   style: const TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.w700,
@@ -225,23 +260,69 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                     color: AppTheme.bgMuted,
                     borderRadius: BorderRadius.circular(AppTheme.cardRadius),
                   ),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 24,
+                    runSpacing: 10,
                     children: [
                       _StatItem(
                         label: l.activeListings,
                         value: '${user['listing_count'] ?? 0}',
                       ),
-                      if (user['seller_type'] != null &&
-                          user['seller_type'] != 'individual') ...[
-                        const SizedBox(width: 24),
+                      if (sellerTypeRaw.trim().isNotEmpty)
                         _StatItem(
                           label: l.sellerType,
-                          value: _sellerTypeLabel(
-                            user['seller_type'] as String,
-                            l,
-                          ),
+                          value: _sellerTypeLabel(sellerTypeRaw, l),
                         ),
+                      if (responseRate != null)
+                        _StatItem(
+                          label: l.responseRate,
+                          value: _formatPercent(responseRate),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.bgSurface,
+                    borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l.sellerInfo,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _InfoRow(
+                        label: l.sellerType,
+                        value: _sellerTypeLabel(sellerTypeRaw, l),
+                      ),
+                      if (hasCompanyName) ...[
+                        const SizedBox(height: 8),
+                        _InfoRow(label: l.companyName, value: companyName),
                       ],
+                      const SizedBox(height: 8),
+                      _InfoRow(
+                        label: l.verification,
+                        value: user['verified_badge'] == true
+                            ? l.verified
+                            : l.notVerified,
+                        valueColor: user['verified_badge'] == true
+                            ? AppTheme.statusSuccess
+                            : AppTheme.textSubtle,
+                      ),
                     ],
                   ),
                 ),
@@ -334,6 +415,42 @@ class _StatItem extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(color: AppTheme.textSubtle, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.label, required this.value, this.valueColor});
+
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSubtle),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: valueColor ?? AppTheme.textMain,
+            ),
+          ),
         ),
       ],
     );

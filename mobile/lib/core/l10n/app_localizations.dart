@@ -523,6 +523,30 @@ abstract class S {
   /// **'New message'**
   String get newMessage;
 
+  /// No description provided for @callAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Call'**
+  String get callAction;
+
+  /// No description provided for @writeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Write'**
+  String get writeAction;
+
+  /// No description provided for @cannotOpenDialer.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot open phone dialer'**
+  String get cannotOpenDialer;
+
+  /// No description provided for @counterpartPhoneMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number is not available'**
+  String get counterpartPhoneMissing;
+
   /// No description provided for @typeMessage.
   ///
   /// In en, this message translates to:
@@ -540,6 +564,18 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Attach file'**
   String get attachFile;
+
+  /// No description provided for @pickFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick file'**
+  String get pickFile;
+
+  /// No description provided for @reportMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Report message'**
+  String get reportMessage;
 
   /// Shown after attachment is downloaded
   ///
@@ -661,6 +697,12 @@ abstract class S {
   /// **'Edit profile'**
   String get editProfile;
 
+  /// No description provided for @tapProfileCardToEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap this card to edit profile'**
+  String get tapProfileCardToEdit;
+
   /// No description provided for @profileUpdated.
   ///
   /// In en, this message translates to:
@@ -756,6 +798,36 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Sign out from this account'**
   String get signOutFromAccount;
+
+  /// No description provided for @responseRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Response rate'**
+  String get responseRate;
+
+  /// No description provided for @sellerInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'Seller information'**
+  String get sellerInfo;
+
+  /// No description provided for @verification.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification'**
+  String get verification;
+
+  /// No description provided for @verified.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified'**
+  String get verified;
+
+  /// No description provided for @notVerified.
+  ///
+  /// In en, this message translates to:
+  /// **'Not verified'**
+  String get notVerified;
 
   /// No description provided for @promotions.
   ///

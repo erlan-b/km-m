@@ -130,6 +130,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final draft = await showModalBottomSheet<_ProfileUpdateDraft>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: AppTheme.bgMuted,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -201,35 +204,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final selectedCode = await showModalBottomSheet<String>(
       context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: AppTheme.bgMuted,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (sheetContext) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(
-                  l.language,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            color: AppTheme.bgMuted,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: Text(
+                    l.language,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
-              ),
-              ListTile(
-                title: Text(l.languageEnglish),
-                trailing: currentCode == 'en'
-                    ? const Icon(Icons.check, color: AppTheme.accent)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop('en'),
-              ),
-              ListTile(
-                title: Text(l.languageRussian),
-                trailing: currentCode == 'ru'
-                    ? const Icon(Icons.check, color: AppTheme.accent)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop('ru'),
-              ),
-            ],
+                ListTile(
+                  title: Text(l.languageEnglish),
+                  trailing: currentCode == 'en'
+                      ? const Icon(Icons.check, color: AppTheme.accent)
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop('en'),
+                ),
+                ListTile(
+                  title: Text(l.languageRussian),
+                  trailing: currentCode == 'ru'
+                      ? const Icon(Icons.check, color: AppTheme.accent)
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop('ru'),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -286,6 +298,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final draft = await showModalBottomSheet<_SellerTypeChangeRequestDraft>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: AppTheme.bgMuted,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -418,93 +433,108 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.bgSurface,
+            Material(
+              color: AppTheme.bgSurface,
+              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+              child: InkWell(
                 borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: Row(
-                children: [
-                  Stack(
-                    clipBehavior: Clip.none,
+                onTap: _saving ? null : _showEditProfileSheet,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: AppTheme.accent,
-                        backgroundImage: profileImageUrl == null
-                            ? null
-                            : NetworkImage(profileImageUrl),
-                        child: profileImageUrl != null
-                            ? null
-                            : Text(
-                                displayName.isNotEmpty
-                                    ? displayName[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                      ),
-                      Positioned(
-                        right: -6,
-                        bottom: -6,
-                        child: Material(
-                          color: AppTheme.accent,
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: _saving ? null : _pickAvatar,
-                            child: const Padding(
-                              padding: EdgeInsets.all(6),
-                              child: Icon(
-                                Icons.camera_alt_outlined,
-                                size: 14,
-                                color: Colors.white,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Material(
+                            color: Colors.transparent,
+                            shape: const CircleBorder(),
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _saving ? null : _pickAvatar,
+                              child: CircleAvatar(
+                                radius: 28,
+                                backgroundColor: AppTheme.accent,
+                                backgroundImage: profileImageUrl == null
+                                    ? null
+                                    : NetworkImage(profileImageUrl),
+                                child: profileImageUrl != null
+                                    ? null
+                                    : Text(
+                                        displayName.isNotEmpty
+                                            ? displayName[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                               ),
                             ),
                           ),
+                          Positioned(
+                            right: -6,
+                            bottom: -6,
+                            child: Material(
+                              color: AppTheme.accent,
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: _saving ? null : _pickAvatar,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(6),
+                                  child: Icon(
+                                    Icons.camera_alt_outlined,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              displayName,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              email,
+                              style: const TextStyle(
+                                color: AppTheme.textSubtle,
+                                fontSize: 13,
+                              ),
+                            ),
+                            if (city != null && city.trim().isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                city,
+                                style: const TextStyle(
+                                  color: AppTheme.textSubtle,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          displayName,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          email,
-                          style: const TextStyle(
-                            color: AppTheme.textSubtle,
-                            fontSize: 13,
-                          ),
-                        ),
-                        if (city != null && city.trim().isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            city,
-                            style: const TextStyle(
-                              color: AppTheme.textSubtle,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -550,13 +580,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               title: l.language,
               subtitle: _languageLabel(preferredLanguageCode, l),
               onTap: _showLanguageSheet,
-            ),
-            const SizedBox(height: 8),
-            _ActionTile(
-              icon: Icons.edit_outlined,
-              title: l.editProfile,
-              subtitle: l.profileUpdated,
-              onTap: _showEditProfileSheet,
             ),
             const SizedBox(height: 8),
             _ActionTile(
@@ -676,46 +699,55 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   Widget build(BuildContext context) {
     final l = S.of(context)!;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        MediaQuery.of(context).viewInsets.bottom + 16,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppTheme.bgMuted,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              l.editProfile,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _nameCtrl,
-              decoration: InputDecoration(labelText: l.fullName),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _cityCtrl,
-              decoration: InputDecoration(labelText: l.city),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _phoneCtrl,
-              decoration: InputDecoration(labelText: l.phone),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _bioCtrl,
-              decoration: InputDecoration(labelText: l.bio),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(onPressed: _submit, child: Text(l.save)),
-          ],
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          8,
+          16,
+          MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l.editProfile,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _nameCtrl,
+                decoration: InputDecoration(labelText: l.fullName),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _cityCtrl,
+                decoration: InputDecoration(labelText: l.city),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _phoneCtrl,
+                decoration: InputDecoration(labelText: l.phone),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _bioCtrl,
+                decoration: InputDecoration(labelText: l.bio),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(onPressed: _submit, child: Text(l.save)),
+            ],
+          ),
         ),
       ),
     );
@@ -867,127 +899,141 @@ class _SellerTypeChangeRequestSheetState
     final l = S.of(context)!;
     final availableSellerTypes = _availableSellerTypes();
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        MediaQuery.of(context).viewInsets.bottom + 16,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: AppTheme.bgMuted,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              l.requestRoleChange,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              l.roleChangePendingHint,
-              style: const TextStyle(fontSize: 12, color: AppTheme.textSubtle),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _requestedSellerType,
-              decoration: InputDecoration(labelText: l.roleChangeTarget),
-              items: availableSellerTypes
-                  .map(
-                    (sellerType) => DropdownMenuItem(
-                      value: sellerType,
-                      child: Text(_sellerTypeLabel(sellerType, l)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() {
-                  _requestedSellerType = value;
-                  if (_requestedSellerType != 'company') {
-                    _companyNameCtrl.clear();
-                  }
-                });
-              },
-            ),
-            if (_requestedSellerType == 'company') ...[
-              const SizedBox(height: 10),
-              TextField(
-                controller: _companyNameCtrl,
-                decoration: InputDecoration(labelText: l.companyName),
-              ),
-            ],
-            const SizedBox(height: 10),
-            TextField(
-              controller: _noteCtrl,
-              decoration: InputDecoration(labelText: l.roleChangeComment),
-              maxLines: 3,
-            ),
-            if (_requiresDocuments) ...[
-              const SizedBox(height: 12),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          8,
+          16,
+          MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
               Text(
-                l.verificationDocuments,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                l.requestRoleChange,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _pickDocuments,
-                icon: const Icon(Icons.attach_file),
-                label: Text(l.addDocuments),
+              const SizedBox(height: 6),
+              Text(
+                l.roleChangePendingHint,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSubtle,
+                ),
               ),
-              if (_documents.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (var i = 0; i < _documents.length; i++)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.bgMuted,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: AppTheme.border),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 170),
-                              child: Text(
-                                _documents[i].name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            GestureDetector(
-                              onTap: () => _removeDocument(i),
-                              child: const Icon(
-                                Icons.close,
-                                size: 16,
-                                color: AppTheme.textSubtle,
-                              ),
-                            ),
-                          ],
-                        ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _requestedSellerType,
+                decoration: InputDecoration(labelText: l.roleChangeTarget),
+                items: availableSellerTypes
+                    .map(
+                      (sellerType) => DropdownMenuItem(
+                        value: sellerType,
+                        child: Text(_sellerTypeLabel(sellerType, l)),
                       ),
-                  ],
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _requestedSellerType = value;
+                    if (_requestedSellerType != 'company') {
+                      _companyNameCtrl.clear();
+                    }
+                  });
+                },
+              ),
+              if (_requestedSellerType == 'company') ...[
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _companyNameCtrl,
+                  decoration: InputDecoration(labelText: l.companyName),
                 ),
               ],
+              const SizedBox(height: 10),
+              TextField(
+                controller: _noteCtrl,
+                decoration: InputDecoration(labelText: l.roleChangeComment),
+                maxLines: 3,
+              ),
+              if (_requiresDocuments) ...[
+                const SizedBox(height: 12),
+                Text(
+                  l.verificationDocuments,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _pickDocuments,
+                  icon: const Icon(Icons.attach_file),
+                  label: Text(l.addDocuments),
+                ),
+                if (_documents.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (var i = 0; i < _documents.length; i++)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.bgSurface,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: AppTheme.border),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 170,
+                                ),
+                                child: Text(
+                                  _documents[i].name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              GestureDetector(
+                                onTap: () => _removeDocument(i),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: AppTheme.textSubtle,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _submit,
+                child: Text(l.requestRoleChange),
+              ),
             ],
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _submit,
-              child: Text(l.requestRoleChange),
-            ),
-          ],
+          ),
         ),
       ),
     );

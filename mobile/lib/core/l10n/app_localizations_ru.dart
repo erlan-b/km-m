@@ -224,6 +224,18 @@ class SRu extends S {
   String get newMessage => 'Новое сообщение';
 
   @override
+  String get callAction => 'Позвонить';
+
+  @override
+  String get writeAction => 'Написать';
+
+  @override
+  String get cannotOpenDialer => 'Не удалось открыть набор номера';
+
+  @override
+  String get counterpartPhoneMissing => 'Номер телефона недоступен';
+
+  @override
   String get typeMessage => 'Введите сообщение...';
 
   @override
@@ -231,6 +243,12 @@ class SRu extends S {
 
   @override
   String get attachFile => 'Прикрепить файл';
+
+  @override
+  String get pickFile => 'Выбрать файл';
+
+  @override
+  String get reportMessage => 'Пожаловаться на сообщение';
 
   @override
   String attachmentDownloaded(Object fileName, int bytes) {
@@ -295,6 +313,10 @@ class SRu extends S {
   String get editProfile => 'Редактировать профиль';
 
   @override
+  String get tapProfileCardToEdit =>
+      'Нажмите на карточку, чтобы редактировать профиль';
+
+  @override
   String get profileUpdated => 'Профиль обновлён';
 
   @override
@@ -344,6 +366,21 @@ class SRu extends S {
 
   @override
   String get signOutFromAccount => 'Выйти из этого аккаунта';
+
+  @override
+  String get responseRate => 'Процент ответов';
+
+  @override
+  String get sellerInfo => 'Информация о продавце';
+
+  @override
+  String get verification => 'Верификация';
+
+  @override
+  String get verified => 'Проверен';
+
+  @override
+  String get notVerified => 'Не проверен';
 
   @override
   String get promotions => 'Промо';

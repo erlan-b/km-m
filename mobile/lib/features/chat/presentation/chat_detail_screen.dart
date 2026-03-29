@@ -6,10 +6,13 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../reports/data/reports_repository.dart';
 import '../data/chat_repository.dart';
 
 class ChatDetailScreen extends ConsumerStatefulWidget {
@@ -29,6 +32,8 @@ class ChatDetailScreen extends ConsumerStatefulWidget {
 class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   final _messageCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  final _composerFocusNode = FocusNode();
+  final ImagePicker _imagePicker = ImagePicker();
 
   List<Map<String, dynamic>> _messages = [];
   Map<String, dynamic>? _conversation;
@@ -59,7 +64,51 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     _pollTimer?.cancel();
     _messageCtrl.dispose();
     _scrollCtrl.dispose();
+    _composerFocusNode.dispose();
     super.dispose();
+  }
+
+  String _normalizePhoneForDialer(String rawPhone) {
+    final trimmed = rawPhone.trim();
+    final hasLeadingPlus = trimmed.startsWith('+');
+    final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.isEmpty) {
+      return '';
+    }
+    return hasLeadingPlus ? '+$digitsOnly' : digitsOnly;
+  }
+
+  Future<void> _callCounterpart(String phone) async {
+    final l = S.of(context)!;
+    final normalized = _normalizePhoneForDialer(phone);
+    if (normalized.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.counterpartPhoneMissing)));
+      return;
+    }
+
+    try {
+      final uri = Uri(scheme: 'tel', path: normalized);
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l.cannotOpenDialer)));
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.cannotOpenDialer)));
+    }
+  }
+
+  void _focusComposer() {
+    _scrollToBottom(animate: true);
+    FocusScope.of(context).requestFocus(_composerFocusNode);
   }
 
   Future<void> _bootstrap() async {
@@ -262,6 +311,359 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     });
   }
 
+  Future<void> _pickFromGallery() async {
+    final pickedImages = await _imagePicker.pickMultiImage(imageQuality: 88);
+    if (pickedImages.isEmpty) {
+      return;
+    }
+
+    final currentPaths = _pickedFiles
+        .map((file) => file.path)
+        .whereType<String>()
+        .toSet();
+
+    final nextFiles = <PlatformFile>[];
+    for (final image in pickedImages) {
+      final path = image.path;
+      if (path.isEmpty || currentPaths.contains(path)) {
+        continue;
+      }
+
+      var size = 0;
+      try {
+        size = await File(path).length();
+      } catch (_) {}
+
+      nextFiles.add(PlatformFile(name: image.name, path: path, size: size));
+    }
+
+    if (nextFiles.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _pickedFiles = <PlatformFile>[..._pickedFiles, ...nextFiles];
+    });
+  }
+
+  Future<void> _showAttachSheet() async {
+    final l = S.of(context)!;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[
+                    AppTheme.bgSurface,
+                    AppTheme.bgMuted.withValues(alpha: 0.96),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppTheme.border),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppTheme.border,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      l.attachFile,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildAttachmentSourceAction(
+                      icon: Icons.photo_library_outlined,
+                      label: l.pickImages,
+                      onTap: () async {
+                        Navigator.of(sheetContext).pop();
+                        await _pickFromGallery();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildAttachmentSourceAction(
+                      icon: Icons.insert_drive_file_outlined,
+                      label: l.pickFile,
+                      onTap: () async {
+                        Navigator.of(sheetContext).pop();
+                        await _pickFiles();
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAttachmentSourceAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: AppTheme.white.withValues(alpha: 0.9),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: AppTheme.bgMuted,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 18, color: AppTheme.accent),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: AppTheme.textSubtle,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showMessageReportSheet(int messageId) async {
+    final l = S.of(context)!;
+    final reasonCtrl = TextEditingController();
+    var selectedReason = 'spam';
+    var submitting = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final reasons = <String, String>{
+              'spam': l.spam,
+              'scam': l.scam,
+              'offensive': l.offensive,
+              'other': l.other,
+            };
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l.reportMessage,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedReason,
+                    decoration: InputDecoration(labelText: l.reportReason),
+                    items: reasons.entries
+                        .map(
+                          (entry) => DropdownMenuItem<String>(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: submitting
+                        ? null
+                        : (value) {
+                            if (value == null) {
+                              return;
+                            }
+                            setSheetState(() {
+                              selectedReason = value;
+                            });
+                          },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: reasonCtrl,
+                    maxLines: 3,
+                    enabled: !submitting,
+                    decoration: InputDecoration(labelText: l.description),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton(
+                    onPressed: submitting
+                        ? null
+                        : () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            final details = reasonCtrl.text.trim();
+                            if (details.isEmpty) {
+                              messenger.showSnackBar(
+                                SnackBar(content: Text(l.fieldRequired)),
+                              );
+                              return;
+                            }
+
+                            setSheetState(() {
+                              submitting = true;
+                            });
+
+                            try {
+                              await ref
+                                  .read(reportsRepositoryProvider)
+                                  .createReport(
+                                    targetType: 'message',
+                                    targetId: messageId,
+                                    reasonCode: selectedReason,
+                                    reasonText: details,
+                                  );
+
+                              if (!context.mounted) {
+                                return;
+                              }
+
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext);
+                              }
+                              messenger.showSnackBar(
+                                SnackBar(content: Text(l.reportSubmitted)),
+                              );
+                            } on DioException catch (e) {
+                              final data = e.response?.data;
+                              var message = l.errorOccurred;
+                              if (data is Map && data['detail'] is String) {
+                                message = data['detail'].toString();
+                              }
+                              if (context.mounted) {
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text(message)),
+                                );
+                              }
+                            } catch (_) {
+                              if (context.mounted) {
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text(l.errorOccurred)),
+                                );
+                              }
+                            } finally {
+                              if (sheetContext.mounted) {
+                                setSheetState(() {
+                                  submitting = false;
+                                });
+                              }
+                            }
+                          },
+                    child: submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(l.apply),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    reasonCtrl.dispose();
+  }
+
+  Future<void> _showMessageActions(Map<String, dynamic> message) async {
+    final messageId = (message['id'] as num?)?.toInt();
+    if (messageId == null) {
+      return;
+    }
+
+    final l = S.of(context)!;
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(l.reportMessage),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _showMessageReportSheet(messageId);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _removePickedFile(int index) {
     setState(() {
       _pickedFiles = List<PlatformFile>.from(_pickedFiles)..removeAt(index);
@@ -435,6 +837,14 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     final listingId = (_conversation?['listing_id'] as num?)?.toInt();
     final listingTitle = _conversation?['listing_title']?.toString().trim();
     final hasListingTitle = listingTitle != null && listingTitle.isNotEmpty;
+    final counterpartName = _conversation?['counterpart_name']
+        ?.toString()
+        .trim();
+    final counterpartPhone = _conversation?['counterpart_phone']
+        ?.toString()
+        .trim();
+    final hasCounterpartPhone =
+        counterpartPhone != null && counterpartPhone.isNotEmpty;
     final chatTitle = hasListingTitle
         ? listingTitle
         : listingId == null
@@ -445,9 +855,66 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       appBar: AppBar(title: Text(chatTitle)),
       body: Column(
         children: [
+          if (hasCounterpartPhone)
+            _buildContactPanel(
+              l,
+              phone: counterpartPhone,
+              name: (counterpartName != null && counterpartName.isNotEmpty)
+                  ? counterpartName
+                  : null,
+            ),
           Expanded(child: _buildBody(l)),
           if (_pickedFiles.isNotEmpty) _buildPickedFilesStrip(),
           _buildComposer(l),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactPanel(S l, {required String phone, String? name}) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSurface,
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (name != null) ...[
+            Text(
+              name,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 2),
+          ],
+          Text(
+            '${l.phone}: $phone',
+            style: const TextStyle(fontSize: 13, color: AppTheme.textSubtle),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _focusComposer,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: Text(l.writeAction),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _callCounterpart(phone),
+                  icon: const Icon(Icons.call_outlined),
+                  label: Text(l.callAction),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -511,7 +978,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         },
         child: ListView.builder(
           controller: _scrollCtrl,
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
           itemCount: _messages.length + (_loadingMore ? 1 : 0),
           itemBuilder: (context, index) {
             if (_loadingMore && index == 0) {
@@ -537,52 +1004,75 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final senderId = (message['sender_id'] as num?)?.toInt();
     final isMine = _myUserId != null && senderId == _myUserId;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final bubbleMaxWidth = screenWidth >= 700 ? 520.0 : screenWidth * 0.78;
 
     final textBody = message['text_body']?.toString();
+    final hasTextBody = textBody != null && textBody.trim().isNotEmpty;
     final rawAttachments = message['attachments'];
     final attachments = _toMapList(rawAttachments);
+    final bubbleRadius = BorderRadius.only(
+      topLeft: const Radius.circular(14),
+      topRight: const Radius.circular(14),
+      bottomLeft: Radius.circular(isMine ? 14 : 4),
+      bottomRight: Radius.circular(isMine ? 4 : 14),
+    );
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.8,
-        ),
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: isMine
-                ? AppTheme.accent.withValues(alpha: 0.18)
-                : AppTheme.bgMuted,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (textBody != null && textBody.trim().isNotEmpty)
-                Padding(
-                  padding: EdgeInsets.only(bottom: attachments.isEmpty ? 2 : 8),
-                  child: Text(
-                    textBody,
-                    style: const TextStyle(fontSize: 14, height: 1.4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: GestureDetector(
+          onLongPress: () => _showMessageActions(message),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: bubbleMaxWidth, minWidth: 96),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+              decoration: BoxDecoration(
+                color: isMine
+                    ? AppTheme.accent.withValues(alpha: 0.17)
+                    : AppTheme.white,
+                borderRadius: bubbleRadius,
+                border: Border.all(color: AppTheme.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
-                ),
-              if (attachments.isNotEmpty)
-                ...attachments.map(_buildAttachmentWidget),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  _messageTimeLabel(message),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textSubtle,
-                  ),
-                ),
+                ],
               ),
-            ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (hasTextBody)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: attachments.isEmpty ? 0 : 8,
+                      ),
+                      child: Text(
+                        textBody,
+                        style: const TextStyle(fontSize: 14, height: 1.38),
+                      ),
+                    ),
+                  if (attachments.isNotEmpty)
+                    ...attachments.map(_buildAttachmentWidget),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        _messageTimeLabel(message),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppTheme.textSubtle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -723,7 +1213,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
               height: 48,
               child: IconButton(
                 tooltip: l.attachFile,
-                onPressed: _sending ? null : _pickFiles,
+                onPressed: _sending ? null : _showAttachSheet,
                 icon: const Icon(Icons.attach_file),
               ),
             ),
@@ -731,6 +1221,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
             Expanded(
               child: TextField(
                 controller: _messageCtrl,
+                focusNode: _composerFocusNode,
                 enabled: !_sending,
                 minLines: 1,
                 maxLines: 4,

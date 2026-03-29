@@ -589,19 +589,28 @@ class _ListingFormScreenState extends ConsumerState<ListingFormScreen> {
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: ['sale', 'rent_long', 'rent_daily']
-                      .map(
-                        (value) => ChoiceChip(
-                          label: Text(_transactionLabel(value, l)),
-                          selected: _transactionType == value,
-                          onSelected: (_) {
-                            setState(() {
-                              _transactionType = value;
-                            });
-                          },
-                        ),
-                      )
-                      .toList(),
+                  children: ['sale', 'rent_long', 'rent_daily'].map((value) {
+                    final selected = _transactionType == value;
+                    return ChoiceChip(
+                      label: Text(_transactionLabel(value, l)),
+                      selected: selected,
+                      selectedColor: AppTheme.accent,
+                      backgroundColor: AppTheme.bgSurface,
+                      side: BorderSide(
+                        color: selected ? AppTheme.accent : AppTheme.border,
+                      ),
+                      labelStyle: TextStyle(
+                        color: selected ? Colors.white : AppTheme.textSubtle,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      checkmarkColor: Colors.white,
+                      onSelected: (_) {
+                        setState(() {
+                          _transactionType = value;
+                        });
+                      },
+                    );
+                  }).toList(),
                 ),
                 const SizedBox(height: 12),
                 Row(

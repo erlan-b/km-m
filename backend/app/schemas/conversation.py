@@ -16,6 +16,9 @@ class ConversationItem(BaseModel):
     created_by_user_id: int
     participant_a_id: int
     participant_b_id: int
+    counterpart_user_id: int
+    counterpart_name: str | None = None
+    counterpart_phone: str | None = None
     last_message_at: datetime | None
     created_at: datetime
     updated_at: datetime

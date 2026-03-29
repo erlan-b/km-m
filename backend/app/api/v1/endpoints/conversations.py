@@ -13,6 +13,7 @@ from app.models.user import AccountStatus, User
 from app.schemas.conversation import ConversationItem, ConversationListResponse, ConversationOpenRequest
 from app.services.messaging_service import (
     ensure_user_is_active,
+    get_other_participant_id,
     normalize_participants,
     user_is_conversation_participant,
 )
@@ -23,10 +24,15 @@ router = APIRouter()
 def build_conversation_item(
     *,
     conversation: Conversation,
+    current_user_id: int,
     listing_title: str | None,
     unread_count: int,
     last_message_preview: str | None,
+    counterpart_name: str | None,
+    counterpart_phone: str | None,
 ) -> ConversationItem:
+    counterpart_user_id = get_other_participant_id(conversation, current_user_id)
+
     return ConversationItem(
         id=conversation.id,
         listing_id=conversation.listing_id,
@@ -34,6 +40,9 @@ def build_conversation_item(
         created_by_user_id=conversation.created_by_user_id,
         participant_a_id=conversation.participant_a_id,
         participant_b_id=conversation.participant_b_id,
+        counterpart_user_id=counterpart_user_id,
+        counterpart_name=counterpart_name,
+        counterpart_phone=counterpart_phone,
         last_message_at=conversation.last_message_at,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
@@ -104,6 +113,17 @@ def get_listing_title_map(db: Session, listing_ids: list[int]) -> dict[int, str]
     return {listing_id: listing_title for listing_id, listing_title in rows}
 
 
+def get_user_contact_map(db: Session, user_ids: list[int]) -> dict[int, tuple[str | None, str | None]]:
+    if not user_ids:
+        return {}
+
+    unique_user_ids = list(dict.fromkeys(user_ids))
+    rows = db.execute(
+        select(User.id, User.full_name, User.phone).where(User.id.in_(unique_user_ids))
+    ).all()
+    return {user_id: (full_name, phone) for user_id, full_name, phone in rows}
+
+
 @router.post("", response_model=ConversationItem)
 def open_conversation_for_listing(
     payload: ConversationOpenRequest,
@@ -155,9 +175,12 @@ def open_conversation_for_listing(
 
     return build_conversation_item(
         conversation=conversation,
+        current_user_id=current_user.id,
         listing_title=listing.title,
         unread_count=unread_map.get(conversation.id, 0),
         last_message_preview=preview_map.get(conversation.id),
+        counterpart_name=recipient.full_name,
+        counterpart_phone=recipient.phone,
     )
 
 
@@ -194,17 +217,36 @@ def list_my_conversations(
     unread_map = get_unread_count_map(db, conversation_ids, current_user.id)
     preview_map = get_last_message_preview_map(db, conversation_ids)
     listing_title_map = get_listing_title_map(db, listing_ids)
+    counterpart_id_map = {
+        conversation.id: get_other_participant_id(conversation, current_user.id)
+        for conversation in conversations
+    }
+    counterpart_contact_map = get_user_contact_map(db, list(counterpart_id_map.values()))
 
-    return ConversationListResponse(
-        items=[
+    items: list[ConversationItem] = []
+    for conversation in conversations:
+        counterpart_name: str | None = None
+        counterpart_phone: str | None = None
+        counterpart_user_id = counterpart_id_map.get(conversation.id)
+        if counterpart_user_id is not None:
+            contact = counterpart_contact_map.get(counterpart_user_id)
+            if contact is not None:
+                counterpart_name, counterpart_phone = contact
+
+        items.append(
             build_conversation_item(
                 conversation=conversation,
+                current_user_id=current_user.id,
                 listing_title=listing_title_map.get(conversation.listing_id),
                 unread_count=unread_map.get(conversation.id, 0),
                 last_message_preview=preview_map.get(conversation.id),
+                counterpart_name=counterpart_name,
+                counterpart_phone=counterpart_phone,
             )
-            for conversation in conversations
-        ],
+        )
+
+    return ConversationListResponse(
+        items=items,
         page=page,
         page_size=page_size,
         total_items=total_items,
@@ -228,10 +270,16 @@ def get_conversation_detail(
     unread_map = get_unread_count_map(db, [conversation.id], current_user.id)
     preview_map = get_last_message_preview_map(db, [conversation.id])
     listing_title_map = get_listing_title_map(db, [conversation.listing_id])
+    counterpart_id = get_other_participant_id(conversation, current_user.id)
+    counterpart_map = get_user_contact_map(db, [counterpart_id])
+    counterpart_name, counterpart_phone = counterpart_map.get(counterpart_id, (None, None))
 
     return build_conversation_item(
         conversation=conversation,
+        current_user_id=current_user.id,
         listing_title=listing_title_map.get(conversation.listing_id),
         unread_count=unread_map.get(conversation.id, 0),
         last_message_preview=preview_map.get(conversation.id),
+        counterpart_name=counterpart_name,
+        counterpart_phone=counterpart_phone,
     )

@@ -224,6 +224,18 @@ class SEn extends S {
   String get newMessage => 'New message';
 
   @override
+  String get callAction => 'Call';
+
+  @override
+  String get writeAction => 'Write';
+
+  @override
+  String get cannotOpenDialer => 'Cannot open phone dialer';
+
+  @override
+  String get counterpartPhoneMissing => 'Phone number is not available';
+
+  @override
   String get typeMessage => 'Type a message...';
 
   @override
@@ -231,6 +243,12 @@ class SEn extends S {
 
   @override
   String get attachFile => 'Attach file';
+
+  @override
+  String get pickFile => 'Pick file';
+
+  @override
+  String get reportMessage => 'Report message';
 
   @override
   String attachmentDownloaded(Object fileName, int bytes) {
@@ -295,6 +313,9 @@ class SEn extends S {
   String get editProfile => 'Edit profile';
 
   @override
+  String get tapProfileCardToEdit => 'Tap this card to edit profile';
+
+  @override
   String get profileUpdated => 'Profile updated';
 
   @override
@@ -343,6 +364,21 @@ class SEn extends S {
 
   @override
   String get signOutFromAccount => 'Sign out from this account';
+
+  @override
+  String get responseRate => 'Response rate';
+
+  @override
+  String get sellerInfo => 'Seller information';
+
+  @override
+  String get verification => 'Verification';
+
+  @override
+  String get verified => 'Verified';
+
+  @override
+  String get notVerified => 'Not verified';
 
   @override
   String get promotions => 'Promotions';

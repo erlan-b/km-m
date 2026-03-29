@@ -19,12 +19,18 @@ def create_role(db_session, name: str) -> Role:
     return role
 
 
-def create_user(db_session, email: str, roles: list[Role]) -> User:
+def create_user(
+    db_session,
+    email: str,
+    roles: list[Role],
+    phone: str | None = None,
+) -> User:
     user = User(
         full_name=email.split("@")[0],
         email=email,
         password_hash="test-hash",
         preferred_language="ru",
+        phone=phone,
         account_status=AccountStatus.ACTIVE,
         roles=roles,
     )
@@ -66,8 +72,18 @@ def create_listing(db_session, owner_id: int, category_id: int) -> Listing:
 
 def test_only_conversation_participants_can_access_conversation_and_messages(client, db_session, set_current_user):
     user_role = create_role(db_session, "user")
-    owner = create_user(db_session, "owner-msg@example.com", [user_role])
-    buyer = create_user(db_session, "buyer-msg@example.com", [user_role])
+    owner = create_user(
+        db_session,
+        "owner-msg@example.com",
+        [user_role],
+        phone="+996700111111",
+    )
+    buyer = create_user(
+        db_session,
+        "buyer-msg@example.com",
+        [user_role],
+        phone="+996700222222",
+    )
     outsider = create_user(db_session, "outsider-msg@example.com", [user_role])
 
     category = create_category(db_session)
@@ -76,8 +92,12 @@ def test_only_conversation_participants_can_access_conversation_and_messages(cli
     set_current_user(buyer)
     open_response = client.post("/api/v1/conversations", json={"listing_id": listing.id})
     assert open_response.status_code == 200
-    assert open_response.json()["listing_title"] == listing.title
-    conversation_id = open_response.json()["id"]
+    open_payload = open_response.json()
+    assert open_payload["listing_title"] == listing.title
+    assert open_payload["counterpart_user_id"] == owner.id
+    assert open_payload["counterpart_name"] == owner.full_name
+    assert open_payload["counterpart_phone"] == owner.phone
+    conversation_id = open_payload["id"]
 
     send_response = client.post(
         "/api/v1/messages/text",
@@ -92,11 +112,19 @@ def test_only_conversation_participants_can_access_conversation_and_messages(cli
 
     owner_conversation_response = client.get(f"/api/v1/conversations/{conversation_id}")
     assert owner_conversation_response.status_code == 200
-    assert owner_conversation_response.json()["listing_title"] == listing.title
+    owner_conversation_payload = owner_conversation_response.json()
+    assert owner_conversation_payload["listing_title"] == listing.title
+    assert owner_conversation_payload["counterpart_user_id"] == buyer.id
+    assert owner_conversation_payload["counterpart_name"] == buyer.full_name
+    assert owner_conversation_payload["counterpart_phone"] == buyer.phone
 
     owner_list_response = client.get("/api/v1/conversations")
     assert owner_list_response.status_code == 200
-    assert owner_list_response.json()["items"][0]["listing_title"] == listing.title
+    owner_list_item = owner_list_response.json()["items"][0]
+    assert owner_list_item["listing_title"] == listing.title
+    assert owner_list_item["counterpart_user_id"] == buyer.id
+    assert owner_list_item["counterpart_name"] == buyer.full_name
+    assert owner_list_item["counterpart_phone"] == buyer.phone
 
     set_current_user(outsider)
     outsider_conversation_response = client.get(f"/api/v1/conversations/{conversation_id}")
