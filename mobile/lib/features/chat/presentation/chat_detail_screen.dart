@@ -831,6 +831,80 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     return '$hh:$mm';
   }
 
+  double _measureSingleLineTextWidth(
+    BuildContext context,
+    String text,
+    TextStyle style,
+  ) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+    )..layout(minWidth: 0, maxWidth: double.infinity);
+    return painter.width;
+  }
+
+  double _resolveBubbleMaxWidth({
+    required BuildContext context,
+    required String text,
+    required String timeLabel,
+    required bool hasAttachments,
+  }) {
+    final media = MediaQuery.of(context);
+    final screenWidth = media.size.width;
+    final baseMaxWidth = screenWidth >= 700
+        ? 520.0
+        : screenWidth *
+              (media.orientation == Orientation.portrait ? 0.78 : 0.64);
+
+    if (hasAttachments) {
+      return baseMaxWidth;
+    }
+
+    const horizontalPadding = 24.0;
+    const minBubbleWidth = 68.0;
+    const minContentWidth = 44.0;
+
+    final maxContentWidth = (baseMaxWidth - horizontalPadding)
+        .clamp(minContentWidth, baseMaxWidth)
+        .toDouble();
+    final normalizedText = text.trimRight();
+    final textLines = normalizedText.isEmpty
+        ? const <String>['']
+        : normalizedText.split('\n');
+
+    var longestLineWidth = 0.0;
+    for (final rawLine in textLines) {
+      final line = rawLine.isEmpty ? ' ' : rawLine;
+      final lineWidth = _measureSingleLineTextWidth(
+        context,
+        line,
+        const TextStyle(fontSize: 14, height: 1.38),
+      );
+      if (lineWidth > longestLineWidth) {
+        longestLineWidth = lineWidth;
+      }
+    }
+
+    final resolvedTimeLabel = timeLabel.isEmpty ? '00:00' : timeLabel;
+    final timestampWidth = _measureSingleLineTextWidth(
+      context,
+      resolvedTimeLabel,
+      const TextStyle(fontSize: 11, color: AppTheme.textSubtle),
+    );
+
+    final widestContent = longestLineWidth > timestampWidth
+        ? longestLineWidth
+        : timestampWidth;
+    final clampedContentWidth = widestContent
+        .clamp(minContentWidth, maxContentWidth)
+        .toDouble();
+
+    return (clampedContentWidth + horizontalPadding)
+        .clamp(minBubbleWidth, baseMaxWidth)
+        .toDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
@@ -1004,13 +1078,18 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final senderId = (message['sender_id'] as num?)?.toInt();
     final isMine = _myUserId != null && senderId == _myUserId;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final bubbleMaxWidth = screenWidth >= 700 ? 520.0 : screenWidth * 0.78;
 
     final textBody = message['text_body']?.toString();
     final hasTextBody = textBody != null && textBody.trim().isNotEmpty;
     final rawAttachments = message['attachments'];
     final attachments = _toMapList(rawAttachments);
+    final timeLabel = _messageTimeLabel(message);
+    final bubbleMaxWidth = _resolveBubbleMaxWidth(
+      context: context,
+      text: hasTextBody ? textBody : '',
+      timeLabel: timeLabel,
+      hasAttachments: attachments.isNotEmpty,
+    );
     final bubbleRadius = BorderRadius.only(
       topLeft: const Radius.circular(14),
       topRight: const Radius.circular(14),
@@ -1025,7 +1104,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         child: GestureDetector(
           onLongPress: () => _showMessageActions(message),
           child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: bubbleMaxWidth, minWidth: 96),
+            constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
             child: Container(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
               decoration: BoxDecoration(
@@ -1062,7 +1141,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                     child: Align(
                       alignment: Alignment.centerRight,
                       child: Text(
-                        _messageTimeLabel(message),
+                        timeLabel,
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppTheme.textSubtle,
