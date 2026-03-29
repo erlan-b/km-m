@@ -111,8 +111,8 @@ python -m venv ../.venv          # or use existing venv
 ../.venv/Scripts/python -m alembic upgrade head
 
 # Seed demo data
-../.venv/Scripts/python db/scripts/seed_basics.py --scope all
-../.venv/Scripts/python db/scripts/seed_admin_panel_demo.py --users 30
+../.venv/Scripts/python -m db.scripts.seed_basics --scope all
+../.venv/Scripts/python -m db.scripts.seed_admin_panel_demo --users 30
 
 # Start server
 ../.venv/Scripts/python -m uvicorn app.main:app --reload --port 8000

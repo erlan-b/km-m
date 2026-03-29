@@ -80,13 +80,13 @@ alembic upgrade head
 6. Seed categories:
 
 ```bash
-python db/scripts/seed_basics.py --scope categories
+python -m db.scripts.seed_basics --scope categories
 ```
 
 7. Seed demo accounts (user/admin/moderator):
 
 ```bash
-python db/scripts/seed_basics.py --scope users
+python -m db.scripts.seed_basics --scope users
 ```
 
 8. Start API:
@@ -237,7 +237,7 @@ Current integration suites cover:
 
 ## Demo Credentials
 
-After running `python db/scripts/seed_basics.py --scope users`:
+After running `python -m db.scripts.seed_basics --scope users`:
 
 - Superadmin:
 	- email: `superadmin@demo.kg`

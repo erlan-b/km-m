@@ -56,10 +56,17 @@ type PromotionFilters = {
 type PackageFormState = {
   title: string;
   description: string;
+  inputLanguage: SupportedLanguage;
   duration_days: string;
   price: string;
   currency: string;
   is_active: boolean;
+};
+
+type SupportedLanguage = "en" | "ru";
+
+type I18nSearchResponse = {
+  items: { id: number; text_key: string; language: string }[];
 };
 
 const initialFilters: PromotionFilters = {
@@ -72,6 +79,7 @@ const initialFilters: PromotionFilters = {
 const initialPackageForm: PackageFormState = {
   title: "",
   description: "",
+  inputLanguage: "en",
   duration_days: "7",
   price: "0.00",
   currency: "KGS",
@@ -198,6 +206,7 @@ function statusClass(status: PromotionStatus): string {
 export function PromotionsPage() {
   const { authFetch, canManageAdministration } = useAuth();
   const { t, language } = usePageI18n("promotions");
+  const defaultInputLanguage: SupportedLanguage = language === "ru" ? "ru" : "en";
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [packages, setPackages] = useState<PromotionPackageItem[]>([]);
@@ -348,7 +357,13 @@ export function PromotionsPage() {
     }
 
     setEditingPackage(null);
-    setPackageForm({ ...initialPackageForm, currency: "KGS", price: "0.00", duration_days: "7" });
+    setPackageForm({
+      ...initialPackageForm,
+      inputLanguage: defaultInputLanguage,
+      currency: "KGS",
+      price: "0.00",
+      duration_days: "7",
+    });
     setPackageFormError(null);
     setIsPackageModalOpen(true);
   };
@@ -363,6 +378,7 @@ export function PromotionsPage() {
     setPackageForm({
       title: item.title,
       description: item.description ?? "",
+      inputLanguage: defaultInputLanguage,
       duration_days: String(item.duration_days),
       price: typeof item.price === "string" ? item.price : String(item.price),
       currency: item.currency,
@@ -403,6 +419,73 @@ export function PromotionsPage() {
     setIsPackageSaving(true);
     setPackageFormError(null);
 
+    const upsertLocalizationEntry = async (
+      pageKey: "promotions",
+      textKey: string,
+      languageCode: SupportedLanguage,
+      textValue: string,
+    ) => {
+      const params = new URLSearchParams({
+        page_key: pageKey,
+        language: languageCode,
+        q: textKey,
+        page_size: "100",
+        include_inactive: "true",
+      });
+
+      const searchResponse = await authFetch(`/i18n/admin/entries?${params.toString()}`);
+      if (!searchResponse.ok) {
+        throw new Error("Failed to search localization entries");
+      }
+
+      const searchPayload = (await searchResponse.json()) as I18nSearchResponse;
+      const existing = searchPayload.items.find((item) => item.text_key === textKey && item.language === languageCode);
+
+      if (existing) {
+        const patchResponse = await authFetch(`/i18n/admin/entries/${existing.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text_value: textValue,
+            is_active: true,
+          }),
+        });
+
+        if (!patchResponse.ok) {
+          throw new Error("Failed to update localization entry");
+        }
+        return;
+      }
+
+      const createResponse = await authFetch("/i18n/admin/entries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          page_key: pageKey,
+          text_key: textKey,
+          language: languageCode,
+          text_value: textValue,
+          is_active: true,
+        }),
+      });
+
+      if (!createResponse.ok) {
+        throw new Error("Failed to create localization entry");
+      }
+    };
+
+    const syncPromotionLocalizationFromSource = async (
+      packageId: number,
+      sourceLanguage: SupportedLanguage,
+      titleValue: string,
+      descriptionValue: string | null,
+    ) => {
+      await upsertLocalizationEntry("promotions", `package_${packageId}_title`, sourceLanguage, titleValue);
+      if (descriptionValue && descriptionValue.trim()) {
+        await upsertLocalizationEntry("promotions", `package_${packageId}_description`, sourceLanguage, descriptionValue.trim());
+      }
+    };
+
     try {
       const payload = {
         title: trimmedTitle,
@@ -436,6 +519,21 @@ export function PromotionsPage() {
           message = t("error_save_package", "Failed to save promotion package");
         }
         throw new Error(message);
+      }
+
+      const savedPackage = (await response.json()) as PromotionPackageItem;
+
+      if (!isEdit) {
+        try {
+          await syncPromotionLocalizationFromSource(
+            savedPackage.id,
+            packageForm.inputLanguage,
+            payload.title,
+            payload.description,
+          );
+        } catch {
+          setPackagesError(t("warning_created_without_localization", "Package created, but source-language localization entries were not fully saved"));
+        }
       }
 
       setIsPackageModalOpen(false);
@@ -840,6 +938,23 @@ export function PromotionsPage() {
                 />
               </label>
 
+              {!editingPackage ? (
+                <label>
+                  {t("input_language", "Input language")}
+                  <select
+                    className="users-filter-select"
+                    value={packageForm.inputLanguage}
+                    onChange={(event) => setPackageForm((prev) => ({
+                      ...prev,
+                      inputLanguage: event.target.value as SupportedLanguage,
+                    }))}
+                  >
+                    <option value="en">{t("language_english", "English")}</option>
+                    <option value="ru">{t("language_russian", "Русский")}</option>
+                  </select>
+                </label>
+              ) : null}
+
               <label>
                 {t("currency", "Currency")}
                 <input
@@ -900,7 +1015,7 @@ export function PromotionsPage() {
                   if (editingPackage) {
                     openEditPackageModal(editingPackage);
                   } else {
-                    setPackageForm(initialPackageForm);
+                    setPackageForm({ ...initialPackageForm, inputLanguage: defaultInputLanguage });
                   }
                 }}
               >

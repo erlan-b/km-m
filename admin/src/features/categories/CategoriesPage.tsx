@@ -44,9 +44,16 @@ type CategoryAttributeDraft = {
 
 type CategoryFormState = {
   name: string;
+  inputLanguage: SupportedLanguage;
   isActive: boolean;
   displayOrder: string;
   attributesSchema: CategoryAttributeDraft[];
+};
+
+type SupportedLanguage = "en" | "ru";
+
+type I18nSearchResponse = {
+  items: { id: number; text_key: string; language: string }[];
 };
 
 function buildEmptyAttributeDraft(id: number, existingKey?: string): CategoryAttributeDraft {
@@ -69,9 +76,10 @@ function extractErrorMessage(error: unknown): string {
   return "Request failed";
 }
 
-function buildInitialFormState(): CategoryFormState {
+function buildInitialFormState(inputLanguage: SupportedLanguage = "en"): CategoryFormState {
   return {
     name: "",
+    inputLanguage,
     isActive: true,
     displayOrder: "0",
     attributesSchema: [],
@@ -90,13 +98,68 @@ function sortCategories(items: CategoryItem[]): CategoryItem[] {
   });
 }
 
-function normalizeSlug(value: string): string {
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "y",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "h",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "sch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+};
+
+function transliterateToLatin(value: string): string {
   return value
+    .split("")
+    .map((char) => CYRILLIC_TO_LATIN[char.toLowerCase()] ?? char)
+    .join("");
+}
+
+function normalizeSlug(value: string): string {
+  const normalizedSource = transliterateToLatin(value);
+
+  return normalizedSource
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9\s-_]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
+}
+
+function normalizeTextKeyPart(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    || "field";
 }
 
 function toDraftAttributes(source: CategoryAttributeDefinition[] | null): CategoryAttributeDraft[] {
@@ -192,6 +255,7 @@ function normalizeAttributesSchema(
 export function CategoriesPage() {
   const { authFetch, canModerateContent } = useAuth();
   const { t, language } = usePageI18n("categories");
+  const defaultInputLanguage: SupportedLanguage = language === "ru" ? "ru" : "en";
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -201,7 +265,7 @@ export function CategoriesPage() {
   const [query, setQuery] = useState("");
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
-  const [formState, setFormState] = useState<CategoryFormState>(buildInitialFormState());
+  const [formState, setFormState] = useState<CategoryFormState>(() => buildInitialFormState(defaultInputLanguage));
   const [nextFieldId, setNextFieldId] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -249,7 +313,7 @@ export function CategoriesPage() {
 
   useEffect(() => {
     if (!selectedCategory) {
-      setFormState(buildInitialFormState());
+      setFormState(buildInitialFormState(defaultInputLanguage));
       setNextFieldId(1);
       return;
     }
@@ -258,12 +322,13 @@ export function CategoriesPage() {
 
     setFormState({
       name: selectedCategory.name,
+      inputLanguage: defaultInputLanguage,
       isActive: selectedCategory.is_active,
       displayOrder: String(selectedCategory.display_order),
       attributesSchema: draftAttributes,
     });
     setNextFieldId(getNextFieldId(draftAttributes));
-  }, [selectedCategory]);
+  }, [defaultInputLanguage, selectedCategory]);
 
   const filteredRows = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -284,10 +349,107 @@ export function CategoriesPage() {
     }
 
     setSelectedCategoryId(null);
-    setFormState(buildInitialFormState());
+    setFormState(buildInitialFormState(defaultInputLanguage));
     setNextFieldId(1);
     setIsFormModalOpen(true);
   };
+
+  const upsertLocalizationEntry = useCallback(async (
+    pageKey: "categories",
+    textKey: string,
+    languageCode: SupportedLanguage,
+    textValue: string,
+  ) => {
+    const params = new URLSearchParams({
+      page_key: pageKey,
+      language: languageCode,
+      q: textKey,
+      page_size: "100",
+      include_inactive: "true",
+    });
+
+    const searchResponse = await authFetch(`/i18n/admin/entries?${params.toString()}`);
+    if (!searchResponse.ok) {
+      throw new Error("Failed to search localization entries");
+    }
+
+    const searchPayload = (await searchResponse.json()) as I18nSearchResponse;
+    const existing = searchPayload.items.find((item) => item.text_key === textKey && item.language === languageCode);
+
+    if (existing) {
+      const patchResponse = await authFetch(`/i18n/admin/entries/${existing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text_value: textValue,
+          is_active: true,
+        }),
+      });
+
+      if (!patchResponse.ok) {
+        throw new Error("Failed to update localization entry");
+      }
+      return;
+    }
+
+    const createResponse = await authFetch("/i18n/admin/entries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        page_key: pageKey,
+        text_key: textKey,
+        language: languageCode,
+        text_value: textValue,
+        is_active: true,
+      }),
+    });
+
+    if (!createResponse.ok) {
+      throw new Error("Failed to create localization entry");
+    }
+  }, [authFetch]);
+
+  const syncCategoryLocalizationFromSource = useCallback(async (
+    categoryId: number,
+    sourceLanguage: SupportedLanguage,
+    categoryName: string,
+    attributesSchema: CategoryAttributeDefinition[] | null,
+  ) => {
+    const writes: Array<{ textKey: string; textValue: string }> = [
+      { textKey: `category_${categoryId}_name`, textValue: categoryName },
+    ];
+
+    for (const [attributeIndex, attribute] of (attributesSchema ?? []).entries()) {
+      const rawAttributeKey = attribute.key?.trim() || `field_${attributeIndex + 1}`;
+      const normalizedAttributeKey = normalizeTextKeyPart(rawAttributeKey);
+      const labelValue = attribute.label.trim();
+
+      if (labelValue) {
+        writes.push({
+          textKey: `category_${categoryId}_attr_${normalizedAttributeKey}_label`,
+          textValue: labelValue,
+        });
+      }
+
+      if (Array.isArray(attribute.options)) {
+        for (const [optionIndex, optionValue] of attribute.options.entries()) {
+          const optionText = optionValue.trim();
+          if (!optionText) {
+            continue;
+          }
+
+          writes.push({
+            textKey: `category_${categoryId}_attr_${normalizedAttributeKey}_option_${optionIndex + 1}`,
+            textValue: optionText,
+          });
+        }
+      }
+    }
+
+    for (const write of writes) {
+      await upsertLocalizationEntry("categories", write.textKey, sourceLanguage, write.textValue);
+    }
+  }, [upsertLocalizationEntry]);
 
   const applyActivationToggle = async (category: CategoryItem) => {
     if (!canModerateContent) {
@@ -401,6 +563,19 @@ export function CategoriesPage() {
       }
 
       const saved = (await response.json()) as CategoryItem;
+
+      if (!isEditMode) {
+        try {
+          await syncCategoryLocalizationFromSource(
+            saved.id,
+            formState.inputLanguage,
+            payload.name,
+            payload.attributes_schema,
+          );
+        } catch {
+          setError(t("warning_created_without_localization", "Category created, but source-language localization entries were not fully saved"));
+        }
+      }
 
       setCategories((prev) => {
         if (isEditMode) {
@@ -598,6 +773,7 @@ export function CategoriesPage() {
                                 const draftAttributes = toDraftAttributes(category.attributes_schema);
                                 setFormState({
                                   name: category.name,
+                                  inputLanguage: defaultInputLanguage,
                                   isActive: category.is_active,
                                   displayOrder: String(category.display_order),
                                   attributesSchema: draftAttributes,
@@ -651,6 +827,23 @@ export function CategoriesPage() {
                   minLength={2}
                 />
               </label>
+
+              {!selectedCategory ? (
+                <label>
+                  {t("input_language", "Input language")}
+                  <select
+                    className="users-filter-select"
+                    value={formState.inputLanguage}
+                    onChange={(event) => setFormState((prev) => ({
+                      ...prev,
+                      inputLanguage: event.target.value as SupportedLanguage,
+                    }))}
+                  >
+                    <option value="en">{t("language_english", "English")}</option>
+                    <option value="ru">{t("language_russian", "Русский")}</option>
+                  </select>
+                </label>
+              ) : null}
 
               <label>
                 {t("display_order", "Order")}
@@ -820,6 +1013,7 @@ export function CategoriesPage() {
                     const draftAttributes = toDraftAttributes(selectedCategory.attributes_schema);
                     setFormState({
                       name: selectedCategory.name,
+                      inputLanguage: defaultInputLanguage,
                       isActive: selectedCategory.is_active,
                       displayOrder: String(selectedCategory.display_order),
                       attributesSchema: draftAttributes,
@@ -827,7 +1021,7 @@ export function CategoriesPage() {
                     setNextFieldId(getNextFieldId(draftAttributes));
                     return;
                   }
-                  setFormState(buildInitialFormState());
+                  setFormState(buildInitialFormState(defaultInputLanguage));
                   setNextFieldId(1);
                 }}
               >
