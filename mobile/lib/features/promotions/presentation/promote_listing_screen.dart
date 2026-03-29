@@ -415,26 +415,59 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
                     borderRadius: BorderRadius.circular(AppTheme.cardRadius),
                     border: Border.all(color: AppTheme.border),
                   ),
-                  child: RadioListTile<int>(
-                    value: packageId ?? -1,
-                    groupValue: selectedId,
-                    onChanged: (_submitting || packageId == null)
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+                    onTap: (_submitting || packageId == null)
                         ? null
-                        : (_) {
+                        : () {
                             setState(() {
                               _selectedPackage = item;
                             });
                           },
-                    title: Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Icon(
+                              selectedId == packageId
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_off,
+                              color: selectedId == packageId
+                                  ? AppTheme.accent
+                                  : AppTheme.textSubtle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '${l.duration}: $durationDays ${l.days} · ${_formatMoney(price, currency)}'
+                                  '${description.trim().isEmpty ? '' : '\n$description'}',
+                                  style: const TextStyle(
+                                    color: AppTheme.textSubtle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    subtitle: Text(
-                      '${l.duration}: $durationDays ${l.days} · ${_formatMoney(price, currency)}'
-                      '${description.trim().isEmpty ? '' : '\n$description'}',
-                    ),
-                    dense: true,
-                    activeColor: AppTheme.accent,
                   ),
                 );
               }),

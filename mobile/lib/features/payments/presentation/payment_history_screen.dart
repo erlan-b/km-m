@@ -226,7 +226,7 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
         child: ListView.separated(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 16),
           itemCount: _items.length + (_loadingMore ? 1 : 0),
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (context, index) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             if (index >= _items.length) {
               return const Padding(
