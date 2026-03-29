@@ -1,12 +1,15 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/data/auth_state.dart';
+import '../data/profile_repository.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -17,6 +20,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _loading = true;
+  bool _saving = false;
   String? _error;
   Map<String, dynamic>? _me;
 
@@ -33,7 +37,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
 
     try {
-      final me = await ref.read(authRepositoryProvider).getMe();
+      final me = await ref.read(profileRepositoryProvider).getMyProfile();
       setState(() {
         _me = me;
         _loading = false;
@@ -44,6 +48,255 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _loading = false;
       });
     }
+  }
+
+  String _friendlyError(Object error, S l) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map && data['detail'] is String) {
+        return data['detail'].toString();
+      }
+      if (error.message != null && error.message!.trim().isNotEmpty) {
+        return error.message!;
+      }
+    }
+    return l.errorOccurred;
+  }
+
+  Future<void> _pickAvatar() async {
+    if (_saving) {
+      return;
+    }
+
+    final l = S.of(context)!;
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 86,
+    );
+    if (picked == null) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final updated = await ref
+          .read(profileRepositoryProvider)
+          .uploadAvatar(picked.path);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _me = updated;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l.profileUpdated)));
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_friendlyError(e, l))));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _showEditProfileSheet() async {
+    final me = _me;
+    if (me == null || _saving) {
+      return;
+    }
+
+    final l = S.of(context)!;
+    final nameCtrl = TextEditingController(
+      text: me['full_name']?.toString() ?? '',
+    );
+    final cityCtrl = TextEditingController(text: me['city']?.toString() ?? '');
+    final phoneCtrl = TextEditingController(
+      text: me['phone']?.toString() ?? '',
+    );
+    final bioCtrl = TextEditingController(text: me['bio']?.toString() ?? '');
+
+    var language = (me['preferred_language']?.toString() ?? 'en').toLowerCase();
+    if (language != 'ru') {
+      language = 'en';
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        var submitting = false;
+
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      l.editProfile,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(labelText: l.fullName),
+                      enabled: !submitting,
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: cityCtrl,
+                      decoration: InputDecoration(labelText: l.city),
+                      enabled: !submitting,
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: phoneCtrl,
+                      decoration: InputDecoration(labelText: l.phone),
+                      enabled: !submitting,
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: bioCtrl,
+                      decoration: InputDecoration(labelText: l.bio),
+                      maxLines: 3,
+                      enabled: !submitting,
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      initialValue: language,
+                      decoration: InputDecoration(labelText: l.language),
+                      onChanged: submitting
+                          ? null
+                          : (value) {
+                              if (value == null) {
+                                return;
+                              }
+                              setSheetState(() {
+                                language = value;
+                              });
+                            },
+                      items: const [
+                        DropdownMenuItem(value: 'en', child: Text('English')),
+                        DropdownMenuItem(value: 'ru', child: Text('Русский')),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: submitting
+                          ? null
+                          : () async {
+                              final fullName = nameCtrl.text.trim();
+                              if (fullName.length < 2) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(l.fieldRequired)),
+                                );
+                                return;
+                              }
+
+                              setSheetState(() {
+                                submitting = true;
+                              });
+
+                              try {
+                                final updated = await ref
+                                    .read(profileRepositoryProvider)
+                                    .updateProfile({
+                                      'full_name': fullName,
+                                      'city': cityCtrl.text.trim().isEmpty
+                                          ? null
+                                          : cityCtrl.text.trim(),
+                                      'phone': phoneCtrl.text.trim().isEmpty
+                                          ? null
+                                          : phoneCtrl.text.trim(),
+                                      'bio': bioCtrl.text.trim().isEmpty
+                                          ? null
+                                          : bioCtrl.text.trim(),
+                                      'preferred_language': language,
+                                    });
+
+                                if (!mounted) {
+                                  return;
+                                }
+
+                                setState(() {
+                                  _me = updated;
+                                });
+
+                                if (sheetContext.mounted) {
+                                  Navigator.pop(sheetContext);
+                                }
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(l.profileUpdated)),
+                                );
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(_friendlyError(e, l)),
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                if (sheetContext.mounted) {
+                                  setSheetState(() {
+                                    submitting = false;
+                                  });
+                                }
+                              }
+                            },
+                      child: submitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(l.save),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    nameCtrl.dispose();
+    cityCtrl.dispose();
+    phoneCtrl.dispose();
+    bioCtrl.dispose();
   }
 
   Future<void> _logout() async {
@@ -100,6 +353,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final displayName = me['full_name'] as String? ?? '-';
     final email = me['email'] as String? ?? '-';
     final city = me['city'] as String?;
+    final profileImagePath = me['profile_image_url']?.toString();
+    final profileImageUrl =
+        (profileImagePath == null || profileImagePath.isEmpty)
+        ? null
+        : ref
+              .read(profileRepositoryProvider)
+              .absoluteMediaUrl(profileImagePath);
 
     return Scaffold(
       appBar: AppBar(title: Text(l.profile)),
@@ -118,19 +378,49 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: AppTheme.accent,
-                    child: Text(
-                      displayName.isNotEmpty
-                          ? displayName[0].toUpperCase()
-                          : '?',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: AppTheme.accent,
+                        backgroundImage: profileImageUrl == null
+                            ? null
+                            : NetworkImage(profileImageUrl),
+                        child: profileImageUrl != null
+                            ? null
+                            : Text(
+                                displayName.isNotEmpty
+                                    ? displayName[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                       ),
-                    ),
+                      Positioned(
+                        right: -6,
+                        bottom: -6,
+                        child: Material(
+                          color: AppTheme.accent,
+                          shape: const CircleBorder(),
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _saving ? null : _pickAvatar,
+                            child: const Padding(
+                              padding: EdgeInsets.all(6),
+                              child: Icon(
+                                Icons.camera_alt_outlined,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -181,6 +471,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               title: l.createListing,
               subtitle: l.publishNewOffer,
               onTap: () => context.push('/my-listings/create'),
+            ),
+            const SizedBox(height: 8),
+            _ActionTile(
+              icon: Icons.edit_outlined,
+              title: l.editProfile,
+              subtitle: l.profileUpdated,
+              onTap: _showEditProfileSheet,
             ),
             const SizedBox(height: 8),
             _ActionTile(

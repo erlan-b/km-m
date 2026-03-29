@@ -21,11 +21,16 @@ class HomeShell extends StatelessWidget {
 
   void _onTap(BuildContext context, int index) {
     switch (index) {
-      case 0: context.go('/home');
-      case 1: context.go('/search');
-      case 2: context.go('/favorites');
-      case 3: context.go('/inbox');
-      case 4: context.go('/profile');
+      case 0:
+        context.go('/home');
+      case 1:
+        context.go('/search');
+      case 2:
+        context.go('/favorites');
+      case 3:
+        context.go('/inbox');
+      case 4:
+        context.go('/profile');
     }
   }
 
@@ -44,11 +49,31 @@ class HomeShell extends StatelessWidget {
           currentIndex: idx,
           onTap: (i) => _onTap(context, i),
           items: [
-            BottomNavigationBarItem(icon: const Icon(Icons.home_outlined), activeIcon: const Icon(Icons.home), label: l.navHome),
-            BottomNavigationBarItem(icon: const Icon(Icons.search_outlined), activeIcon: const Icon(Icons.search), label: l.navSearch),
-            BottomNavigationBarItem(icon: const Icon(Icons.favorite_outline), activeIcon: const Icon(Icons.favorite), label: l.navFavorites),
-            BottomNavigationBarItem(icon: const Icon(Icons.chat_bubble_outline), activeIcon: const Icon(Icons.chat_bubble), label: l.navInbox),
-            BottomNavigationBarItem(icon: const Icon(Icons.person_outline), activeIcon: const Icon(Icons.person), label: l.navProfile),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.home_outlined),
+              activeIcon: const Icon(Icons.home),
+              label: l.navHome,
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.search_outlined),
+              activeIcon: const Icon(Icons.search),
+              label: l.navSearch,
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.favorite_outline),
+              activeIcon: const Icon(Icons.favorite),
+              label: l.navFavorites,
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.chat_bubble_outline),
+              activeIcon: const Icon(Icons.chat_bubble),
+              label: l.conversations,
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.person_outline),
+              activeIcon: const Icon(Icons.person),
+              label: l.navProfile,
+            ),
           ],
         ),
       ),

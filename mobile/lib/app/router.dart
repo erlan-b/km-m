@@ -1,16 +1,19 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../features/auth/data/auth_state.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
+import '../features/chat/presentation/chat_detail_screen.dart';
+import '../features/chat/presentation/conversations_screen.dart';
+import '../features/favorites/presentation/favorites_screen.dart';
 import '../features/home/presentation/home_feed_screen.dart';
 import '../features/home/presentation/home_shell.dart';
 import '../features/listings/presentation/listing_form_screen.dart';
 import '../features/listings/presentation/listing_detail_screen.dart';
 import '../features/listings/presentation/my_listings_screen.dart';
 import '../features/listings/presentation/owner_profile_screen.dart';
+import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/search/presentation/search_screen.dart';
 
@@ -55,6 +58,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/chat/:id',
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          final extra = state.extra;
+          final initialConversation = extra is Map
+              ? Map<String, dynamic>.from(extra)
+              : null;
+          return ChatDetailScreen(
+            conversationId: id,
+            initialConversation: initialConversation,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationsScreen(),
+      ),
+      GoRoute(
         path: '/my-listings',
         builder: (context, state) => const MyListingsScreen(),
       ),
@@ -94,12 +115,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/favorites',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: Placeholder()),
+                const NoTransitionPage(child: FavoritesScreen()),
           ),
           GoRoute(
             path: '/inbox',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: Placeholder()),
+                const NoTransitionPage(child: ConversationsScreen()),
           ),
           GoRoute(
             path: '/profile',

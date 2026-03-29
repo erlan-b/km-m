@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../app/theme.dart';
+import '../../favorites/data/favorites_repository.dart';
 import '../../listings/data/listings_repository.dart';
 import '../../listings/presentation/widgets/listing_card.dart';
+import '../../notifications/data/notifications_repository.dart';
 
 class HomeFeedScreen extends ConsumerStatefulWidget {
   const HomeFeedScreen({super.key});
@@ -16,16 +18,21 @@ class HomeFeedScreen extends ConsumerStatefulWidget {
 
 class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   List<dynamic> _listings = [];
+  final Set<int> _favoriteIds = <int>{};
+  final Set<int> _favoriteBusyIds = <int>{};
 
   bool _loading = true;
   String? _error;
   int _page = 1;
   int _totalPages = 1;
+  int _unreadNotifications = 0;
 
   @override
   void initState() {
     super.initState();
     _loadListings();
+    _loadFavoriteIds();
+    _loadUnreadCount();
   }
 
   Future<void> _loadListings({bool append = false}) async {
@@ -66,13 +73,90 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
   Future<void> _refresh() async {
     _page = 1;
-    await _loadListings();
+    await Future.wait([
+      _loadListings(),
+      _loadFavoriteIds(),
+      _loadUnreadCount(),
+    ]);
   }
 
   void _loadMore() {
     if (_page < _totalPages) {
       _page++;
       _loadListings(append: true);
+    }
+  }
+
+  Future<void> _loadFavoriteIds() async {
+    try {
+      final ids = await ref
+          .read(favoritesRepositoryProvider)
+          .fetchFavoriteIds();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _favoriteIds
+          ..clear()
+          ..addAll(ids);
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final data = await ref
+          .read(notificationsRepositoryProvider)
+          .getUnreadCount();
+      final count = (data['unread_count'] as num?)?.toInt() ?? 0;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _unreadNotifications = count;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleFavorite(int listingId) async {
+    if (_favoriteBusyIds.contains(listingId)) {
+      return;
+    }
+
+    final wasFavorite = _favoriteIds.contains(listingId);
+    setState(() {
+      _favoriteBusyIds.add(listingId);
+      if (wasFavorite) {
+        _favoriteIds.remove(listingId);
+      } else {
+        _favoriteIds.add(listingId);
+      }
+    });
+
+    try {
+      final repo = ref.read(favoritesRepositoryProvider);
+      if (wasFavorite) {
+        await repo.removeFavorite(listingId);
+      } else {
+        await repo.addFavorite(listingId);
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (wasFavorite) {
+          _favoriteIds.add(listingId);
+        } else {
+          _favoriteIds.remove(listingId);
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _favoriteBusyIds.remove(listingId);
+        });
+      }
     }
   }
 
@@ -97,9 +181,44 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
             onPressed: () => context.push('/my-listings'),
           ),
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              /* TODO: notifications */
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications_outlined),
+                if (_unreadNotifications > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        _unreadNotifications > 99
+                            ? '99+'
+                            : '$_unreadNotifications',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: () async {
+              await context.push('/notifications');
+              if (mounted) {
+                _loadUnreadCount();
+              }
             },
           ),
         ],
@@ -180,8 +299,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
             itemCount: _listings.length,
             itemBuilder: (context, index) {
               final listing = _listings[index] as Map<String, dynamic>;
+              final listingId = listing['id'] as int;
               return ListingCard(
-                id: listing['id'] as int,
+                id: listingId,
                 title: listing['title'] as String,
                 price: (listing['price'] is String)
                     ? double.parse(listing['price'] as String)
@@ -190,7 +310,11 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                 city: listing['city'] as String,
                 transactionType: listing['transaction_type'] as String,
                 thumbnailUrl: _getThumbnailUrl(listing),
-                onTap: () => context.push('/listing/${listing['id']}'),
+                isFavorite: _favoriteIds.contains(listingId),
+                onTap: () => context.push('/listing/$listingId'),
+                onFavoriteTap: _favoriteBusyIds.contains(listingId)
+                    ? null
+                    : () => _toggleFavorite(listingId),
               );
             },
           ),

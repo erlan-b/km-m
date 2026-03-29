@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../app/theme.dart';
+import '../../favorites/data/favorites_repository.dart';
 import '../../listings/data/categories_repository.dart';
 import '../../listings/data/listings_repository.dart';
 import '../../listings/presentation/widgets/listing_card.dart';
@@ -19,6 +20,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   final _searchCtrl = TextEditingController();
   List<dynamic> _results = [];
   List<dynamic> _categories = [];
+  final Set<int> _favoriteIds = <int>{};
+  final Set<int> _favoriteBusyIds = <int>{};
   bool _loading = false;
   String? _error;
   int _page = 1;
@@ -35,6 +38,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   void initState() {
     super.initState();
     _loadCategories();
+    _loadFavoriteIds();
   }
 
   @override
@@ -45,15 +49,80 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Future<void> _loadCategories() async {
     try {
-      final cats = await ref.read(categoriesRepositoryProvider).getCategories(activeOnly: true);
-      setState(() { _categories = cats; });
+      final cats = await ref
+          .read(categoriesRepositoryProvider)
+          .getCategories(activeOnly: true);
+      setState(() {
+        _categories = cats;
+      });
     } catch (_) {}
+  }
+
+  Future<void> _loadFavoriteIds() async {
+    try {
+      final ids = await ref
+          .read(favoritesRepositoryProvider)
+          .fetchFavoriteIds();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _favoriteIds
+          ..clear()
+          ..addAll(ids);
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleFavorite(int listingId) async {
+    if (_favoriteBusyIds.contains(listingId)) {
+      return;
+    }
+
+    final wasFavorite = _favoriteIds.contains(listingId);
+    setState(() {
+      _favoriteBusyIds.add(listingId);
+      if (wasFavorite) {
+        _favoriteIds.remove(listingId);
+      } else {
+        _favoriteIds.add(listingId);
+      }
+    });
+
+    try {
+      final repo = ref.read(favoritesRepositoryProvider);
+      if (wasFavorite) {
+        await repo.removeFavorite(listingId);
+      } else {
+        await repo.addFavorite(listingId);
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        if (wasFavorite) {
+          _favoriteIds.add(listingId);
+        } else {
+          _favoriteIds.remove(listingId);
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _favoriteBusyIds.remove(listingId);
+        });
+      }
+    }
   }
 
   Future<void> _search({bool append = false}) async {
     if (!append) {
       _page = 1;
-      setState(() { _loading = true; _error = null; });
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
     }
 
     try {
@@ -61,7 +130,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       final data = await repo.getListings(
         page: _page,
         pageSize: 20,
-        query: _searchCtrl.text.trim().isNotEmpty ? _searchCtrl.text.trim() : null,
+        query: _searchCtrl.text.trim().isNotEmpty
+            ? _searchCtrl.text.trim()
+            : null,
         categoryId: _selectedCategoryId,
         city: _selectedCity,
         minPrice: _minPrice,
@@ -80,7 +151,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         _loading = false;
       });
     } catch (e) {
-      setState(() { _error = e.toString(); _loading = false; });
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
     }
   }
 
@@ -107,7 +181,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -116,7 +195,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(l.filters, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    Text(
+                      l.filters,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     TextButton(
                       onPressed: () {
                         setSheetState(() {
@@ -134,7 +219,13 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 const SizedBox(height: 16),
 
                 // Category
-                Text(l.category, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(
+                  l.category,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -159,35 +250,75 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 const SizedBox(height: 16),
 
                 // City
-                Text(l.city, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(
+                  l.city,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 6),
-                TextField(controller: cityCtrl, decoration: InputDecoration(hintText: l.city)),
+                TextField(
+                  controller: cityCtrl,
+                  decoration: InputDecoration(hintText: l.city),
+                ),
                 const SizedBox(height: 16),
 
                 // Price range
-                Text(l.price, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(
+                  l.price,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: TextField(controller: minCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(hintText: l.minPrice))),
+                    Expanded(
+                      child: TextField(
+                        controller: minCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(hintText: l.minPrice),
+                      ),
+                    ),
                     const SizedBox(width: 12),
-                    Expanded(child: TextField(controller: maxCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(hintText: l.maxPrice))),
+                    Expanded(
+                      child: TextField(
+                        controller: maxCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(hintText: l.maxPrice),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
 
                 // Sort
-                Text(l.sort, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(
+                  l.sort,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
                   children: [
-                    for (final entry in {'newest': l.newest, 'oldest': l.oldest, 'price_asc': l.priceAsc, 'price_desc': l.priceDesc, 'most_viewed': l.mostViewed}.entries)
+                    for (final entry in {
+                      'newest': l.newest,
+                      'oldest': l.oldest,
+                      'price_asc': l.priceAsc,
+                      'price_desc': l.priceDesc,
+                      'most_viewed': l.mostViewed,
+                    }.entries)
                       ChoiceChip(
                         label: Text(entry.value),
                         selected: tempSort == entry.key,
-                        onSelected: (_) => setSheetState(() => tempSort = entry.key),
+                        onSelected: (_) =>
+                            setSheetState(() => tempSort = entry.key),
                       ),
                   ],
                 ),
@@ -197,7 +328,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   onPressed: () {
                     setState(() {
                       _selectedCategoryId = tempCatId;
-                      _selectedCity = cityCtrl.text.trim().isNotEmpty ? cityCtrl.text.trim() : null;
+                      _selectedCity = cityCtrl.text.trim().isNotEmpty
+                          ? cityCtrl.text.trim()
+                          : null;
                       _minPrice = double.tryParse(minCtrl.text);
                       _maxPrice = double.tryParse(maxCtrl.text);
                       _sortBy = tempSort;
@@ -220,9 +353,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final l = S.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(l.search),
-      ),
+      appBar: AppBar(title: Text(l.search)),
       body: Column(
         children: [
           // Search bar + filter button
@@ -236,7 +367,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     decoration: InputDecoration(
                       hintText: l.search,
                       prefixIcon: const Icon(Icons.search, size: 20),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 12,
+                      ),
                       isDense: true,
                     ),
                     textInputAction: TextInputAction.search,
@@ -250,7 +384,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   style: IconButton.styleFrom(
                     backgroundColor: AppTheme.accent,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radius)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radius),
+                    ),
                   ),
                 ),
               ],
@@ -265,7 +401,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Widget _buildResults(S l) {
     if (_loading && _results.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.accent));
+      return const Center(
+        child: CircularProgressIndicator(color: AppTheme.accent),
+      );
     }
 
     if (_error != null && _results.isEmpty) {
@@ -273,9 +411,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: AppTheme.textSubtle),
+            const Icon(
+              Icons.error_outline,
+              size: 48,
+              color: AppTheme.textSubtle,
+            ),
             const SizedBox(height: 12),
-            Text(l.errorOccurred, style: const TextStyle(color: AppTheme.textSubtle)),
+            Text(
+              l.errorOccurred,
+              style: const TextStyle(color: AppTheme.textSubtle),
+            ),
             const SizedBox(height: 12),
             ElevatedButton(onPressed: () => _search(), child: Text(l.retry)),
           ],
@@ -290,7 +435,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           children: [
             const Icon(Icons.search_off, size: 48, color: AppTheme.textSubtle),
             const SizedBox(height: 12),
-            Text(l.noResults, style: const TextStyle(color: AppTheme.textSubtle)),
+            Text(
+              l.noResults,
+              style: const TextStyle(color: AppTheme.textSubtle),
+            ),
           ],
         ),
       );
@@ -298,7 +446,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification is ScrollEndNotification && notification.metrics.extentAfter < 200) {
+        if (notification is ScrollEndNotification &&
+            notification.metrics.extentAfter < 200) {
           _loadMore();
         }
         return false;
@@ -315,8 +464,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           itemCount: _results.length,
           itemBuilder: (context, index) {
             final listing = _results[index] as Map<String, dynamic>;
+            final listingId = listing['id'] as int;
             return ListingCard(
-              id: listing['id'] as int,
+              id: listingId,
               title: listing['title'] as String,
               price: (listing['price'] is String)
                   ? double.parse(listing['price'] as String)
@@ -324,7 +474,11 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               currency: listing['currency'] as String,
               city: listing['city'] as String,
               transactionType: listing['transaction_type'] as String,
-              onTap: () => context.push('/listing/${listing['id']}'),
+              isFavorite: _favoriteIds.contains(listingId),
+              onTap: () => context.push('/listing/$listingId'),
+              onFavoriteTap: _favoriteBusyIds.contains(listingId)
+                  ? null
+                  : () => _toggleFavorite(listingId),
             );
           },
         ),
