@@ -173,7 +173,7 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(
-              Icons.favorite_outline,
+              Icons.bookmark_border,
               size: 56,
               color: AppTheme.textSubtle,
             ),

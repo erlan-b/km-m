@@ -505,8 +505,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
             actions: [
               IconButton(
                 icon: Icon(
-                  _isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: _isFavorite ? Colors.redAccent : null,
+                  _isFavorite ? Icons.bookmark : Icons.bookmark_border,
+                  color: _isFavorite ? AppTheme.bookmarkActive : null,
                 ),
                 tooltip: _isFavorite ? l.removeFromFavorites : l.addToFavorites,
                 onPressed: _updatingFavorite ? null : _toggleFavorite,

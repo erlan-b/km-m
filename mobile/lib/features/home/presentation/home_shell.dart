@@ -60,8 +60,8 @@ class HomeShell extends StatelessWidget {
               label: l.navSearch,
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Icons.favorite_outline),
-              activeIcon: const Icon(Icons.favorite),
+              icon: const Icon(Icons.bookmark_border),
+              activeIcon: const Icon(Icons.bookmark),
               label: l.navFavorites,
             ),
             BottomNavigationBarItem(

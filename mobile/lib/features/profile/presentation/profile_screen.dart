@@ -126,191 +126,68 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       return;
     }
 
-    final l = S.of(context)!;
-    final nameCtrl = TextEditingController(
-      text: me['full_name']?.toString() ?? '',
-    );
-    final cityCtrl = TextEditingController(text: me['city']?.toString() ?? '');
-    final phoneCtrl = TextEditingController(
-      text: me['phone']?.toString() ?? '',
-    );
-    final bioCtrl = TextEditingController(text: me['bio']?.toString() ?? '');
-
-    var language = (me['preferred_language']?.toString() ?? 'en').toLowerCase();
-    if (language != 'ru') {
-      language = 'en';
-    }
-
-    await showModalBottomSheet<void>(
+    final draft = await showModalBottomSheet<_ProfileUpdateDraft>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (sheetContext) {
-        var submitting = false;
-
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                16,
-                16,
-                MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      l.editProfile,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: nameCtrl,
-                      decoration: InputDecoration(labelText: l.fullName),
-                      enabled: !submitting,
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: cityCtrl,
-                      decoration: InputDecoration(labelText: l.city),
-                      enabled: !submitting,
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: phoneCtrl,
-                      decoration: InputDecoration(labelText: l.phone),
-                      enabled: !submitting,
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: bioCtrl,
-                      decoration: InputDecoration(labelText: l.bio),
-                      maxLines: 3,
-                      enabled: !submitting,
-                    ),
-                    const SizedBox(height: 10),
-                    DropdownButtonFormField<String>(
-                      initialValue: language,
-                      decoration: InputDecoration(labelText: l.language),
-                      onChanged: submitting
-                          ? null
-                          : (value) {
-                              if (value == null) {
-                                return;
-                              }
-                              setSheetState(() {
-                                language = value;
-                              });
-                            },
-                      items: const [
-                        DropdownMenuItem(value: 'en', child: Text('English')),
-                        DropdownMenuItem(value: 'ru', child: Text('Русский')),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: submitting
-                          ? null
-                          : () async {
-                              var sheetClosed = false;
-                              final messenger = ScaffoldMessenger.of(context);
-                              final fullName = nameCtrl.text.trim();
-                              if (fullName.length < 2) {
-                                messenger.showSnackBar(
-                                  SnackBar(content: Text(l.fieldRequired)),
-                                );
-                                return;
-                              }
-
-                              setSheetState(() {
-                                submitting = true;
-                              });
-
-                              try {
-                                final updated = await ref
-                                    .read(profileRepositoryProvider)
-                                    .updateProfile({
-                                      'full_name': fullName,
-                                      'city': cityCtrl.text.trim().isEmpty
-                                          ? null
-                                          : cityCtrl.text.trim(),
-                                      'phone': phoneCtrl.text.trim().isEmpty
-                                          ? null
-                                          : phoneCtrl.text.trim(),
-                                      'bio': bioCtrl.text.trim().isEmpty
-                                          ? null
-                                          : bioCtrl.text.trim(),
-                                      'preferred_language': language,
-                                    });
-
-                                if (!mounted) {
-                                  return;
-                                }
-
-                                setState(() {
-                                  _me = updated;
-                                });
-
-                                if (sheetContext.mounted) {
-                                  sheetClosed = true;
-                                  Navigator.pop(sheetContext);
-                                }
-
-                                await ref
-                                    .read(localeControllerProvider.notifier)
-                                    .setLocaleByCode(language);
-
-                                messenger.showSnackBar(
-                                  SnackBar(content: Text(l.profileUpdated)),
-                                );
-                              } catch (e) {
-                                if (mounted) {
-                                  messenger.showSnackBar(
-                                    SnackBar(
-                                      content: Text(_friendlyError(e, l)),
-                                    ),
-                                  );
-                                }
-                              } finally {
-                                if (!sheetClosed && sheetContext.mounted) {
-                                  setSheetState(() {
-                                    submitting = false;
-                                  });
-                                }
-                              }
-                            },
-                      child: submitting
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : Text(l.save),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
+        return _EditProfileSheet(initialProfile: me);
       },
     );
 
-    nameCtrl.dispose();
-    cityCtrl.dispose();
-    phoneCtrl.dispose();
-    bioCtrl.dispose();
+    if (draft == null) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    final l = S.of(context)!;
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final updated = await ref
+          .read(profileRepositoryProvider)
+          .updateProfile(draft.toPayload());
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _me = updated;
+      });
+
+      await ref
+          .read(localeControllerProvider.notifier)
+          .setLocaleByCode(draft.preferredLanguage);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(S.of(context)!.profileUpdated)));
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(_friendlyError(e, l))));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
   }
 
   Future<void> _logout() async {
@@ -515,6 +392,177 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               iconColor: AppTheme.statusError,
               onTap: _logout,
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileUpdateDraft {
+  const _ProfileUpdateDraft({
+    required this.fullName,
+    required this.city,
+    required this.phone,
+    required this.bio,
+    required this.preferredLanguage,
+  });
+
+  final String fullName;
+  final String city;
+  final String phone;
+  final String bio;
+  final String preferredLanguage;
+
+  Map<String, dynamic> toPayload() {
+    String? normalize(String value) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return null;
+      }
+      return trimmed;
+    }
+
+    return {
+      'full_name': fullName.trim(),
+      'city': normalize(city),
+      'phone': normalize(phone),
+      'bio': normalize(bio),
+      'preferred_language': preferredLanguage,
+    };
+  }
+}
+
+class _EditProfileSheet extends StatefulWidget {
+  const _EditProfileSheet({required this.initialProfile});
+
+  final Map<String, dynamic> initialProfile;
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _cityCtrl;
+  late final TextEditingController _phoneCtrl;
+  late final TextEditingController _bioCtrl;
+  late String _preferredLanguage;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(
+      text: widget.initialProfile['full_name']?.toString() ?? '',
+    );
+    _cityCtrl = TextEditingController(
+      text: widget.initialProfile['city']?.toString() ?? '',
+    );
+    _phoneCtrl = TextEditingController(
+      text: widget.initialProfile['phone']?.toString() ?? '',
+    );
+    _bioCtrl = TextEditingController(
+      text: widget.initialProfile['bio']?.toString() ?? '',
+    );
+
+    _preferredLanguage =
+        (widget.initialProfile['preferred_language']?.toString() ?? 'en')
+            .toLowerCase();
+    if (_preferredLanguage != 'ru') {
+      _preferredLanguage = 'en';
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _cityCtrl.dispose();
+    _phoneCtrl.dispose();
+    _bioCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final l = S.of(context)!;
+    final fullName = _nameCtrl.text.trim();
+    if (fullName.length < 2) {
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(l.fieldRequired)));
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _ProfileUpdateDraft(
+        fullName: fullName,
+        city: _cityCtrl.text,
+        phone: _phoneCtrl.text,
+        bio: _bioCtrl.text,
+        preferredLanguage: _preferredLanguage,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = S.of(context)!;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l.editProfile,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nameCtrl,
+              decoration: InputDecoration(labelText: l.fullName),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _cityCtrl,
+              decoration: InputDecoration(labelText: l.city),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _phoneCtrl,
+              decoration: InputDecoration(labelText: l.phone),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _bioCtrl,
+              decoration: InputDecoration(labelText: l.bio),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: _preferredLanguage,
+              decoration: InputDecoration(labelText: l.language),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _preferredLanguage = value;
+                });
+              },
+              items: const [
+                DropdownMenuItem(value: 'en', child: Text('English')),
+                DropdownMenuItem(value: 'ru', child: Text('Русский')),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: _submit, child: Text(l.save)),
           ],
         ),
       ),

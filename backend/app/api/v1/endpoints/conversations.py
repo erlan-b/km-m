@@ -23,12 +23,14 @@ router = APIRouter()
 def build_conversation_item(
     *,
     conversation: Conversation,
+    listing_title: str | None,
     unread_count: int,
     last_message_preview: str | None,
 ) -> ConversationItem:
     return ConversationItem(
         id=conversation.id,
         listing_id=conversation.listing_id,
+        listing_title=listing_title,
         created_by_user_id=conversation.created_by_user_id,
         participant_a_id=conversation.participant_a_id,
         participant_b_id=conversation.participant_b_id,
@@ -92,6 +94,16 @@ def get_unread_count_map(db: Session, conversation_ids: list[int], user_id: int)
     return {conversation_id: unread_count for conversation_id, unread_count in rows}
 
 
+def get_listing_title_map(db: Session, listing_ids: list[int]) -> dict[int, str]:
+    if not listing_ids:
+        return {}
+
+    rows = db.execute(
+        select(Listing.id, Listing.title).where(Listing.id.in_(listing_ids))
+    ).all()
+    return {listing_id: listing_title for listing_id, listing_title in rows}
+
+
 @router.post("", response_model=ConversationItem)
 def open_conversation_for_listing(
     payload: ConversationOpenRequest,
@@ -143,6 +155,7 @@ def open_conversation_for_listing(
 
     return build_conversation_item(
         conversation=conversation,
+        listing_title=listing.title,
         unread_count=unread_map.get(conversation.id, 0),
         last_message_preview=preview_map.get(conversation.id),
     )
@@ -177,13 +190,16 @@ def list_my_conversations(
     ).all()
 
     conversation_ids = [conversation.id for conversation in conversations]
+    listing_ids = [conversation.listing_id for conversation in conversations]
     unread_map = get_unread_count_map(db, conversation_ids, current_user.id)
     preview_map = get_last_message_preview_map(db, conversation_ids)
+    listing_title_map = get_listing_title_map(db, listing_ids)
 
     return ConversationListResponse(
         items=[
             build_conversation_item(
                 conversation=conversation,
+                listing_title=listing_title_map.get(conversation.listing_id),
                 unread_count=unread_map.get(conversation.id, 0),
                 last_message_preview=preview_map.get(conversation.id),
             )
@@ -211,9 +227,11 @@ def get_conversation_detail(
 
     unread_map = get_unread_count_map(db, [conversation.id], current_user.id)
     preview_map = get_last_message_preview_map(db, [conversation.id])
+    listing_title_map = get_listing_title_map(db, [conversation.listing_id])
 
     return build_conversation_item(
         conversation=conversation,
+        listing_title=listing_title_map.get(conversation.listing_id),
         unread_count=unread_map.get(conversation.id, 0),
         last_message_preview=preview_map.get(conversation.id),
     )

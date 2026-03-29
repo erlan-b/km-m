@@ -118,6 +118,14 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     } catch (_) {}
   }
 
+  Future<void> _openListingDetails(int listingId) async {
+    await context.push('/listing/$listingId');
+    if (!mounted) {
+      return;
+    }
+    await _loadFavoriteIds();
+  }
+
   Future<void> _toggleFavorite(int listingId) async {
     if (_favoriteBusyIds.contains(listingId)) {
       return;
@@ -312,7 +320,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                 thumbnailUrl: _getThumbnailUrl(listing),
                 isFavorite: _favoriteIds.contains(listingId),
                 isPromoted: listing['is_subscription'] == true,
-                onTap: () => context.push('/listing/$listingId'),
+                onTap: () {
+                  _openListingDetails(listingId);
+                },
                 onFavoriteTap: _favoriteBusyIds.contains(listingId)
                     ? null
                     : () => _toggleFavorite(listingId),

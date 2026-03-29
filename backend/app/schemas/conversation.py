@@ -12,6 +12,7 @@ class ConversationItem(BaseModel):
 
     id: int
     listing_id: int
+    listing_title: str | None = None
     created_by_user_id: int
     participant_a_id: int
     participant_b_id: int

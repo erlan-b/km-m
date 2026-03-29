@@ -21,6 +21,7 @@ class AppTheme {
   static const statusError = Color(0xFF7A0000);
   static const statusErrorBg = Color(0xFFFFF0F0);
   static const statusWarningBg = Color(0xFFFFF6DF);
+  static const bookmarkActive = Color(0xFFFFC107);
 
   static const radius = 8.0;
   static const cardRadius = 12.0;
@@ -64,7 +65,10 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
           borderSide: const BorderSide(color: border),
@@ -133,7 +137,11 @@ class AppTheme {
         ),
         labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
       ),
-      dividerTheme: const DividerThemeData(color: border, thickness: 1, space: 0),
+      dividerTheme: const DividerThemeData(
+        color: border,
+        thickness: 1,
+        space: 0,
+      ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: bgSurface,
         selectedItemColor: accent,
@@ -144,7 +152,9 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         backgroundColor: textMain,
         contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius),
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );

@@ -361,7 +361,7 @@ class SRu extends S {
   String get sale => 'Продажа';
 
   @override
-  String get rentLong => 'Долгосрочная аренда';
+  String get rentLong => 'Долгосроч. аренда';
 
   @override
   String get rentDaily => 'Посуточная аренда';

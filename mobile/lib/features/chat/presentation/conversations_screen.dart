@@ -217,6 +217,12 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
             final conversation = _conversations[index];
             final listingId =
                 (conversation['listing_id'] as num?)?.toInt() ?? 0;
+            final listingTitle = conversation['listing_title']
+                ?.toString()
+                .trim();
+            final title = (listingTitle == null || listingTitle.isEmpty)
+                ? '${l.listingDetail} #$listingId'
+                : listingTitle;
             final unreadCount = _unreadCount(conversation);
 
             return Material(
@@ -251,7 +257,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '#$listingId',
+                              title,
                               style: const TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w700,

@@ -43,14 +43,14 @@ class ListingCard extends StatelessWidget {
     return '$buffer $currency';
   }
 
-  String get _transactionLabel {
+  String _transactionLabel(S l) {
     switch (transactionType) {
       case 'sale':
-        return 'Sale';
+        return l.sale;
       case 'rent_long':
-        return 'Long rent';
+        return l.rentLong;
       case 'rent_daily':
-        return 'Daily rent';
+        return l.rentDaily;
       default:
         return transactionType;
     }
@@ -59,6 +59,8 @@ class ListingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
+    final shortPromotionLabel =
+        Localizations.localeOf(context).languageCode == 'ru' ? 'про.' : 'pro.';
 
     return GestureDetector(
       onTap: onTap,
@@ -106,21 +108,27 @@ class ListingCard extends StatelessWidget {
                   Positioned(
                     top: 8,
                     left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accent.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        _transactionLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                    right: 46,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.accent.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _transactionLabel(l),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -148,7 +156,7 @@ class ListingCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              l.promotionActive,
+                              shortPromotionLabel,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
@@ -176,9 +184,11 @@ class ListingCard extends StatelessWidget {
                           ),
                           child: Icon(
                             isFavorite
-                                ? Icons.favorite
-                                : Icons.favorite_outline,
-                            color: isFavorite ? Colors.redAccent : Colors.white,
+                                ? Icons.bookmark
+                                : Icons.bookmark_outline,
+                            color: isFavorite
+                                ? AppTheme.bookmarkActive
+                                : Colors.white,
                             size: 20,
                           ),
                         ),

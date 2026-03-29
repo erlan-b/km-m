@@ -76,6 +76,7 @@ def test_only_conversation_participants_can_access_conversation_and_messages(cli
     set_current_user(buyer)
     open_response = client.post("/api/v1/conversations", json={"listing_id": listing.id})
     assert open_response.status_code == 200
+    assert open_response.json()["listing_title"] == listing.title
     conversation_id = open_response.json()["id"]
 
     send_response = client.post(
@@ -88,6 +89,14 @@ def test_only_conversation_participants_can_access_conversation_and_messages(cli
     owner_messages_response = client.get("/api/v1/messages", params={"conversation_id": conversation_id})
     assert owner_messages_response.status_code == 200
     assert owner_messages_response.json()["total_items"] == 1
+
+    owner_conversation_response = client.get(f"/api/v1/conversations/{conversation_id}")
+    assert owner_conversation_response.status_code == 200
+    assert owner_conversation_response.json()["listing_title"] == listing.title
+
+    owner_list_response = client.get("/api/v1/conversations")
+    assert owner_list_response.status_code == 200
+    assert owner_list_response.json()["items"][0]["listing_title"] == listing.title
 
     set_current_user(outsider)
     outsider_conversation_response = client.get(f"/api/v1/conversations/{conversation_id}")

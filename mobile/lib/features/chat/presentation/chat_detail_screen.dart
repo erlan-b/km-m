@@ -433,15 +433,16 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
   Widget build(BuildContext context) {
     final l = S.of(context)!;
     final listingId = (_conversation?['listing_id'] as num?)?.toInt();
+    final listingTitle = _conversation?['listing_title']?.toString().trim();
+    final hasListingTitle = listingTitle != null && listingTitle.isNotEmpty;
+    final chatTitle = hasListingTitle
+        ? listingTitle
+        : listingId == null
+        ? l.conversations
+        : '${l.listingDetail} #$listingId';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          listingId == null
-              ? l.conversations
-              : '${l.conversations} #$listingId',
-        ),
-      ),
+      appBar: AppBar(title: Text(chatTitle)),
       body: Column(
         children: [
           Expanded(child: _buildBody(l)),
