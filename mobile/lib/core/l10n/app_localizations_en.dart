@@ -189,6 +189,9 @@ class SEn extends S {
   String get markAsSold => 'Mark as sold';
 
   @override
+  String get deactivate => 'Deactivate';
+
+  @override
   String get archive => 'Archive';
 
   @override
@@ -274,6 +277,15 @@ class SEn extends S {
 
   @override
   String get profileUpdated => 'Profile updated';
+
+  @override
+  String get manageYourListings => 'Manage your active and archived listings';
+
+  @override
+  String get publishNewOffer => 'Create and publish a new listing';
+
+  @override
+  String get signOutFromAccount => 'Sign out from this account';
 
   @override
   String get promotions => 'Promotions';
@@ -382,4 +394,60 @@ class SEn extends S {
 
   @override
   String get passwordsMismatch => 'Passwords do not match';
+
+  @override
+  String get youDontHaveListings => 'You don\'t have any listings yet';
+
+  @override
+  String get deleteListingForever =>
+      'Delete this listing forever? This action cannot be undone.';
+
+  @override
+  String get invalidNumber => 'Enter a valid number';
+
+  @override
+  String get selectCategory => 'Please select a category';
+
+  @override
+  String get setLocationFirst => 'Please select a location on the map';
+
+  @override
+  String get listingUpdated => 'Listing updated';
+
+  @override
+  String get listingCreated => 'Listing created';
+
+  @override
+  String get titleTooShort => 'Title must be at least 3 characters';
+
+  @override
+  String get descriptionTooShort =>
+      'Description must be at least 10 characters';
+
+  @override
+  String get transactionType => 'Transaction type';
+
+  @override
+  String get currency => 'Currency';
+
+  @override
+  String get cityTooShort => 'City must be at least 2 characters';
+
+  @override
+  String get address => 'Address';
+
+  @override
+  String get listingPhotos => 'Listing photos';
+
+  @override
+  String get pickImages => 'Pick images';
+
+  @override
+  String get additionalDetails => 'Additional details';
+
+  @override
+  String get requiredField => 'Required field';
+
+  @override
+  String get selectPointOnMap => 'Tap on the map to select a point';
 }

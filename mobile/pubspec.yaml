@@ -50,4 +50,5 @@ dev_dependencies:
   json_annotation: ^4.9.0
 
 flutter:
+  generate: true
   uses-material-design: true

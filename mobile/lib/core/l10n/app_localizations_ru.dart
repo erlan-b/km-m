@@ -189,6 +189,9 @@ class SRu extends S {
   String get markAsSold => 'Отметить как продано';
 
   @override
+  String get deactivate => 'Деактивировать';
+
+  @override
   String get archive => 'Архивировать';
 
   @override
@@ -274,6 +277,16 @@ class SRu extends S {
 
   @override
   String get profileUpdated => 'Профиль обновлён';
+
+  @override
+  String get manageYourListings =>
+      'Управляйте активными и архивными объявлениями';
+
+  @override
+  String get publishNewOffer => 'Создайте и опубликуйте новое объявление';
+
+  @override
+  String get signOutFromAccount => 'Выйти из этого аккаунта';
 
   @override
   String get promotions => 'Промо';
@@ -382,4 +395,60 @@ class SRu extends S {
 
   @override
   String get passwordsMismatch => 'Пароли не совпадают';
+
+  @override
+  String get youDontHaveListings => 'У вас пока нет объявлений';
+
+  @override
+  String get deleteListingForever =>
+      'Удалить объявление навсегда? Это действие нельзя отменить.';
+
+  @override
+  String get invalidNumber => 'Введите корректное число';
+
+  @override
+  String get selectCategory => 'Выберите категорию';
+
+  @override
+  String get setLocationFirst => 'Сначала выберите точку на карте';
+
+  @override
+  String get listingUpdated => 'Объявление обновлено';
+
+  @override
+  String get listingCreated => 'Объявление создано';
+
+  @override
+  String get titleTooShort => 'Заголовок должен быть не короче 3 символов';
+
+  @override
+  String get descriptionTooShort =>
+      'Описание должно быть не короче 10 символов';
+
+  @override
+  String get transactionType => 'Тип сделки';
+
+  @override
+  String get currency => 'Валюта';
+
+  @override
+  String get cityTooShort => 'Город должен быть не короче 2 символов';
+
+  @override
+  String get address => 'Адрес';
+
+  @override
+  String get listingPhotos => 'Фотографии объявления';
+
+  @override
+  String get pickImages => 'Выбрать фото';
+
+  @override
+  String get additionalDetails => 'Дополнительные характеристики';
+
+  @override
+  String get requiredField => 'Обязательное поле';
+
+  @override
+  String get selectPointOnMap => 'Нажмите на карту, чтобы выбрать точку';
 }

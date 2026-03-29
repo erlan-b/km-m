@@ -65,6 +65,7 @@
   "draft": "Draft",
   "inactive": "Inactive",
   "markAsSold": "Mark as sold",
+  "deactivate": "Deactivate",
   "archive": "Archive",
   "reactivate": "Reactivate",
 
@@ -99,6 +100,9 @@
   "newPassword": "New password",
   "editProfile": "Edit profile",
   "profileUpdated": "Profile updated",
+  "manageYourListings": "Manage your active and archived listings",
+  "publishNewOffer": "Create and publish a new listing",
+  "signOutFromAccount": "Sign out from this account",
 
   "promotions": "Promotions",
   "choosePackage": "Choose a package",
@@ -138,5 +142,24 @@
   "fieldRequired": "This field is required",
   "invalidEmail": "Invalid email address",
   "passwordTooShort": "Password must be at least 8 characters",
-  "passwordsMismatch": "Passwords do not match"
+  "passwordsMismatch": "Passwords do not match",
+
+  "youDontHaveListings": "You don't have any listings yet",
+  "deleteListingForever": "Delete this listing forever? This action cannot be undone.",
+  "invalidNumber": "Enter a valid number",
+  "selectCategory": "Please select a category",
+  "setLocationFirst": "Please select a location on the map",
+  "listingUpdated": "Listing updated",
+  "listingCreated": "Listing created",
+  "titleTooShort": "Title must be at least 3 characters",
+  "descriptionTooShort": "Description must be at least 10 characters",
+  "transactionType": "Transaction type",
+  "currency": "Currency",
+  "cityTooShort": "City must be at least 2 characters",
+  "address": "Address",
+  "listingPhotos": "Listing photos",
+  "pickImages": "Pick images",
+  "additionalDetails": "Additional details",
+  "requiredField": "Required field",
+  "selectPointOnMap": "Tap on the map to select a point"
 }

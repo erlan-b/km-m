@@ -65,6 +65,7 @@
   "draft": "Черновик",
   "inactive": "Неактивно",
   "markAsSold": "Отметить как продано",
+  "deactivate": "Деактивировать",
   "archive": "Архивировать",
   "reactivate": "Активировать",
 
@@ -99,6 +100,9 @@
   "newPassword": "Новый пароль",
   "editProfile": "Редактировать профиль",
   "profileUpdated": "Профиль обновлён",
+  "manageYourListings": "Управляйте активными и архивными объявлениями",
+  "publishNewOffer": "Создайте и опубликуйте новое объявление",
+  "signOutFromAccount": "Выйти из этого аккаунта",
 
   "promotions": "Промо",
   "choosePackage": "Выберите пакет",
@@ -138,5 +142,24 @@
   "fieldRequired": "Обязательное поле",
   "invalidEmail": "Неверный email",
   "passwordTooShort": "Пароль минимум 8 символов",
-  "passwordsMismatch": "Пароли не совпадают"
+  "passwordsMismatch": "Пароли не совпадают",
+
+  "youDontHaveListings": "У вас пока нет объявлений",
+  "deleteListingForever": "Удалить объявление навсегда? Это действие нельзя отменить.",
+  "invalidNumber": "Введите корректное число",
+  "selectCategory": "Выберите категорию",
+  "setLocationFirst": "Сначала выберите точку на карте",
+  "listingUpdated": "Объявление обновлено",
+  "listingCreated": "Объявление создано",
+  "titleTooShort": "Заголовок должен быть не короче 3 символов",
+  "descriptionTooShort": "Описание должно быть не короче 10 символов",
+  "transactionType": "Тип сделки",
+  "currency": "Валюта",
+  "cityTooShort": "Город должен быть не короче 2 символов",
+  "address": "Адрес",
+  "listingPhotos": "Фотографии объявления",
+  "pickImages": "Выбрать фото",
+  "additionalDetails": "Дополнительные характеристики",
+  "requiredField": "Обязательное поле",
+  "selectPointOnMap": "Нажмите на карту, чтобы выбрать точку"
 }

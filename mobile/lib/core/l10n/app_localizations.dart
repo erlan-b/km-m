@@ -457,6 +457,12 @@ abstract class S {
   /// **'Mark as sold'**
   String get markAsSold;
 
+  /// No description provided for @deactivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate'**
+  String get deactivate;
+
   /// No description provided for @archive.
   ///
   /// In en, this message translates to:
@@ -630,6 +636,24 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Profile updated'**
   String get profileUpdated;
+
+  /// No description provided for @manageYourListings.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage your active and archived listings'**
+  String get manageYourListings;
+
+  /// No description provided for @publishNewOffer.
+  ///
+  /// In en, this message translates to:
+  /// **'Create and publish a new listing'**
+  String get publishNewOffer;
+
+  /// No description provided for @signOutFromAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out from this account'**
+  String get signOutFromAccount;
 
   /// No description provided for @promotions.
   ///
@@ -846,6 +870,114 @@ abstract class S {
   /// In en, this message translates to:
   /// **'Passwords do not match'**
   String get passwordsMismatch;
+
+  /// No description provided for @youDontHaveListings.
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t have any listings yet'**
+  String get youDontHaveListings;
+
+  /// No description provided for @deleteListingForever.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this listing forever? This action cannot be undone.'**
+  String get deleteListingForever;
+
+  /// No description provided for @invalidNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid number'**
+  String get invalidNumber;
+
+  /// No description provided for @selectCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select a category'**
+  String get selectCategory;
+
+  /// No description provided for @setLocationFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Please select a location on the map'**
+  String get setLocationFirst;
+
+  /// No description provided for @listingUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing updated'**
+  String get listingUpdated;
+
+  /// No description provided for @listingCreated.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing created'**
+  String get listingCreated;
+
+  /// No description provided for @titleTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Title must be at least 3 characters'**
+  String get titleTooShort;
+
+  /// No description provided for @descriptionTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Description must be at least 10 characters'**
+  String get descriptionTooShort;
+
+  /// No description provided for @transactionType.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction type'**
+  String get transactionType;
+
+  /// No description provided for @currency.
+  ///
+  /// In en, this message translates to:
+  /// **'Currency'**
+  String get currency;
+
+  /// No description provided for @cityTooShort.
+  ///
+  /// In en, this message translates to:
+  /// **'City must be at least 2 characters'**
+  String get cityTooShort;
+
+  /// No description provided for @address.
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get address;
+
+  /// No description provided for @listingPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing photos'**
+  String get listingPhotos;
+
+  /// No description provided for @pickImages.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick images'**
+  String get pickImages;
+
+  /// No description provided for @additionalDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Additional details'**
+  String get additionalDetails;
+
+  /// No description provided for @requiredField.
+  ///
+  /// In en, this message translates to:
+  /// **'Required field'**
+  String get requiredField;
+
+  /// No description provided for @selectPointOnMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap on the map to select a point'**
+  String get selectPointOnMap;
 }
 
 class _SDelegate extends LocalizationsDelegate<S> {

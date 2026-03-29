@@ -29,7 +29,12 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   }
 
   Future<void> _loadListings({bool append = false}) async {
-    if (!append) setState(() { _loading = true; _error = null; });
+    if (!append) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       final repo = ref.read(listingsRepositoryProvider);
@@ -87,8 +92,15 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
         title: Text(l.appTitle),
         actions: [
           IconButton(
+            icon: const Icon(Icons.storefront_outlined),
+            tooltip: l.myListings,
+            onPressed: () => context.push('/my-listings'),
+          ),
+          IconButton(
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {/* TODO: notifications */},
+            onPressed: () {
+              /* TODO: notifications */
+            },
           ),
         ],
       ),
@@ -98,7 +110,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
 
   Widget _buildBody(S l) {
     if (_loading && _listings.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.accent));
+      return const Center(
+        child: CircularProgressIndicator(color: AppTheme.accent),
+      );
     }
 
     if (_error != null && _listings.isEmpty) {
@@ -106,9 +120,16 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: AppTheme.textSubtle),
+            const Icon(
+              Icons.error_outline,
+              size: 48,
+              color: AppTheme.textSubtle,
+            ),
             const SizedBox(height: 12),
-            Text(l.errorOccurred, style: const TextStyle(color: AppTheme.textSubtle)),
+            Text(
+              l.errorOccurred,
+              style: const TextStyle(color: AppTheme.textSubtle),
+            ),
             const SizedBox(height: 12),
             ElevatedButton(onPressed: _refresh, child: Text(l.retry)),
           ],
@@ -121,9 +142,16 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.home_outlined, size: 64, color: AppTheme.textSubtle),
+            const Icon(
+              Icons.home_outlined,
+              size: 64,
+              color: AppTheme.textSubtle,
+            ),
             const SizedBox(height: 12),
-            Text(l.emptyList, style: const TextStyle(color: AppTheme.textSubtle, fontSize: 16)),
+            Text(
+              l.emptyList,
+              style: const TextStyle(color: AppTheme.textSubtle, fontSize: 16),
+            ),
           ],
         ),
       );

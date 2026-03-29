@@ -7,8 +7,11 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
 import '../features/home/presentation/home_feed_screen.dart';
 import '../features/home/presentation/home_shell.dart';
+import '../features/listings/presentation/listing_form_screen.dart';
 import '../features/listings/presentation/listing_detail_screen.dart';
+import '../features/listings/presentation/my_listings_screen.dart';
 import '../features/listings/presentation/owner_profile_screen.dart';
+import '../features/profile/presentation/profile_screen.dart';
 import '../features/search/presentation/search_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -18,7 +21,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/home',
     redirect: (context, state) {
       final isAuth = authState.isAuthenticated;
-      final isAuthRoute = state.matchedLocation == '/login' || state.matchedLocation == '/register';
+      final isAuthRoute =
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/register';
 
       if (authState.status == AuthStatus.unknown) return null;
 
@@ -28,10 +33,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
@@ -52,6 +54,28 @@ final routerProvider = Provider<GoRouter>((ref) {
           return OwnerProfileScreen(userId: id);
         },
       ),
+      GoRoute(
+        path: '/my-listings',
+        builder: (context, state) => const MyListingsScreen(),
+      ),
+      GoRoute(
+        path: '/my-listings/create',
+        builder: (context, state) => const ListingFormScreen(),
+      ),
+      GoRoute(
+        path: '/my-listings/:id/edit',
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          final extra = state.extra;
+          final initialListing = extra is Map
+              ? Map<String, dynamic>.from(extra)
+              : null;
+          return ListingFormScreen(
+            listingId: id,
+            initialListing: initialListing,
+          );
+        },
+      ),
 
       // Main shell with bottom nav
       ShellRoute(
@@ -59,23 +83,28 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/home',
-            pageBuilder: (context, state) => const NoTransitionPage(child: HomeFeedScreen()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: HomeFeedScreen()),
           ),
           GoRoute(
             path: '/search',
-            pageBuilder: (context, state) => const NoTransitionPage(child: SearchScreen()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: SearchScreen()),
           ),
           GoRoute(
             path: '/favorites',
-            pageBuilder: (context, state) => const NoTransitionPage(child: Placeholder()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: Placeholder()),
           ),
           GoRoute(
             path: '/inbox',
-            pageBuilder: (context, state) => const NoTransitionPage(child: Placeholder()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: Placeholder()),
           ),
           GoRoute(
             path: '/profile',
-            pageBuilder: (context, state) => const NoTransitionPage(child: Placeholder()),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ProfileScreen()),
           ),
         ],
       ),
