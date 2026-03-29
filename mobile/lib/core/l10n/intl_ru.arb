@@ -100,7 +100,7 @@
   "newPassword": "Новый пароль",
   "editProfile": "Редактировать профиль",
   "profileUpdated": "Профиль обновлён",
-  "requestRoleChange": "Смена роли продавца",
+  "requestRoleChange": "Сменить статус",
   "roleChangeRequestSubtitle": "Отправьте документы на проверку",
   "roleChangeTarget": "Желаемая роль продавца",
   "sellerTypeOwner": "Собственник",

@@ -279,7 +279,7 @@ class SRu extends S {
   String get profileUpdated => 'Профиль обновлён';
 
   @override
-  String get requestRoleChange => 'Смена роли продавца';
+  String get requestRoleChange => 'Сменить статус';
 
   @override
   String get roleChangeRequestSubtitle => 'Отправьте документы на проверку';

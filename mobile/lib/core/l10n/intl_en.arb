@@ -100,7 +100,7 @@
   "newPassword": "New password",
   "editProfile": "Edit profile",
   "profileUpdated": "Profile updated",
-  "requestRoleChange": "Request seller role update",
+  "requestRoleChange": "Change status",
   "roleChangeRequestSubtitle": "Send documents for admin review",
   "roleChangeTarget": "Target seller type",
   "sellerTypeOwner": "Owner",

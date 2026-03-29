@@ -640,7 +640,7 @@ abstract class S {
   /// No description provided for @requestRoleChange.
   ///
   /// In en, this message translates to:
-  /// **'Request seller role update'**
+  /// **'Change status'**
   String get requestRoleChange;
 
   /// No description provided for @roleChangeRequestSubtitle.

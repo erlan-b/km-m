@@ -279,7 +279,7 @@ class SEn extends S {
   String get profileUpdated => 'Profile updated';
 
   @override
-  String get requestRoleChange => 'Request seller role update';
+  String get requestRoleChange => 'Change status';
 
   @override
   String get roleChangeRequestSubtitle => 'Send documents for admin review';
