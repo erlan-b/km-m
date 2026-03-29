@@ -21,6 +21,7 @@ from app.schemas.user import (
     AdminUserStatusResponse,
     AdminUserVerificationActionRequest,
 )
+from app.services.profile_image_service import build_profile_image_public_url
 from app.services.user_metrics_service import calculate_user_response_rate, has_verified_badge
 
 router = APIRouter()
@@ -99,7 +100,11 @@ def build_admin_user_detail_response(db: Session, target_user: User) -> AdminUse
         full_name=target_user.full_name,
         email=target_user.email,
         phone=target_user.phone,
-        profile_image_url=target_user.profile_image_url,
+        profile_image_url=build_profile_image_public_url(
+            user_id=target_user.id,
+            profile_image_url=target_user.profile_image_url,
+            updated_at=target_user.updated_at,
+        ),
         bio=target_user.bio,
         city=target_user.city,
         preferred_language=target_user.preferred_language,

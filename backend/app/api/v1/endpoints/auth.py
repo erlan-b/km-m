@@ -31,6 +31,7 @@ from app.schemas.auth import (
     UpdateLanguageRequest,
     UserMeResponse,
 )
+from app.services.profile_image_service import build_profile_image_public_url
 from app.services.auth_service import (
     authenticate_user,
     create_password_reset_token,
@@ -53,7 +54,11 @@ def build_user_me_response(*, db: Session, user: User) -> UserMeResponse:
         full_name=user.full_name,
         email=user.email,
         phone=user.phone,
-        profile_image_url=user.profile_image_url,
+        profile_image_url=build_profile_image_public_url(
+            user_id=user.id,
+            profile_image_url=user.profile_image_url,
+            updated_at=user.updated_at,
+        ),
         bio=user.bio,
         city=user.city,
         preferred_language=user.preferred_language,

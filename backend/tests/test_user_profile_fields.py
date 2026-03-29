@@ -1,7 +1,9 @@
 from decimal import Decimal
+from pathlib import Path
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.category import Category
 from app.models.conversation import Conversation
@@ -134,7 +136,9 @@ def test_profile_response_includes_minimum_fields_and_computed_metrics(client, d
     assert response.status_code == 200
 
     payload = response.json()
-    assert payload["profile_image_url"] == "avatars/sample.png"
+    assert payload["profile_image_url"].startswith(
+        f"/api/v1/profile/avatar/{owner.id}/download"
+    )
     assert payload["bio"] == "Owner profile bio"
     assert payload["city"] == "Bishkek"
     assert payload["seller_type"] == "company"
@@ -206,13 +210,32 @@ def test_public_user_response_includes_owner_visibility_fields(client, db_sessio
 
     payload = response.json()
     assert payload["full_name"] == owner.full_name
-    assert payload["profile_image_url"] == "avatars/sample.png"
+    assert payload["profile_image_url"].startswith(
+        f"/api/v1/profile/avatar/{owner.id}/download"
+    )
     assert payload["city"] == "Bishkek"
     assert payload["seller_type"] == "company"
     assert payload["company_name"] == "Owner Co"
     assert payload["verified_badge"] is True
     assert payload["response_rate"] == 100.0
     assert payload["listing_count"] == 1
+
+
+def test_profile_avatar_download_serves_file(client, db_session, set_current_user):
+    user_role = create_role(db_session, "user")
+    owner = create_user(db_session, "avatar-owner@example.com", [user_role])
+
+    settings = get_settings()
+    avatar_file = Path(settings.media_root) / "avatars" / "sample.png"
+    avatar_file.parent.mkdir(parents=True, exist_ok=True)
+    avatar_file.write_bytes(b"fake-image-content")
+
+    try:
+        response = client.get(f"/api/v1/profile/avatar/{owner.id}/download")
+        assert response.status_code == 200
+        assert response.content == b"fake-image-content"
+    finally:
+        avatar_file.unlink(missing_ok=True)
 
 
 def test_admin_user_detail_includes_full_profile_fields_and_metrics(client, db_session, set_current_user):
@@ -253,7 +276,9 @@ def test_admin_user_detail_includes_full_profile_fields_and_metrics(client, db_s
     assert payload["full_name"] == target_user.full_name
     assert payload["email"] == target_user.email
     assert payload["phone"] == "+996700000000"
-    assert payload["profile_image_url"] == "avatars/sample.png"
+    assert payload["profile_image_url"].startswith(
+        f"/api/v1/profile/avatar/{target_user.id}/download"
+    )
     assert payload["bio"] == "Owner profile bio"
     assert payload["city"] == "Bishkek"
     assert payload["preferred_language"] == "ru"

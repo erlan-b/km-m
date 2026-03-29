@@ -1,6 +1,9 @@
 from pathlib import Path
+import mimetypes
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -9,6 +12,10 @@ from app.db.session import get_db
 from app.models.user import SellerType, User
 from app.schemas.profile import ProfileResponse, ProfileUpdateRequest
 from app.services.attachment_service import save_upload_file
+from app.services.profile_image_service import (
+    build_profile_image_public_url,
+    resolve_profile_image_path,
+)
 from app.services.user_metrics_service import calculate_user_response_rate, has_verified_badge
 
 router = APIRouter()
@@ -30,7 +37,11 @@ def build_profile_response(*, db: Session, user: User) -> ProfileResponse:
         full_name=user.full_name,
         email=user.email,
         phone=user.phone,
-        profile_image_url=user.profile_image_url,
+        profile_image_url=build_profile_image_public_url(
+            user_id=user.id,
+            profile_image_url=user.profile_image_url,
+            updated_at=user.updated_at,
+        ),
         bio=user.bio,
         city=user.city,
         preferred_language=user.preferred_language,
@@ -124,3 +135,19 @@ def upload_avatar(
     db.commit()
     db.refresh(current_user)
     return build_profile_response(db=db, user=current_user)
+
+
+@router.get("/avatar/{user_id}/download")
+def download_avatar(user_id: int, db: Session = Depends(get_db)) -> FileResponse:
+    user = db.scalar(select(User).where(User.id == user_id))
+    if user is None or not user.profile_image_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
+
+    absolute_path = resolve_profile_image_path(user.profile_image_url)
+    media_type = mimetypes.guess_type(absolute_path.name)[0] or "application/octet-stream"
+
+    return FileResponse(
+        path=absolute_path,
+        media_type=media_type,
+        filename=absolute_path.name,
+    )

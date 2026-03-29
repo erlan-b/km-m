@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/locale_controller.dart';
 import '../storage/secure_storage.dart';
 
 class AuthInterceptor extends Interceptor {
@@ -11,12 +12,21 @@ class AuthInterceptor extends Interceptor {
   bool _isRefreshing = false;
 
   @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+  void onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
     final storage = ref.read(secureStorageProvider);
     final accessToken = await storage.readAccessToken();
+    final locale = ref.read(localeControllerProvider);
 
     if (accessToken != null) {
       options.headers['Authorization'] = 'Bearer $accessToken';
+    }
+
+    if (locale != null) {
+      options.headers['x-language'] = locale.languageCode;
+      options.headers['accept-language'] = locale.languageCode;
     }
 
     handler.next(options);

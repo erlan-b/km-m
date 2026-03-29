@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
+import 'package:km_marketplace/core/l10n/locale_controller.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/storage/secure_storage.dart';
@@ -38,6 +39,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     try {
       final me = await ref.read(profileRepositoryProvider).getMyProfile();
+      await ref
+          .read(localeControllerProvider.notifier)
+          .setLocaleByCode(me['preferred_language']?.toString());
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _me = me;
         _loading = false;
@@ -213,9 +220,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       onPressed: submitting
                           ? null
                           : () async {
+                              var sheetClosed = false;
+                              final messenger = ScaffoldMessenger.of(context);
                               final fullName = nameCtrl.text.trim();
                               if (fullName.length < 2) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                messenger.showSnackBar(
                                   SnackBar(content: Text(l.fieldRequired)),
                                 );
                                 return;
@@ -251,22 +260,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 });
 
                                 if (sheetContext.mounted) {
+                                  sheetClosed = true;
                                   Navigator.pop(sheetContext);
                                 }
 
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                await ref
+                                    .read(localeControllerProvider.notifier)
+                                    .setLocaleByCode(language);
+
+                                messenger.showSnackBar(
                                   SnackBar(content: Text(l.profileUpdated)),
                                 );
                               } catch (e) {
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  messenger.showSnackBar(
                                     SnackBar(
                                       content: Text(_friendlyError(e, l)),
                                     ),
                                   );
                                 }
                               } finally {
-                                if (sheetContext.mounted) {
+                                if (!sheetClosed && sheetContext.mounted) {
                                   setSheetState(() {
                                     submitting = false;
                                   });

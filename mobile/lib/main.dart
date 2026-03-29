@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
+import 'package:km_marketplace/core/l10n/locale_controller.dart';
 
 import 'app/router.dart';
 import 'app/theme.dart';
@@ -23,18 +24,23 @@ class _KmMarketplaceAppState extends ConsumerState<KmMarketplaceApp> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(authProvider.notifier).checkAuth());
+    Future.microtask(() async {
+      await ref.read(localeControllerProvider.notifier).load();
+      await ref.read(authProvider.notifier).checkAuth();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
+    final locale = ref.watch(localeControllerProvider);
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'KM Marketplace',
       theme: AppTheme.light,
       routerConfig: router,
+      locale: locale,
       localizationsDelegates: const [
         S.delegate,
         GlobalMaterialLocalizations.delegate,
