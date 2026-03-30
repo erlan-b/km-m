@@ -333,6 +333,20 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                       ChoiceChip(
                         label: Text(entry.value),
                         selected: tempSort == entry.key,
+                        backgroundColor: AppTheme.bgSurface,
+                        selectedColor: AppTheme.accent,
+                        side: BorderSide(
+                          color: tempSort == entry.key
+                              ? AppTheme.accent
+                              : AppTheme.border,
+                        ),
+                        labelStyle: TextStyle(
+                          color: tempSort == entry.key
+                              ? Colors.white
+                              : AppTheme.textMain,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        checkmarkColor: Colors.white,
                         onSelected: (_) =>
                             setSheetState(() => tempSort = entry.key),
                       ),
