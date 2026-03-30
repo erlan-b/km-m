@@ -1047,35 +1047,6 @@ export function AdminMessagesPage() {
                                 <div className="messages-inline-image-meta">
                                   <span>{attachment.original_name}</span>
                                   <span>{formatFileSize(attachment.file_size, language)}</span>
-                                  <div className="users-actions-cell">
-                                    <button
-                                      type="button"
-                                      className="btn btn-ghost"
-                                      disabled={
-                                        downloadingAttachmentId === attachment.id ||
-                                        openingImagePreviewId === attachment.id
-                                      }
-                                      onClick={() => {
-                                        void openImageAttachmentPreview(attachment);
-                                      }}
-                                    >
-                                      {openingImagePreviewId === attachment.id
-                                        ? t("loading_preview", "Loading preview...")
-                                        : t("open_image", "Open image")}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn btn-ghost"
-                                      disabled={downloadingAttachmentId === attachment.id}
-                                      onClick={() => {
-                                        void downloadAttachment(attachment);
-                                      }}
-                                    >
-                                      {downloadingAttachmentId === attachment.id
-                                        ? t("downloading", "Downloading...")
-                                        : t("download", "Download")}
-                                    </button>
-                                  </div>
                                 </div>
                               </div>
                             );
