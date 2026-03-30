@@ -8,21 +8,10 @@ import { ImagePreviewOverlay } from "../common/ImagePreviewOverlay";
 import { Modal } from "../common/Modal";
 
 type ReportStatus = "open" | "resolved" | "dismissed";
-type ReportTargetType = "listing" | "user" | "message";
+type ReportTargetType = "listing" | "message";
 type ResolveAction = "resolve" | "dismiss";
 type ListingStatus = "draft" | "pending_review" | "published" | "rejected" | "archived" | "inactive" | "sold";
 type TransactionType = "sale" | "rent_long" | "rent_daily";
-
-type ReportAttachmentItem = {
-  id: number;
-  report_id: number;
-  file_name: string;
-  original_name: string;
-  mime_type: string;
-  file_size: number;
-  file_path: string;
-  created_at: string;
-};
 
 type ReportItem = {
   id: number;
@@ -33,7 +22,6 @@ type ReportItem = {
   target_listing_id: number | null;
   reason_code: string;
   reason_text: string | null;
-  attachments: ReportAttachmentItem[];
   status: ReportStatus;
   resolution_note: string | null;
   reviewed_by_admin_id: number | null;
@@ -177,9 +165,6 @@ function extractErrorMessage(error: unknown): string {
 function targetTypeLabel(targetType: ReportTargetType, t: (key: string, fallback: string) => string): string {
   if (targetType === "listing") {
     return t("target_listing", "Listing");
-  }
-  if (targetType === "user") {
-    return t("target_user", "User");
   }
   return t("target_message", "Message");
 }
@@ -887,7 +872,6 @@ export function ReportsPage() {
         >
           <option value="">{t("all_target_types", "All target types")}</option>
           <option value="listing">{t("target_listing", "Listing")}</option>
-          <option value="user">{t("target_user", "User")}</option>
           <option value="message">{t("target_message", "Message")}</option>
         </select>
         <button type="button" className="btn btn-ghost" onClick={onApplyFilters}>

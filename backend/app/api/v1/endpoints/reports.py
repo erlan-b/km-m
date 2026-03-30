@@ -66,12 +66,6 @@ def ensure_report_target_exists(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Listing not found")
         return None
 
-    if target_type == ReportTargetType.USER:
-        user = db.scalar(select(User).where(User.id == target_id))
-        if user is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        return None
-
     if target_type == ReportTargetType.MESSAGE:
         message = db.scalar(select(Message).where(Message.id == target_id))
         if message is None:
@@ -322,32 +316,7 @@ def resolve_report(
                 details=payload.resolution_note,
             )
 
-        elif report.target_type == ReportTargetType.USER:
-            target_user = db.scalar(select(User).where(User.id == report.target_id))
-            if target_user is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target user not found")
-
-            user_map = {
-                "block": AccountStatus.BLOCKED,
-                "unblock": AccountStatus.ACTIVE,
-                "activate": AccountStatus.ACTIVE,
-                "deactivate": AccountStatus.DEACTIVATED,
-            }
-            next_status = user_map.get(moderation_action)
-            if next_status is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user moderation action")
-
-            target_user.account_status = next_status
-            db.add(target_user)
-            write_audit_log(
-                db,
-                admin_user.id,
-                action=f"user_moderation:{moderation_action}",
-                target_type="user",
-                target_id=target_user.id,
-                details=payload.resolution_note,
-            )
-        else:
+        elif report.target_type == ReportTargetType.MESSAGE:
             target_message = db.scalar(select(Message).where(Message.id == report.target_id))
             if target_message is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target message not found")
@@ -376,6 +345,8 @@ def resolve_report(
                 target_id=sender_user.id,
                 details=f"report_id={report.id};message_id={target_message.id};{payload.resolution_note or ''}",
             )
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported report target type")
 
     report.status = ReportStatus.RESOLVED if action == "resolve" else ReportStatus.DISMISSED
     report.resolution_note = payload.resolution_note

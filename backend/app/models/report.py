@@ -9,7 +9,6 @@ from app.db.base import Base
 
 class ReportTargetType(str, enum.Enum):
     LISTING = "listing"
-    USER = "user"
     MESSAGE = "message"
 
 

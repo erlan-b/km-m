@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/auth/AuthContext";
 import { usePageI18n } from "../../app/i18n/I18nContext";
 import { formatDateTime, formatInteger } from "../../shared/i18n/format";
+import { Modal } from "../common/Modal";
 import { ImagePreviewOverlay } from "../common/ImagePreviewOverlay";
 
 type ConversationItem = {
@@ -207,6 +208,13 @@ export function AdminMessagesPage() {
   const [messages, setMessages] = useState<MessageListResponse | null>(null);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [isTranscriptModalOpen, setIsTranscriptModalOpen] = useState(false);
+  const [openTranscriptWhenConversationReady, setOpenTranscriptWhenConversationReady] = useState(
+    () => (
+      parsePositiveInt(searchParams.get("conversation_id") ?? "") !== null ||
+      parsePositiveInt(searchParams.get("message_id") ?? "") !== null
+    ),
+  );
 
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<number | null>(null);
   const [openingImagePreviewId, setOpeningImagePreviewId] = useState<number | null>(null);
@@ -214,7 +222,14 @@ export function AdminMessagesPage() {
   const [messageImagePreviewUrl, setMessageImagePreviewUrl] = useState<string | null>(null);
   const [pendingMessageId, setPendingMessageId] = useState<number | null>(() => parsePositiveInt(searchParams.get("message_id") ?? ""));
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(() => parsePositiveInt(searchParams.get("message_id") ?? ""));
+
+  const [inlineImageUrls, setInlineImageUrls] = useState<Record<number, string>>({});
+  const [inlineImageLoadingIds, setInlineImageLoadingIds] = useState<number[]>([]);
+  const [inlineImageFailedIds, setInlineImageFailedIds] = useState<number[]>([]);
+
+  const messageNodeRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const lastQueryFilterKey = useRef("");
+  const inlineImageUrlsRef = useRef<Record<number, string>>({});
 
   const appliedUserId = useMemo(() => parsePositiveInt(appliedFilters.user_id), [appliedFilters.user_id]);
   const appliedListingId = useMemo(() => parsePositiveInt(appliedFilters.listing_id), [appliedFilters.listing_id]);
@@ -227,6 +242,13 @@ export function AdminMessagesPage() {
     return conversations.items.find((item) => item.id === selectedConversationId) ?? null;
   }, [conversations, selectedConversationId]);
 
+  const conversationRows = useMemo(() => conversations?.items ?? [], [conversations]);
+  const messageRows = useMemo(() => messages?.items ?? [], [messages]);
+
+  useEffect(() => {
+    inlineImageUrlsRef.current = inlineImageUrls;
+  }, [inlineImageUrls]);
+
   useEffect(() => {
     const queryFilters = readConversationFiltersFromSearchParams(searchParams);
     const shouldSubmitFilters = (
@@ -236,6 +258,8 @@ export function AdminMessagesPage() {
     const queryConversationPage = readPageParam(searchParams.get("page"));
     const queryMessagesPage = readPageParam(searchParams.get("messages_page"));
     const queryMessageId = parsePositiveInt(searchParams.get("message_id") ?? "");
+    const queryConversationId = parsePositiveInt(queryFilters.conversation_id);
+    const queryWantsTranscript = queryConversationId !== null || queryMessageId !== null;
     const filterKey = `${queryFilters.user_id}|${queryFilters.listing_id}|${queryFilters.conversation_id}`;
     const filtersChanged = lastQueryFilterKey.current !== filterKey;
 
@@ -248,6 +272,7 @@ export function AdminMessagesPage() {
     setMessagesPage((previous) => (previous === queryMessagesPage ? previous : queryMessagesPage));
     setPendingMessageId((previous) => (previous === queryMessageId ? previous : queryMessageId));
     setHighlightedMessageId((previous) => (previous === queryMessageId ? previous : queryMessageId));
+    setOpenTranscriptWhenConversationReady((previous) => (previous === queryWantsTranscript ? previous : queryWantsTranscript));
 
     if (filtersChanged) {
       setSelectedConversationId(null);
@@ -255,8 +280,18 @@ export function AdminMessagesPage() {
       setMessages(null);
       setConversationsError(null);
       setMessagesError(null);
+      setIsTranscriptModalOpen(false);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!openTranscriptWhenConversationReady || selectedConversationId === null) {
+      return;
+    }
+
+    setIsTranscriptModalOpen(true);
+    setOpenTranscriptWhenConversationReady(false);
+  }, [openTranscriptWhenConversationReady, selectedConversationId]);
 
   const loadConversations = useCallback(async () => {
     if (!hasSubmittedFilters) {
@@ -368,6 +403,10 @@ export function AdminMessagesPage() {
       return;
     }
 
+    if (!isTranscriptModalOpen) {
+      return;
+    }
+
     setIsMessagesLoading(true);
     setMessagesError(null);
 
@@ -411,11 +450,34 @@ export function AdminMessagesPage() {
     } finally {
       setIsMessagesLoading(false);
     }
-  }, [authFetch, messagesPage, pendingMessageId, selectedConversationId, t]);
+  }, [authFetch, isTranscriptModalOpen, messagesPage, pendingMessageId, selectedConversationId, t]);
 
   useEffect(() => {
     void loadMessages();
   }, [loadMessages]);
+
+  const setMessageNodeRef = useCallback((messageId: number, node: HTMLDivElement | null) => {
+    messageNodeRefs.current[messageId] = node;
+  }, []);
+
+  useEffect(() => {
+    if (!isTranscriptModalOpen || highlightedMessageId === null || isMessagesLoading) {
+      return;
+    }
+
+    const node = messageNodeRefs.current[highlightedMessageId];
+    if (!node) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      node.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [highlightedMessageId, isMessagesLoading, isTranscriptModalOpen, messageRows]);
 
   const onApplyFilters = () => {
     const nextFilters: ConversationFilters = {
@@ -430,6 +492,8 @@ export function AdminMessagesPage() {
     setConversationPage(1);
     setMessagesPage(1);
     setSelectedConversationId(parsedConversationId);
+    setIsTranscriptModalOpen(false);
+    setOpenTranscriptWhenConversationReady(parsedConversationId !== null);
     setAppliedFilters(nextFilters);
     setPendingMessageId(null);
     setHighlightedMessageId(null);
@@ -447,9 +511,30 @@ export function AdminMessagesPage() {
     setMessages(null);
     setConversationsError(null);
     setMessagesError(null);
+    setIsTranscriptModalOpen(false);
+    setOpenTranscriptWhenConversationReady(false);
     setPendingMessageId(null);
     setHighlightedMessageId(null);
     setSearchParams(new URLSearchParams(), { replace: true });
+  };
+
+  const closeTranscriptModal = () => {
+    setIsTranscriptModalOpen(false);
+  };
+
+  const openTranscriptForConversation = (conversationId: number) => {
+    setSelectedConversationId(conversationId);
+    setMessagesPage(1);
+    setMessages(null);
+    setMessagesError(null);
+    setPendingMessageId(null);
+    setHighlightedMessageId(null);
+    setIsTranscriptModalOpen(true);
+    setOpenTranscriptWhenConversationReady(false);
+    setSearchParams(
+      buildMessagesSearchParams(appliedFilters, conversationPage, 1, conversationId, null),
+      { replace: true },
+    );
   };
 
   const downloadAttachment = async (attachment: MessageAttachmentItem) => {
@@ -539,6 +624,95 @@ export function AdminMessagesPage() {
     });
   };
 
+  const loadInlineAttachmentPreview = useCallback(async (attachment: MessageAttachmentItem) => {
+    if (!isImageAttachment(attachment)) {
+      return;
+    }
+
+    if (inlineImageUrls[attachment.id] || inlineImageLoadingIds.includes(attachment.id)) {
+      return;
+    }
+
+    setInlineImageLoadingIds((previous) => (previous.includes(attachment.id) ? previous : [...previous, attachment.id]));
+
+    try {
+      const response = await authFetch(`/admin/messages/attachments/${attachment.id}/download`);
+      if (!response.ok) {
+        throw new Error("Failed to load image preview");
+      }
+
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+
+      setInlineImageUrls((previous) => {
+        const previousUrl = previous[attachment.id];
+        if (previousUrl) {
+          window.URL.revokeObjectURL(previousUrl);
+        }
+        return { ...previous, [attachment.id]: objectUrl };
+      });
+      setInlineImageFailedIds((previous) => previous.filter((id) => id !== attachment.id));
+    } catch {
+      setInlineImageFailedIds((previous) => (previous.includes(attachment.id) ? previous : [...previous, attachment.id]));
+    } finally {
+      setInlineImageLoadingIds((previous) => previous.filter((id) => id !== attachment.id));
+    }
+  }, [authFetch, inlineImageLoadingIds, inlineImageUrls]);
+
+  useEffect(() => {
+    if (!isTranscriptModalOpen) {
+      return;
+    }
+
+    for (const message of messageRows) {
+      for (const attachment of message.attachments) {
+        if (isImageAttachment(attachment)) {
+          void loadInlineAttachmentPreview(attachment);
+        }
+      }
+    }
+  }, [isTranscriptModalOpen, loadInlineAttachmentPreview, messageRows]);
+
+  useEffect(() => {
+    const activeImageIds = new Set<number>();
+    for (const message of messageRows) {
+      for (const attachment of message.attachments) {
+        if (isImageAttachment(attachment)) {
+          activeImageIds.add(attachment.id);
+        }
+      }
+    }
+
+    setInlineImageUrls((previous) => {
+      let changed = false;
+      const next: Record<number, string> = {};
+
+      for (const [rawId, url] of Object.entries(previous)) {
+        const id = Number(rawId);
+        if (activeImageIds.has(id)) {
+          next[id] = url;
+          continue;
+        }
+
+        window.URL.revokeObjectURL(url);
+        changed = true;
+      }
+
+      return changed ? next : previous;
+    });
+
+    setInlineImageLoadingIds((previous) => previous.filter((id) => activeImageIds.has(id)));
+    setInlineImageFailedIds((previous) => previous.filter((id) => activeImageIds.has(id)));
+  }, [messageRows]);
+
+  useEffect(() => {
+    return () => {
+      for (const url of Object.values(inlineImageUrlsRef.current)) {
+        window.URL.revokeObjectURL(url);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (messageImagePreviewUrl) {
@@ -546,9 +720,6 @@ export function AdminMessagesPage() {
       }
     };
   }, [messageImagePreviewUrl]);
-
-  const conversationRows = conversations?.items ?? [];
-  const messageRows = messages?.items ?? [];
 
   const conversationTotalPages = conversations?.total_pages ?? 0;
   const canConversationPrev = conversationPage > 1;
@@ -615,7 +786,6 @@ export function AdminMessagesPage() {
       </header>
 
       {conversationsError ? <div className="dashboard-error">{conversationsError}</div> : null}
-      {messagesError ? <div className="dashboard-error">{messagesError}</div> : null}
 
       <section className="search-strip messages-search-strip" aria-label={t("filters", "Filters") }>
         <input
@@ -690,18 +860,11 @@ export function AdminMessagesPage() {
                       <button
                         type="button"
                         className="btn btn-ghost"
-                        onClick={() => {
-                          setSelectedConversationId(conversation.id);
-                          setMessagesPage(1);
-                          setPendingMessageId(null);
-                          setHighlightedMessageId(null);
-                          setSearchParams(
-                            buildMessagesSearchParams(appliedFilters, conversationPage, 1, appliedConversationId, null),
-                            { replace: true },
-                          );
-                        }}
+                        onClick={() => openTranscriptForConversation(conversation.id)}
                       >
-                        {selectedConversationId === conversation.id ? t("selected", "Selected") : t("inspect", "Inspect")}
+                        {selectedConversationId === conversation.id && isTranscriptModalOpen
+                          ? t("transcript_opened", "Transcript opened")
+                          : t("open_transcript", "Open transcript")}
                       </button>
                     </td>
                   </tr>
@@ -720,7 +883,13 @@ export function AdminMessagesPage() {
               const nextPage = Math.max(1, conversationPage - 1);
               setConversationPage(nextPage);
               setSearchParams(
-                buildMessagesSearchParams(appliedFilters, nextPage, messagesPage, appliedConversationId, null),
+                buildMessagesSearchParams(
+                  appliedFilters,
+                  nextPage,
+                  messagesPage,
+                  isTranscriptModalOpen ? selectedConversationId : appliedConversationId,
+                  null,
+                ),
                 { replace: true },
               );
             }}
@@ -738,7 +907,13 @@ export function AdminMessagesPage() {
               const nextPage = conversationPage + 1;
               setConversationPage(nextPage);
               setSearchParams(
-                buildMessagesSearchParams(appliedFilters, nextPage, messagesPage, appliedConversationId, null),
+                buildMessagesSearchParams(
+                  appliedFilters,
+                  nextPage,
+                  messagesPage,
+                  isTranscriptModalOpen ? selectedConversationId : appliedConversationId,
+                  null,
+                ),
                 { replace: true },
               );
             }}
@@ -748,118 +923,209 @@ export function AdminMessagesPage() {
         </div>
       </section>
 
-      <section className="table-card" aria-label={t("messages_table", "Messages table") }>
-        <div className="table-head users-table-head">
-          <strong>{t("messages", "Messages")}</strong>
-          <span>{messageSummary}</span>
-        </div>
+      <Modal
+        open={isTranscriptModalOpen}
+        onClose={closeTranscriptModal}
+        title={t("transcript_title", "Conversation transcript")}
+        subtitle={selectedConversation
+          ? `${t("conversation", "Conversation")} #${formatInteger(selectedConversation.id, language)} - ${messageSummary}`
+          : t("select_conversation", "Select a conversation to inspect messages")}
+      >
+        <div className="users-detail-body messages-transcript-modal-body">
+          {messagesError ? <div className="dashboard-error">{messagesError}</div> : null}
 
-        <div className="messages-table-wrap">
-          <table className="messages-table messages-detail-table">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>{t("sender", "Sender")}</th>
-                <th>{t("type", "Type")}</th>
-                <th>{t("content", "Content")}</th>
-                <th>{t("attachments", "Attachments")}</th>
-                <th>{t("sent_at", "Sent")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {messageRows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="users-empty-cell">
-                    {selectedConversation === null
-                      ? t("select_conversation", "Select a conversation to inspect messages")
-                      : isMessagesLoading
-                        ? t("loading_messages", "Loading messages...")
-                        : t("no_messages_found", "No messages found")}
-                  </td>
-                </tr>
-              ) : (
-                messageRows.map((message) => (
-                  <tr key={message.id} className={highlightedMessageId === message.id ? "messages-row-highlight" : undefined}>
-                    <td>#{formatInteger(message.id, language)}</td>
-                    <td>{formatInteger(message.sender_id, language)}</td>
-                    <td>{message.message_type}</td>
-                    <td>{message.text_body?.trim() || "-"}</td>
-                    <td>
-                      {message.attachments.length === 0 ? (
-                        "-"
-                      ) : (
+          {selectedConversation ? (
+            <div className="messages-transcript-meta">
+              <p>
+                {t("listing", "Listing")}: <strong>#{formatInteger(selectedConversation.listing_id, language)}</strong>
+              </p>
+              <p>
+                {t("participants", "Participants")}: <strong>A #{formatInteger(selectedConversation.participant_a_id, language)}</strong>, <strong>B #{formatInteger(selectedConversation.participant_b_id, language)}</strong>
+              </p>
+              <p>
+                {t("last_activity", "Last activity")}: <strong>{formatDateTime(selectedConversation.last_message_at, language)}</strong>
+              </p>
+            </div>
+          ) : null}
+
+          <div className="messages-transcript-feed" aria-live="polite">
+            {selectedConversation === null ? (
+              <p className="messages-transcript-empty">{t("select_conversation", "Select a conversation to inspect messages")}</p>
+            ) : isMessagesLoading ? (
+              <p className="messages-transcript-empty">{t("loading_messages", "Loading messages...")}</p>
+            ) : messageRows.length === 0 ? (
+              <p className="messages-transcript-empty">{t("no_messages_found", "No messages found")}</p>
+            ) : (
+              messageRows.map((message) => {
+                const senderRole = selectedConversation && message.sender_id === selectedConversation.participant_a_id
+                  ? "participant-a"
+                  : selectedConversation && message.sender_id === selectedConversation.participant_b_id
+                    ? "participant-b"
+                    : "other";
+
+                return (
+                  <article
+                    key={message.id}
+                    className={`messages-bubble-row messages-bubble-row-${senderRole}${highlightedMessageId === message.id ? " messages-bubble-row-highlight" : ""}`}
+                  >
+                    <div
+                      className="messages-bubble-card"
+                      ref={(node) => setMessageNodeRef(message.id, node)}
+                    >
+                      <header className="messages-bubble-head">
+                        <strong>
+                          {t("sender", "Sender")} #{formatInteger(message.sender_id, language)}
+                        </strong>
+                        <span>{formatDateTime(message.sent_at, language)}</span>
+                      </header>
+
+                      <p className="messages-bubble-text">{message.text_body?.trim() || t("no_message_text", "Message has no text")}</p>
+
+                      {message.attachments.length > 0 ? (
                         <div className="messages-attachments-list">
-                          {message.attachments.map((attachment) => (
-                            <button
-                              key={attachment.id}
-                              type="button"
-                              className="btn btn-ghost messages-attachment-btn"
-                              disabled={
-                                downloadingAttachmentId === attachment.id ||
-                                openingImagePreviewId === attachment.id
-                              }
-                              onClick={() => {
-                                if (isImageAttachment(attachment)) {
-                                  void openImageAttachmentPreview(attachment);
-                                  return;
-                                }
-                                void downloadAttachment(attachment);
-                              }}
-                            >
-                              {downloadingAttachmentId === attachment.id
-                                ? t("downloading", "Downloading...")
-                                : openingImagePreviewId === attachment.id
-                                  ? t("loading_preview", "Loading preview...")
-                                  : `${attachment.original_name} (${formatFileSize(attachment.file_size, language)})`}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </td>
-                    <td>{formatDateTime(message.sent_at, language)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                          {message.attachments.map((attachment) => {
+                            const isImage = isImageAttachment(attachment);
+                            const inlineUrl = inlineImageUrls[attachment.id];
+                            const isInlineLoading = inlineImageLoadingIds.includes(attachment.id);
+                            const isInlineFailed = inlineImageFailedIds.includes(attachment.id);
 
-        <div className="table-footer">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={!canMessagePrev || selectedConversation === null}
-            onClick={() => {
-              const nextPage = Math.max(1, messagesPage - 1);
-              setMessagesPage(nextPage);
-              setSearchParams(
-                buildMessagesSearchParams(appliedFilters, conversationPage, nextPage, appliedConversationId, null),
-                { replace: true },
-              );
-            }}
-          >
-            {t("previous", "Previous")}
-          </button>
-          <span className="users-page-indicator">
-            {t("page", "Page")} {formatInteger(messages?.page ?? messagesPage, language)}{messageTotalPages ? ` / ${formatInteger(messageTotalPages, language)}` : ""}
-          </span>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={!canMessageNext || selectedConversation === null}
-            onClick={() => {
-              const nextPage = messagesPage + 1;
-              setMessagesPage(nextPage);
-              setSearchParams(
-                buildMessagesSearchParams(appliedFilters, conversationPage, nextPage, appliedConversationId, null),
-                { replace: true },
-              );
-            }}
-          >
-            {t("next", "Next")}
-          </button>
+                            if (!isImage) {
+                              return (
+                                <button
+                                  key={attachment.id}
+                                  type="button"
+                                  className="btn btn-ghost messages-attachment-btn"
+                                  disabled={downloadingAttachmentId === attachment.id}
+                                  onClick={() => {
+                                    void downloadAttachment(attachment);
+                                  }}
+                                >
+                                  {downloadingAttachmentId === attachment.id
+                                    ? t("downloading", "Downloading...")
+                                    : `${attachment.original_name} (${formatFileSize(attachment.file_size, language)})`}
+                                </button>
+                              );
+                            }
+
+                            return (
+                              <div key={attachment.id} className="messages-inline-image-card">
+                                {inlineUrl ? (
+                                  <button
+                                    type="button"
+                                    className="messages-inline-image-btn"
+                                    disabled={openingImagePreviewId === attachment.id}
+                                    onClick={() => {
+                                      void openImageAttachmentPreview(attachment);
+                                    }}
+                                  >
+                                    <img src={inlineUrl} alt={attachment.original_name} loading="lazy" />
+                                  </button>
+                                ) : isInlineLoading ? (
+                                  <div className="messages-inline-image-loading">{t("loading_preview", "Loading preview...")}</div>
+                                ) : isInlineFailed ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost"
+                                    onClick={() => {
+                                      void loadInlineAttachmentPreview(attachment);
+                                    }}
+                                  >
+                                    {t("retry_preview", "Retry preview")}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="btn btn-ghost"
+                                    onClick={() => {
+                                      void loadInlineAttachmentPreview(attachment);
+                                    }}
+                                  >
+                                    {t("load_preview", "Load preview")}
+                                  </button>
+                                )}
+
+                                <div className="messages-inline-image-meta">
+                                  <span>{attachment.original_name}</span>
+                                  <span>{formatFileSize(attachment.file_size, language)}</span>
+                                  <div className="users-actions-cell">
+                                    <button
+                                      type="button"
+                                      className="btn btn-ghost"
+                                      disabled={
+                                        downloadingAttachmentId === attachment.id ||
+                                        openingImagePreviewId === attachment.id
+                                      }
+                                      onClick={() => {
+                                        void openImageAttachmentPreview(attachment);
+                                      }}
+                                    >
+                                      {openingImagePreviewId === attachment.id
+                                        ? t("loading_preview", "Loading preview...")
+                                        : t("open_image", "Open image")}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn btn-ghost"
+                                      disabled={downloadingAttachmentId === attachment.id}
+                                      onClick={() => {
+                                        void downloadAttachment(attachment);
+                                      }}
+                                    >
+                                      {downloadingAttachmentId === attachment.id
+                                        ? t("downloading", "Downloading...")
+                                        : t("download", "Download")}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+
+          <div className="table-footer messages-transcript-footer">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={!canMessagePrev || selectedConversation === null}
+              onClick={() => {
+                const nextPage = Math.max(1, messagesPage - 1);
+                setMessagesPage(nextPage);
+                setSearchParams(
+                  buildMessagesSearchParams(appliedFilters, conversationPage, nextPage, selectedConversationId, null),
+                  { replace: true },
+                );
+              }}
+            >
+              {t("previous", "Previous")}
+            </button>
+            <span className="users-page-indicator">
+              {t("page", "Page")} {formatInteger(messages?.page ?? messagesPage, language)}{messageTotalPages ? ` / ${formatInteger(messageTotalPages, language)}` : ""}
+            </span>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={!canMessageNext || selectedConversation === null}
+              onClick={() => {
+                const nextPage = messagesPage + 1;
+                setMessagesPage(nextPage);
+                setSearchParams(
+                  buildMessagesSearchParams(appliedFilters, conversationPage, nextPage, selectedConversationId, null),
+                  { replace: true },
+                );
+              }}
+            >
+              {t("next", "Next")}
+            </button>
+          </div>
         </div>
-      </section>
+      </Modal>
 
       <ImagePreviewOverlay
         open={messageImagePreviewAttachment !== null && messageImagePreviewUrl !== null}

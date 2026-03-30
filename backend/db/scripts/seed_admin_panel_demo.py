@@ -736,8 +736,8 @@ def seed_admin_panel_demo(*, regular_user_count: int = 30) -> SeedStats:
                 target_type = ReportTargetType.LISTING
                 target_id = listings[(index * 3) % len(listings)].id
             else:
-                target_type = ReportTargetType.USER
-                target_id = regular_users[(index * 2) % len(regular_users)].id
+                target_type = ReportTargetType.LISTING
+                target_id = listings[(index * 5) % len(listings)].id
 
             status = (ReportStatus.OPEN, ReportStatus.RESOLVED, ReportStatus.DISMISSED)[index % 3]
             reviewed_by_admin_id = None

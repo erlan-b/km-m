@@ -112,14 +112,16 @@ def test_create_report_requires_reason_text(client, db_session, set_current_user
     user_role = create_role(db_session, "user")
 
     reporter = create_user(db_session, "reporter-empty-reason@example.com", [user_role])
-    reported_user = create_user(db_session, "target-empty-reason@example.com", [user_role])
+    listing_owner = create_user(db_session, "owner-empty-reason@example.com", [user_role])
+    category = create_category(db_session)
+    listing = create_listing(db_session, listing_owner.id, category.id)
 
     set_current_user(reporter)
     create_report_response = client.post(
         "/api/v1/reports",
         json={
-            "target_type": "user",
-            "target_id": reported_user.id,
+            "target_type": "listing",
+            "target_id": listing.id,
             "reason_code": "abuse",
             "reason_text": "   ",
         },
@@ -198,54 +200,6 @@ def test_admin_resolve_listing_report_with_moderation_updates_entities(client, d
     ).all()
     assert "listing_moderation:archive" in audit_actions
     assert "report_resolve" in audit_actions
-
-
-def test_admin_resolve_user_report_can_block_target_user(client, db_session, set_current_user):
-    user_role = create_role(db_session, "user")
-    admin_role = create_role(db_session, "admin")
-
-    reporter = create_user(db_session, "reporter-user@example.com", [user_role])
-    reported_user = create_user(db_session, "reported-user@example.com", [user_role])
-    admin_user = create_user(db_session, "admin-user@example.com", [admin_role])
-
-    set_current_user(reporter)
-    create_report_response = client.post(
-        "/api/v1/reports",
-        json={
-            "target_type": "user",
-            "target_id": reported_user.id,
-            "reason_code": "abuse",
-            "reason_text": "Abusive behavior",
-        },
-    )
-    assert create_report_response.status_code == 201
-    report_id = create_report_response.json()["id"]
-
-    set_current_user(admin_user)
-    resolve_response = client.patch(
-        f"/api/v1/reports/{report_id}/resolve",
-        json={
-            "action": "resolve",
-            "resolution_note": "Blocked user",
-            "moderation_action": "block",
-        },
-    )
-    assert resolve_response.status_code == 200
-    assert resolve_response.json()["status"] == ReportStatus.RESOLVED.value
-
-    db_session.refresh(reported_user)
-    assert reported_user.account_status == AccountStatus.BLOCKED
-
-    user_audit = db_session.scalar(
-        select(AdminAuditLog)
-        .where(
-            AdminAuditLog.target_type == "user",
-            AdminAuditLog.target_id == reported_user.id,
-            AdminAuditLog.action == "user_moderation:block",
-        )
-        .order_by(AdminAuditLog.id.desc())
-    )
-    assert user_audit is not None
 
 
 def test_create_message_report_sets_conversation_context(client, db_session, set_current_user):

@@ -134,6 +134,72 @@ def test_only_conversation_participants_can_access_conversation_and_messages(cli
     assert outsider_messages_response.status_code == 403
 
 
+def test_admin_messages_conversation_endpoints_return_complete_payload(client, db_session, set_current_user):
+    user_role = create_role(db_session, "user")
+    admin_role = create_role(db_session, "admin")
+
+    owner = create_user(
+        db_session,
+        "owner-admin-msg@example.com",
+        [user_role],
+        phone="+996700111111",
+    )
+    buyer = create_user(
+        db_session,
+        "buyer-admin-msg@example.com",
+        [user_role],
+        phone="+996700222222",
+    )
+    admin_user = create_user(db_session, "admin-admin-msg@example.com", [admin_role])
+
+    category = create_category(db_session)
+    listing = create_listing(db_session, owner.id, category.id)
+
+    participant_a_id, participant_b_id = sorted([owner.id, buyer.id])
+    conversation = Conversation(
+        listing_id=listing.id,
+        created_by_user_id=buyer.id,
+        participant_a_id=participant_a_id,
+        participant_b_id=participant_b_id,
+    )
+    db_session.add(conversation)
+    db_session.commit()
+    db_session.refresh(conversation)
+
+    message = Message(
+        conversation_id=conversation.id,
+        sender_id=buyer.id,
+        message_type=MessageType.TEXT,
+        text_body="hello owner",
+        is_read=False,
+    )
+    db_session.add(message)
+    db_session.commit()
+
+    set_current_user(admin_user)
+
+    list_response = client.get(
+        "/api/v1/admin/messages/conversations",
+        params={"user_id": buyer.id},
+    )
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["total_items"] == 1
+    item = payload["items"][0]
+    assert item["id"] == conversation.id
+    assert item["listing_title"] == listing.title
+    assert item["counterpart_user_id"] == owner.id
+    assert item["counterpart_name"] == owner.full_name
+    assert item["counterpart_phone"] == owner.phone
+
+    detail_response = client.get(f"/api/v1/admin/messages/conversations/{conversation.id}")
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["id"] == conversation.id
+    assert detail_payload["listing_title"] == listing.title
+    assert detail_payload["counterpart_user_id"] == owner.id
+
+
 def test_attachment_access_is_limited_to_conversation_participants(
     client,
     db_session,
