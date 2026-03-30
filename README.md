@@ -2,6 +2,24 @@
 
 - https://www.youtube.com/watch?v=PUT_YOUR_VIDEO_ID_HERE
 
+## Docker
+
+### Windows
+
+```powershell
+cd C:\Users\User\Documents\GitHub\km-m\backend
+docker compose up -d --build mysql backend admin
+docker compose down
+```
+
+### Linux
+
+```bash
+cd /path/to/km-m/backend
+docker compose up -d --build mysql backend admin
+docker compose down
+```
+
 ## Windows
 
 ### 1) MySQL
