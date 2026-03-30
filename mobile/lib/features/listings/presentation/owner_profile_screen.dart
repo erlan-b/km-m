@@ -100,6 +100,17 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
         : '${normalized.toStringAsFixed(0)}%';
   }
 
+  String _languageLabel(String languageCode, S l) {
+    switch (languageCode.toLowerCase()) {
+      case 'ru':
+        return l.languageRussian;
+      case 'en':
+        return l.languageEnglish;
+      default:
+        return languageCode.toUpperCase();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
@@ -136,7 +147,17 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
     final sellerTypeRaw = user['seller_type']?.toString() ?? 'owner';
     final companyName = user['company_name']?.toString().trim();
     final hasCompanyName = companyName != null && companyName.isNotEmpty;
+    final phone = user['phone']?.toString().trim();
+    final hasPhone = phone != null && phone.isNotEmpty;
+    final city = user['city']?.toString().trim();
+    final hasCity = city != null && city.isNotEmpty;
     final responseRate = _parseResponseRate(user['response_rate']);
+    final listingCount = (user['listing_count'] as num?)?.toInt() ?? 0;
+    final memberSince = createdAt == null
+        ? null
+        : '${createdAt.year}.${createdAt.month.toString().padLeft(2, '0')}';
+    final preferredLanguage =
+        user['preferred_language']?.toString().trim().toLowerCase() ?? '';
     final profileImagePath = user['profile_image_url']?.toString().trim();
     final profileImageUrl =
         (profileImagePath == null || profileImagePath.isEmpty)
@@ -191,7 +212,7 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                                 child: Text(
                                   fullName,
                                   style: const TextStyle(
-                                    fontSize: 20,
+                                    fontSize: 22,
                                     fontWeight: FontWeight.w700,
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -207,7 +228,7 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                               ],
                             ],
                           ),
-                          if (user['city'] != null)
+                          if (hasCity)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
                               child: Row(
@@ -219,23 +240,23 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                                   ),
                                   const SizedBox(width: 3),
                                   Text(
-                                    user['city'] as String,
+                                    city,
                                     style: const TextStyle(
                                       color: AppTheme.textSubtle,
-                                      fontSize: 14,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          if (createdAt != null)
+                          if (memberSince != null)
                             Padding(
                               padding: const EdgeInsets.only(top: 4),
                               child: Text(
-                                '${l.memberSince} ${createdAt.year}.${createdAt.month.toString().padLeft(2, '0')}',
+                                '${l.memberSince} $memberSince',
                                 style: const TextStyle(
                                   color: AppTheme.textSubtle,
-                                  fontSize: 12,
+                                  fontSize: 13,
                                 ),
                               ),
                             ),
@@ -266,7 +287,7 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                     children: [
                       _StatItem(
                         label: l.activeListings,
-                        value: '${user['listing_count'] ?? 0}',
+                        value: '$listingCount',
                       ),
                       if (sellerTypeRaw.trim().isNotEmpty)
                         _StatItem(
@@ -300,7 +321,7 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                       Text(
                         l.sellerInfo,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -313,6 +334,34 @@ class _OwnerProfileScreenState extends ConsumerState<OwnerProfileScreen> {
                         const SizedBox(height: 8),
                         _InfoRow(label: l.companyName, value: companyName),
                       ],
+                      if (hasPhone) ...[
+                        const SizedBox(height: 8),
+                        _InfoRow(label: l.phone, value: phone),
+                      ],
+                      if (hasCity) ...[
+                        const SizedBox(height: 8),
+                        _InfoRow(label: l.city, value: city),
+                      ],
+                      if (memberSince != null) ...[
+                        const SizedBox(height: 8),
+                        _InfoRow(label: l.memberSince, value: memberSince),
+                      ],
+                      if (preferredLanguage.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _InfoRow(
+                          label: l.language,
+                          value: _languageLabel(preferredLanguage, l),
+                        ),
+                      ],
+                      if (responseRate != null) ...[
+                        const SizedBox(height: 8),
+                        _InfoRow(
+                          label: l.responseRate,
+                          value: _formatPercent(responseRate),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      _InfoRow(label: l.activeListings, value: '$listingCount'),
                       const SizedBox(height: 8),
                       _InfoRow(
                         label: l.verification,
@@ -406,15 +455,16 @@ class _StatItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           value,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: AppTheme.textSubtle, fontSize: 12),
+          style: const TextStyle(color: AppTheme.textSubtle, fontSize: 13),
         ),
       ],
     );
@@ -435,7 +485,7 @@ class _InfoRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: const TextStyle(fontSize: 12, color: AppTheme.textSubtle),
+            style: const TextStyle(fontSize: 13, color: AppTheme.textSubtle),
           ),
         ),
         const SizedBox(width: 10),
@@ -446,7 +496,7 @@ class _InfoRow extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.right,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: FontWeight.w600,
               color: valueColor ?? AppTheme.textMain,
             ),

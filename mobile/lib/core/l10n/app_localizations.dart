@@ -199,6 +199,48 @@ abstract class S {
   /// **'Sign in to your account'**
   String get loginSubtitle;
 
+  /// No description provided for @continueAsGuest.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue as guest'**
+  String get continueAsGuest;
+
+  /// No description provided for @guestFavoritesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites are available after sign in'**
+  String get guestFavoritesTitle;
+
+  /// No description provided for @guestFavoritesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in or create an account to save listings and manage your favorites.'**
+  String get guestFavoritesHint;
+
+  /// No description provided for @guestMessagesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages are available after sign in'**
+  String get guestMessagesTitle;
+
+  /// No description provided for @guestMessagesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in or create an account to chat with sellers and buyers.'**
+  String get guestMessagesHint;
+
+  /// No description provided for @guestProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to unlock full profile'**
+  String get guestProfileTitle;
+
+  /// No description provided for @guestProfileHint.
+  ///
+  /// In en, this message translates to:
+  /// **'As a guest, only language settings are available. Sign in or register to edit profile and manage listings.'**
+  String get guestProfileHint;
+
   /// No description provided for @noAccount.
   ///
   /// In en, this message translates to:
@@ -526,8 +568,14 @@ abstract class S {
   /// No description provided for @callAction.
   ///
   /// In en, this message translates to:
-  /// **'Call'**
+  /// **'Copy number'**
   String get callAction;
+
+  /// No description provided for @phoneCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number copied'**
+  String get phoneCopied;
 
   /// No description provided for @writeAction.
   ///

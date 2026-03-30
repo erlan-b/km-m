@@ -18,7 +18,6 @@ import '../features/payments/presentation/payment_history_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/promotions/presentation/my_promotions_screen.dart';
 import '../features/promotions/presentation/promote_listing_screen.dart';
-import '../features/search/presentation/search_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -27,13 +26,20 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/home',
     redirect: (context, state) {
       final isAuth = authState.isAuthenticated;
-      final isAuthRoute =
-          state.matchedLocation == '/login' ||
-          state.matchedLocation == '/register';
+      final location = state.matchedLocation;
+      final isAuthRoute = location == '/login' || location == '/register';
+
+      final requiresAuth =
+          location.startsWith('/notifications') ||
+          location.startsWith('/my-listings') ||
+          location.startsWith('/my-promotions') ||
+          location.startsWith('/payments') ||
+          location.startsWith('/chat/') ||
+          location.startsWith('/promote/');
 
       if (authState.status == AuthStatus.unknown) return null;
 
-      if (!isAuth && !isAuthRoute) return '/login';
+      if (!isAuth && requiresAuth) return '/login';
       if (isAuth && isAuthRoute) return '/home';
 
       return null;
@@ -136,7 +142,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/search',
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: SearchScreen()),
+                const NoTransitionPage(child: HomeFeedScreen()),
           ),
           GoRoute(
             path: '/favorites',

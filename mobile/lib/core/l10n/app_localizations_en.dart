@@ -60,6 +60,30 @@ class SEn extends S {
   String get loginSubtitle => 'Sign in to your account';
 
   @override
+  String get continueAsGuest => 'Continue as guest';
+
+  @override
+  String get guestFavoritesTitle => 'Favorites are available after sign in';
+
+  @override
+  String get guestFavoritesHint =>
+      'Sign in or create an account to save listings and manage your favorites.';
+
+  @override
+  String get guestMessagesTitle => 'Messages are available after sign in';
+
+  @override
+  String get guestMessagesHint =>
+      'Sign in or create an account to chat with sellers and buyers.';
+
+  @override
+  String get guestProfileTitle => 'Sign in to unlock full profile';
+
+  @override
+  String get guestProfileHint =>
+      'As a guest, only language settings are available. Sign in or register to edit profile and manage listings.';
+
+  @override
   String get noAccount => 'Don\'t have an account?';
 
   @override
@@ -224,7 +248,10 @@ class SEn extends S {
   String get newMessage => 'New message';
 
   @override
-  String get callAction => 'Call';
+  String get callAction => 'Copy number';
+
+  @override
+  String get phoneCopied => 'Phone number copied';
 
   @override
   String get writeAction => 'Write';

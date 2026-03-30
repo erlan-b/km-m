@@ -20,6 +20,13 @@
   "signingIn": "Signing in...",
   "registerSubtitle": "Create your account",
   "loginSubtitle": "Sign in to your account",
+  "continueAsGuest": "Continue as guest",
+  "guestFavoritesTitle": "Favorites are available after sign in",
+  "guestFavoritesHint": "Sign in or create an account to save listings and manage your favorites.",
+  "guestMessagesTitle": "Messages are available after sign in",
+  "guestMessagesHint": "Sign in or create an account to chat with sellers and buyers.",
+  "guestProfileTitle": "Sign in to unlock full profile",
+  "guestProfileHint": "As a guest, only language settings are available. Sign in or register to edit profile and manage listings.",
   "noAccount": "Don't have an account?",
   "haveAccount": "Already have an account?",
 
@@ -89,7 +96,8 @@
 
   "conversations": "Messages",
   "newMessage": "New message",
-  "callAction": "Call",
+  "callAction": "Copy number",
+  "phoneCopied": "Phone number copied",
   "writeAction": "Write",
   "cannotOpenDialer": "Cannot open phone dialer",
   "counterpartPhoneMissing": "Phone number is not available",

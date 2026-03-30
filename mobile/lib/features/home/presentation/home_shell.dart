@@ -11,11 +11,12 @@ class HomeShell extends StatelessWidget {
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    if (location.startsWith('/home')) return 0;
-    if (location.startsWith('/search')) return 1;
-    if (location.startsWith('/favorites')) return 2;
-    if (location.startsWith('/inbox')) return 3;
-    if (location.startsWith('/profile')) return 4;
+    if (location.startsWith('/home') || location.startsWith('/search')) {
+      return 0;
+    }
+    if (location.startsWith('/favorites')) return 1;
+    if (location.startsWith('/inbox')) return 2;
+    if (location.startsWith('/profile')) return 3;
     return 0;
   }
 
@@ -23,14 +24,18 @@ class HomeShell extends StatelessWidget {
     switch (index) {
       case 0:
         context.go('/home');
+        return;
       case 1:
-        context.go('/search');
-      case 2:
         context.go('/favorites');
-      case 3:
+        return;
+      case 2:
         context.go('/inbox');
-      case 4:
+        return;
+      case 3:
         context.go('/profile');
+        return;
+      default:
+        return;
     }
   }
 
@@ -53,11 +58,6 @@ class HomeShell extends StatelessWidget {
               icon: const Icon(Icons.home_outlined),
               activeIcon: const Icon(Icons.home),
               label: l.navHome,
-            ),
-            BottomNavigationBarItem(
-              icon: const Icon(Icons.search_outlined),
-              activeIcon: const Icon(Icons.search),
-              label: l.navSearch,
             ),
             BottomNavigationBarItem(
               icon: const Icon(Icons.bookmark_border),

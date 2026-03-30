@@ -10,6 +10,7 @@ class PublicUserResponse(BaseModel):
 
     id: int
     full_name: str
+    phone: str | None
     profile_image_url: str | None
     city: str | None
     preferred_language: str

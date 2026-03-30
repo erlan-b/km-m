@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,8 @@ import 'package:intl/intl.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../app/theme.dart';
+import '../../auth/data/auth_state.dart';
+import '../../auth/presentation/widgets/guest_auth_prompt.dart';
 import '../data/chat_repository.dart';
 
 class ConversationsScreen extends ConsumerStatefulWidget {
@@ -17,6 +20,7 @@ class ConversationsScreen extends ConsumerStatefulWidget {
 
 class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
   List<Map<String, dynamic>> _conversations = [];
+  late final ProviderSubscription<AuthState> _authSubscription;
 
   bool _loading = true;
   bool _loadingMore = false;
@@ -25,10 +29,59 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
   int _page = 1;
   int _totalPages = 1;
 
+  bool _isUnauthorized(Object error) {
+    if (error is! DioException) {
+      return false;
+    }
+
+    final statusCode = error.response?.statusCode;
+    return statusCode == 401 || statusCode == 403;
+  }
+
+  void _handleAuthStateChange(AuthState? previous, AuthState next) {
+    if (!mounted) {
+      return;
+    }
+
+    if (next.status == AuthStatus.authenticated) {
+      _page = 1;
+      _loadConversations();
+      return;
+    }
+
+    if (next.status == AuthStatus.unauthenticated) {
+      setState(() {
+        _conversations = <Map<String, dynamic>>[];
+        _loading = false;
+        _loadingMore = false;
+        _error = null;
+        _page = 1;
+        _totalPages = 1;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _loadConversations();
+    _authSubscription = ref.listenManual<AuthState>(
+      authProvider,
+      _handleAuthStateChange,
+    );
+
+    final authState = ref.read(authProvider);
+    if (authState.status == AuthStatus.authenticated) {
+      _loadConversations();
+      return;
+    }
+
+    _loading = false;
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.close();
+    super.dispose();
   }
 
   Future<void> _loadConversations({bool append = false}) async {
@@ -51,6 +104,10 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
       final items = _toMapList(data['items']);
       final totalPages = (data['total_pages'] as num?)?.toInt() ?? 0;
 
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         if (append) {
           _conversations.addAll(items);
@@ -62,6 +119,15 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
         _loadingMore = false;
       });
     } catch (e) {
+      if (_isUnauthorized(e)) {
+        await ref.read(authProvider.notifier).logout();
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -133,6 +199,27 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
+    final authState = ref.watch(authProvider);
+
+    if (authState.status == AuthStatus.unknown) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l.conversations)),
+        body: const Center(
+          child: CircularProgressIndicator(color: AppTheme.accent),
+        ),
+      );
+    }
+
+    if (!authState.isAuthenticated) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l.conversations)),
+        body: GuestAuthPrompt(
+          title: l.guestMessagesTitle,
+          message: l.guestMessagesHint,
+          icon: Icons.chat_bubble_outline,
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text(l.conversations)),

@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +12,21 @@ import 'features/auth/data/auth_state.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('KM_APP_FLUTTER_ERROR: ${details.exceptionAsString()}');
+    if (details.stack != null) {
+      debugPrintStack(stackTrace: details.stack);
+    }
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('KM_APP_PLATFORM_ERROR: $error');
+    debugPrintStack(stackTrace: stack);
+    return false;
+  };
+
   runApp(const ProviderScope(child: KmMarketplaceApp()));
 }
 

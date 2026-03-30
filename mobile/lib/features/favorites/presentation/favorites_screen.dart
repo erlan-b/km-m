@@ -1,9 +1,12 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../app/theme.dart';
+import '../../auth/data/auth_state.dart';
+import '../../auth/presentation/widgets/guest_auth_prompt.dart';
 import '../../favorites/data/favorites_repository.dart';
 import '../../listings/data/listings_repository.dart';
 import '../../listings/presentation/widgets/listing_card.dart';
@@ -18,6 +21,7 @@ class FavoritesScreen extends ConsumerStatefulWidget {
 class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   List<Map<String, dynamic>> _items = [];
   final Set<int> _busyIds = <int>{};
+  late final ProviderSubscription<AuthState> _authSubscription;
 
   bool _loading = true;
   bool _loadingMore = false;
@@ -26,10 +30,60 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   int _page = 1;
   int _totalPages = 1;
 
+  bool _isUnauthorized(Object error) {
+    if (error is! DioException) {
+      return false;
+    }
+
+    final statusCode = error.response?.statusCode;
+    return statusCode == 401 || statusCode == 403;
+  }
+
+  void _handleAuthStateChange(AuthState? previous, AuthState next) {
+    if (!mounted) {
+      return;
+    }
+
+    if (next.status == AuthStatus.authenticated) {
+      _page = 1;
+      _load();
+      return;
+    }
+
+    if (next.status == AuthStatus.unauthenticated) {
+      setState(() {
+        _items = <Map<String, dynamic>>[];
+        _busyIds.clear();
+        _loading = false;
+        _loadingMore = false;
+        _error = null;
+        _page = 1;
+        _totalPages = 1;
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _load();
+    _authSubscription = ref.listenManual<AuthState>(
+      authProvider,
+      _handleAuthStateChange,
+    );
+
+    final authState = ref.read(authProvider);
+    if (authState.status == AuthStatus.authenticated) {
+      _load();
+      return;
+    }
+
+    _loading = false;
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.close();
+    super.dispose();
   }
 
   Future<void> _load({bool append = false}) async {
@@ -74,6 +128,11 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
         _loadingMore = false;
       });
     } catch (e) {
+      if (_isUnauthorized(e)) {
+        await ref.read(authProvider.notifier).logout();
+        return;
+      }
+
       if (!mounted) {
         return;
       }
@@ -135,6 +194,27 @@ class _FavoritesScreenState extends ConsumerState<FavoritesScreen> {
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
+    final authState = ref.watch(authProvider);
+
+    if (authState.status == AuthStatus.unknown) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l.favorites)),
+        body: const Center(
+          child: CircularProgressIndicator(color: AppTheme.accent),
+        ),
+      );
+    }
+
+    if (!authState.isAuthenticated) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l.favorites)),
+        body: GuestAuthPrompt(
+          title: l.guestFavoritesTitle,
+          message: l.guestFavoritesHint,
+          icon: Icons.bookmark_border,
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text(l.favorites)),

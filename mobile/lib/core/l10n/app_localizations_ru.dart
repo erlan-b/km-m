@@ -60,6 +60,30 @@ class SRu extends S {
   String get loginSubtitle => 'Войдите в аккаунт';
 
   @override
+  String get continueAsGuest => 'Продолжить как гость';
+
+  @override
+  String get guestFavoritesTitle => 'Избранное доступно после входа';
+
+  @override
+  String get guestFavoritesHint =>
+      'Войдите или зарегистрируйтесь, чтобы сохранять объявления и управлять избранным.';
+
+  @override
+  String get guestMessagesTitle => 'Сообщения доступны после входа';
+
+  @override
+  String get guestMessagesHint =>
+      'Войдите или зарегистрируйтесь, чтобы переписываться с продавцами и покупателями.';
+
+  @override
+  String get guestProfileTitle => 'Войдите, чтобы открыть полный профиль';
+
+  @override
+  String get guestProfileHint =>
+      'В гостевом режиме доступна только смена языка. Войдите или зарегистрируйтесь, чтобы редактировать профиль и управлять объявлениями.';
+
+  @override
   String get noAccount => 'Нет аккаунта?';
 
   @override
@@ -224,7 +248,10 @@ class SRu extends S {
   String get newMessage => 'Новое сообщение';
 
   @override
-  String get callAction => 'Позвонить';
+  String get callAction => 'Скопировать номер';
+
+  @override
+  String get phoneCopied => 'Номер скопирован';
 
   @override
   String get writeAction => 'Написать';

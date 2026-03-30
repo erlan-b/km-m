@@ -189,6 +189,7 @@ def test_public_user_response_includes_owner_visibility_fields(client, db_sessio
 
     owner.seller_type = SellerType.COMPANY
     owner.company_name = "Owner Co"
+    owner.phone = "+996700123123"
     owner.verification_status = VerificationStatus.VERIFIED
     db_session.add(owner)
     db_session.commit()
@@ -212,6 +213,7 @@ def test_public_user_response_includes_owner_visibility_fields(client, db_sessio
 
     payload = response.json()
     assert payload["full_name"] == owner.full_name
+    assert payload["phone"] == "+996700123123"
     assert payload["profile_image_url"].startswith(
         f"/api/v1/profile/avatar/{owner.id}/download"
     )

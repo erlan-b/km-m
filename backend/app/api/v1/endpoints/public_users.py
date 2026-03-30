@@ -44,6 +44,7 @@ def get_public_user(user_id: int, db: Session = Depends(get_db)) -> PublicUserRe
     return PublicUserResponse(
         id=user.id,
         full_name=user.full_name,
+        phone=user.phone,
         profile_image_url=build_profile_image_public_url(
             user_id=user.id,
             profile_image_url=user.profile_image_url,

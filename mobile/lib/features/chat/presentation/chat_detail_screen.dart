@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:km_marketplace/core/l10n/app_localizations.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/theme.dart';
 import '../../auth/data/auth_repository.dart';
@@ -80,44 +79,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     _scrollCtrl.dispose();
     _composerFocusNode.dispose();
     super.dispose();
-  }
-
-  String _normalizePhoneForDialer(String rawPhone) {
-    final trimmed = rawPhone.trim();
-    final hasLeadingPlus = trimmed.startsWith('+');
-    final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
-    if (digitsOnly.isEmpty) {
-      return '';
-    }
-    return hasLeadingPlus ? '+$digitsOnly' : digitsOnly;
-  }
-
-  Future<void> _callCounterpart(String phone) async {
-    final l = S.of(context)!;
-    final normalized = _normalizePhoneForDialer(phone);
-    if (normalized.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l.counterpartPhoneMissing)));
-      return;
-    }
-
-    try {
-      final uri = Uri(scheme: 'tel', path: normalized);
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l.cannotOpenDialer)));
-      }
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l.cannotOpenDialer)));
-    }
   }
 
   void _focusComposer() {
@@ -1116,11 +1077,8 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     final counterpartName = _conversation?['counterpart_name']
         ?.toString()
         .trim();
-    final counterpartPhone = _conversation?['counterpart_phone']
-        ?.toString()
-        .trim();
-    final hasCounterpartPhone =
-        counterpartPhone != null && counterpartPhone.isNotEmpty;
+    final hasCounterpartName =
+        counterpartName != null && counterpartName.isNotEmpty;
     final chatTitle = hasListingTitle
         ? listingTitle
         : listingId == null
@@ -1131,14 +1089,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       appBar: AppBar(title: Text(chatTitle)),
       body: Column(
         children: [
-          if (hasCounterpartPhone)
-            _buildContactPanel(
-              l,
-              phone: counterpartPhone,
-              name: (counterpartName != null && counterpartName.isNotEmpty)
-                  ? counterpartName
-                  : null,
-            ),
+          if (hasCounterpartName) _buildContactPanel(l, name: counterpartName),
           Expanded(child: _buildBody(l)),
           if (_pickedFiles.isNotEmpty) _buildPickedFilesStrip(),
           _buildComposer(l),
@@ -1147,7 +1098,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     );
   }
 
-  Widget _buildContactPanel(S l, {required String phone, String? name}) {
+  Widget _buildContactPanel(S l, {required String name}) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
@@ -1160,36 +1111,15 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (name != null) ...[
-            Text(
-              name,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 2),
-          ],
           Text(
-            '${l.phone}: $phone',
-            style: const TextStyle(fontSize: 13, color: AppTheme.textSubtle),
+            name,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _focusComposer,
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  label: Text(l.writeAction),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _callCounterpart(phone),
-                  icon: const Icon(Icons.call_outlined),
-                  label: Text(l.callAction),
-                ),
-              ),
-            ],
+          OutlinedButton.icon(
+            onPressed: _focusComposer,
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: Text(l.writeAction),
           ),
         ],
       ),

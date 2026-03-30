@@ -11,6 +11,7 @@ import '../../../app/theme.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../auth/data/auth_state.dart';
+import '../../auth/presentation/widgets/guest_auth_prompt.dart';
 import '../data/profile_repository.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -25,11 +26,58 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _saving = false;
   String? _error;
   Map<String, dynamic>? _me;
+  late final ProviderSubscription<AuthState> _authSubscription;
+
+  bool _isUnauthorized(Object error) {
+    if (error is! DioException) {
+      return false;
+    }
+
+    final statusCode = error.response?.statusCode;
+    return statusCode == 401 || statusCode == 403;
+  }
+
+  void _handleAuthStateChange(AuthState? previous, AuthState next) {
+    if (!mounted) {
+      return;
+    }
+
+    if (next.status == AuthStatus.authenticated) {
+      _load();
+      return;
+    }
+
+    if (next.status == AuthStatus.unauthenticated) {
+      setState(() {
+        _loading = false;
+        _saving = false;
+        _error = null;
+        _me = null;
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _authSubscription = ref.listenManual<AuthState>(
+      authProvider,
+      _handleAuthStateChange,
+    );
+
+    final authState = ref.read(authProvider);
+    if (authState.status == AuthStatus.authenticated) {
+      _load();
+      return;
+    }
+
+    _loading = false;
+  }
+
+  @override
+  void dispose() {
+    _authSubscription.close();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -51,6 +99,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         _loading = false;
       });
     } catch (e) {
+      if (_isUnauthorized(e)) {
+        await ref.read(authProvider.notifier).logout();
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -287,6 +344,83 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _showGuestLanguageSheet() async {
+    if (_saving) {
+      return;
+    }
+
+    final l = S.of(context)!;
+    final locale = ref.read(localeControllerProvider);
+    final currentCode = (locale?.languageCode.toLowerCase() == 'ru')
+        ? 'ru'
+        : 'en';
+
+    final selectedCode = await showModalBottomSheet<String>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: AppTheme.bgMuted,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            color: AppTheme.bgMuted,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: Text(
+                    l.language,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                ListTile(
+                  title: Text(l.languageEnglish),
+                  trailing: currentCode == 'en'
+                      ? const Icon(Icons.check, color: AppTheme.accent)
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop('en'),
+                ),
+                ListTile(
+                  title: Text(l.languageRussian),
+                  trailing: currentCode == 'ru'
+                      ? const Icon(Icons.check, color: AppTheme.accent)
+                      : null,
+                  onTap: () => Navigator.of(sheetContext).pop('ru'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selectedCode == null || selectedCode == currentCode || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      await ref
+          .read(localeControllerProvider.notifier)
+          .setLocaleByCode(selectedCode);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
   Future<void> _showSellerRoleRequestSheet() async {
     final me = _me;
     if (me == null || _saving) {
@@ -377,6 +511,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
+    final authState = ref.watch(authProvider);
+
+    if (authState.status == AuthStatus.unknown) {
+      return Scaffold(
+        appBar: AppBar(title: Text(l.profile)),
+        body: const Center(
+          child: CircularProgressIndicator(color: AppTheme.accent),
+        ),
+      );
+    }
+
+    if (!authState.isAuthenticated) {
+      final locale = ref.watch(localeControllerProvider);
+      final preferredLanguageCode = (locale?.languageCode.toLowerCase() == 'ru')
+          ? 'ru'
+          : 'en';
+
+      return Scaffold(
+        appBar: AppBar(title: Text(l.profile)),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            _ActionTile(
+              icon: Icons.language_outlined,
+              title: l.language,
+              subtitle: _languageLabel(preferredLanguageCode, l),
+              onTap: _showGuestLanguageSheet,
+            ),
+            const SizedBox(height: 12),
+            GuestAuthPrompt(
+              title: l.guestProfileTitle,
+              message: l.guestProfileHint,
+              icon: Icons.person_outline,
+            ),
+          ],
+        ),
+      );
+    }
 
     if (_loading) {
       return Scaffold(
