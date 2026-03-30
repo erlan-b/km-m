@@ -2,6 +2,27 @@
 
 - https://youtu.be/cMnLwQJvDls
 
+## Front
+
+http://34.93.98.217:5173
+
+## Back
+
+http://34.93.98.217:8000
+
+
+## Credentials
+
+- Admin:
+ - email: admin@demo.kg
+ - password: Admin12345! 
+- Moderator:
+ - email: moderator@demo.kg
+ - password: Moderator12345! 
+- User:
+ - email: user@demo.kg
+ - password: User12345!
+
 ## Docker
 
 ### Windows
@@ -84,12 +105,3 @@ cd /path/to/km-m
 chmod +x ./mobile/run_mobile.sh
 bash ./mobile/run_mobile.sh --mode auto --skip-pub-get
 ```
-
-- email: admin@demo.kg
- - password: Admin12345! 
-- Moderator:
- - email: moderator@demo.kg
- - password: Moderator12345! 
-- User:
- - email: user@demo.kg
- - password: User12345!
