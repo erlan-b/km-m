@@ -1,6 +1,6 @@
 ## Video
 
-- https://www.youtube.com/watch?v=PUT_YOUR_VIDEO_ID_HERE
+- https://youtu.be/cMnLwQJvDls
 
 ## Docker
 
