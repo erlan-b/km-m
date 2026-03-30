@@ -165,6 +165,16 @@ class _MyPromotionsScreenState extends ConsumerState<MyPromotionsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(l.promotions),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              context.pop();
+            } else {
+              context.go('/my-listings');
+            }
+          },
+        ),
         actions: [
           IconButton(
             tooltip: l.paymentHistory,

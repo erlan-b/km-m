@@ -265,13 +265,29 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
     }
   }
 
+  AppBar _buildAppBar(S l) {
+    return AppBar(
+      title: Text(l.promote),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () {
+          if (Navigator.of(context).canPop()) {
+            context.pop();
+          } else {
+            context.go('/my-listings');
+          }
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
 
     if (_loading && _listing == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(l.promote)),
+        appBar: _buildAppBar(l),
         body: const Center(
           child: CircularProgressIndicator(color: AppTheme.accent),
         ),
@@ -280,7 +296,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
 
     if (_error != null && _listing == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(l.promote)),
+        appBar: _buildAppBar(l),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -302,7 +318,7 @@ class _PromoteListingScreenState extends ConsumerState<PromoteListingScreen> {
     final selectedCurrency = selectedPackage?['currency']?.toString() ?? 'KGS';
 
     return Scaffold(
-      appBar: AppBar(title: Text(l.promote)),
+      appBar: _buildAppBar(l),
       body: RefreshIndicator(
         onRefresh: _load,
         color: AppTheme.accent,
