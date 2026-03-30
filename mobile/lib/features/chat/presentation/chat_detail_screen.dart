@@ -1194,7 +1194,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
         hasTextBody &&
         _canInlineTimestamp(
           context: context,
-          text: displayTextBody,
+          text: textBody,
           timeLabel: timeLabel,
           hasAttachments: hasAttachments,
           bubbleMaxWidth: bubbleMaxWidth,
@@ -1241,13 +1241,7 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Flexible(
-                          child: Text(
-                            displayTextBody,
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.ellipsis,
-                            style: _bubbleTextStyle,
-                          ),
+                          child: Text(displayTextBody, style: _bubbleTextStyle),
                         ),
                         const SizedBox(width: _inlineTimestampGap),
                         Text(timeLabel, style: _bubbleTimeTextStyle),
