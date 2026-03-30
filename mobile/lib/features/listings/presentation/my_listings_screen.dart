@@ -256,7 +256,19 @@ class _MyListingsScreenState extends ConsumerState<MyListingsScreen> {
     final l = S.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l.myListings)),
+      appBar: AppBar(
+        title: Text(l.myListings),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
+      ),
       body: _buildBody(l),
     );
   }
