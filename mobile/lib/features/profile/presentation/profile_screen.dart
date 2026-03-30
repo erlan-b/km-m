@@ -725,13 +725,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const SizedBox(height: 8),
             _ActionTile(
-              icon: Icons.local_offer_outlined,
-              title: l.promotions,
-              subtitle: l.choosePackage,
-              onTap: () => context.push('/my-promotions'),
-            ),
-            const SizedBox(height: 8),
-            _ActionTile(
               icon: Icons.receipt_long_outlined,
               title: l.paymentHistory,
               subtitle: l.pay,
