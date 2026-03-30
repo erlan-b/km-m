@@ -28,7 +28,7 @@ http://34.93.98.217:8000
 ### Windows
 
 ```powershell
-cd C:\Users\User\Documents\GitHub\km-m\backend
+cd \path\to\km-m\backend
 docker compose up -d --build mysql backend admin
 docker compose down
 ```
@@ -46,14 +46,14 @@ docker compose down
 ### 1) MySQL
 
 ```powershell
-cd C:\Users\User\Documents\GitHub\km-m\backend
+cd \path\to\km-m\backend
 docker compose up -d mysql
 ```
 
 ### 2) Backend
 
 ```powershell
-cd C:\Users\User\Documents\GitHub\km-m\backend
+cd \path\to\km-m\backend
 ..\.venv\Scripts\python.exe -m alembic upgrade head
 ..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
@@ -61,7 +61,7 @@ cd C:\Users\User\Documents\GitHub\km-m\backend
 ### 3) Admin
 
 ```powershell
-cd C:\Users\User\Documents\GitHub\km-m\admin
+cd \path\to\km-m\admin
 pnpm install
 pnpm dev
 ```
@@ -69,7 +69,7 @@ pnpm dev
 ### 4) Mobile
 
 ```powershell
-cd C:\Users\User\Documents\GitHub\km-m
+cd \path\to\km-m
 powershell -NoProfile -ExecutionPolicy Bypass -File .\mobile\run_mobile.ps1 -Mode auto -SkipPubGet
 ```
 
