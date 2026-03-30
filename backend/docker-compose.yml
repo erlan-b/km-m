@@ -18,7 +18,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: realestate_backend
     restart: unless-stopped
@@ -33,14 +33,14 @@ services:
       DB_USER: root
       DB_PASSWORD: root
     volumes:
-      - ./backend:/app
+      - .:/app
     command: sh -c "python -m alembic upgrade head && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
 
   admin:
     build:
-      context: ./admin
+      context: ../admin
       dockerfile: Dockerfile
     container_name: realestate_admin
     restart: unless-stopped
@@ -51,7 +51,7 @@ services:
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: "300"
     volumes:
-      - ./admin:/app
+      - ../admin:/app
       - /app/node_modules
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
     ports:
