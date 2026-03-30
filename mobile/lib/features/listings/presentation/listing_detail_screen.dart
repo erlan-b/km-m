@@ -12,6 +12,7 @@ import '../../chat/data/chat_repository.dart';
 import '../../favorites/data/favorites_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../reports/data/reports_repository.dart';
+import '../data/public_users_repository.dart';
 import '../data/listings_repository.dart';
 
 class ListingDetailScreen extends ConsumerStatefulWidget {
@@ -33,6 +34,8 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
   bool _isFavorite = false;
   bool _updatingFavorite = false;
   int? _currentUserId;
+  String? _ownerAvatarUrl;
+  String? _ownerFullName;
 
   @override
   void initState() {
@@ -50,7 +53,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
       final listing = await repo.getListing(widget.listingId);
       final media = await repo.getListingMedia(widget.listingId);
       final listingId = (listing['id'] as num?)?.toInt();
+      final ownerId = (listing['owner_id'] as num?)?.toInt();
       int? currentUserId;
+      String? ownerAvatarUrl;
+      String? ownerFullName;
 
       var isFavorite = false;
       if (listingId != null) {
@@ -67,11 +73,29 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
         currentUserId = (me['id'] as num?)?.toInt();
       } catch (_) {}
 
+      if (ownerId != null) {
+        try {
+          final owner = await ref
+              .read(publicUsersRepositoryProvider)
+              .getPublicUser(ownerId);
+          final avatarPath = owner['profile_image_url']?.toString().trim();
+          if (avatarPath != null && avatarPath.isNotEmpty) {
+            ownerAvatarUrl = repo.absoluteUrl(avatarPath);
+          }
+          final fullName = owner['full_name']?.toString().trim();
+          if (fullName != null && fullName.isNotEmpty) {
+            ownerFullName = fullName;
+          }
+        } catch (_) {}
+      }
+
       setState(() {
         _listing = listing;
         _media = media;
         _isFavorite = isFavorite;
         _currentUserId = currentUserId;
+        _ownerAvatarUrl = ownerAvatarUrl;
+        _ownerFullName = ownerFullName;
         _loading = false;
       });
     } catch (e) {
@@ -457,6 +481,10 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
     }
 
     final listing = _listing!;
+    final ownerName = (_ownerFullName ?? '').trim();
+    final ownerInitial = ownerName.isNotEmpty
+        ? ownerName.characters.first.toUpperCase()
+        : '${listing['owner_id']}'.substring(0, 1);
     final lat = double.tryParse(listing['latitude'].toString()) ?? 0;
     final lng = double.tryParse(listing['longitude'].toString()) ?? 0;
     final viewCount = (listing['view_count'] as num?)?.toInt() ?? 0;
@@ -762,13 +790,18 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                           CircleAvatar(
                             radius: 24,
                             backgroundColor: AppTheme.accent,
-                            child: Text(
-                              '${listing['owner_id']}'.substring(0, 1),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            backgroundImage: _ownerAvatarUrl == null
+                                ? null
+                                : NetworkImage(_ownerAvatarUrl!),
+                            child: _ownerAvatarUrl != null
+                                ? null
+                                : Text(
+                                    ownerInitial,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -776,7 +809,9 @@ class _ListingDetailScreenState extends ConsumerState<ListingDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  l.ownerProfile,
+                                  ownerName.isNotEmpty
+                                      ? ownerName
+                                      : l.ownerProfile,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 15,
