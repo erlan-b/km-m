@@ -231,14 +231,39 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                     ChoiceChip(
                       label: Text(l.allCategories),
                       selected: tempCatId == null,
+                      backgroundColor: AppTheme.bgSurface,
+                      selectedColor: AppTheme.accent,
+                      side: BorderSide(
+                        color: tempCatId == null
+                            ? AppTheme.accent
+                            : AppTheme.border,
+                      ),
+                      labelStyle: TextStyle(
+                        color: tempCatId == null
+                            ? Colors.white
+                            : AppTheme.textMain,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      checkmarkColor: Colors.white,
                       onSelected: (_) => setSheetState(() => tempCatId = null),
                     ),
                     ..._categories.map((cat) {
                       final id = cat['id'] as int;
                       final name = cat['name'] as String;
+                      final isSelected = tempCatId == id;
                       return ChoiceChip(
                         label: Text(name),
-                        selected: tempCatId == id,
+                        selected: isSelected,
+                        backgroundColor: AppTheme.bgSurface,
+                        selectedColor: AppTheme.accent,
+                        side: BorderSide(
+                          color: isSelected ? AppTheme.accent : AppTheme.border,
+                        ),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : AppTheme.textMain,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        checkmarkColor: Colors.white,
                         onSelected: (_) => setSheetState(() => tempCatId = id),
                       );
                     }),
