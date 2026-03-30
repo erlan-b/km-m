@@ -479,15 +479,32 @@ class _ListingFormScreenState extends ConsumerState<ListingFormScreen> {
     }
   }
 
+  AppBar _buildAppBar(S l) {
+    return AppBar(
+      title: Text(widget.isEdit ? l.editListing : l.createListing),
+      automaticallyImplyLeading: widget.isEdit,
+      leading: widget.isEdit
+          ? null
+          : IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                if (Navigator.of(context).canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/my-listings');
+                }
+              },
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = S.of(context)!;
 
     if (_loading) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(widget.isEdit ? l.editListing : l.createListing),
-        ),
+        appBar: _buildAppBar(l),
         body: const Center(
           child: CircularProgressIndicator(color: AppTheme.accent),
         ),
@@ -496,9 +513,7 @@ class _ListingFormScreenState extends ConsumerState<ListingFormScreen> {
 
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(
-          title: Text(widget.isEdit ? l.editListing : l.createListing),
-        ),
+        appBar: _buildAppBar(l),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -519,9 +534,7 @@ class _ListingFormScreenState extends ConsumerState<ListingFormScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isEdit ? l.editListing : l.createListing),
-      ),
+      appBar: _buildAppBar(l),
       body: SafeArea(
         child: Form(
           key: _formKey,

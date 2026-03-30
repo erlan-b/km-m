@@ -81,11 +81,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     super.dispose();
   }
 
-  void _focusComposer() {
-    _scrollToBottom(animate: true);
-    FocusScope.of(context).requestFocus(_composerFocusNode);
-  }
-
   Future<void> _bootstrap() async {
     setState(() {
       _loading = true;
@@ -1074,11 +1069,6 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
     final listingId = (_conversation?['listing_id'] as num?)?.toInt();
     final listingTitle = _conversation?['listing_title']?.toString().trim();
     final hasListingTitle = listingTitle != null && listingTitle.isNotEmpty;
-    final counterpartName = _conversation?['counterpart_name']
-        ?.toString()
-        .trim();
-    final hasCounterpartName =
-        counterpartName != null && counterpartName.isNotEmpty;
     final chatTitle = hasListingTitle
         ? listingTitle
         : listingId == null
@@ -1089,38 +1079,9 @@ class _ChatDetailScreenState extends ConsumerState<ChatDetailScreen> {
       appBar: AppBar(title: Text(chatTitle)),
       body: Column(
         children: [
-          if (hasCounterpartName) _buildContactPanel(l, name: counterpartName),
           Expanded(child: _buildBody(l)),
           if (_pickedFiles.isNotEmpty) _buildPickedFilesStrip(),
           _buildComposer(l),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContactPanel(S l, {required String name}) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.bgSurface,
-        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            name,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _focusComposer,
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: Text(l.writeAction),
-          ),
         ],
       ),
     );

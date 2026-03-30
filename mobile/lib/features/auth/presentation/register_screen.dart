@@ -6,7 +6,6 @@ import 'package:km_marketplace/core/l10n/app_localizations.dart';
 
 import '../../../app/theme.dart';
 import '../data/auth_repository.dart';
-import '../data/auth_state.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -36,29 +35,39 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     try {
-      final result = await ref.read(authRepositoryProvider).register(
-        fullName: _nameCtrl.text.trim(),
-        email: _emailCtrl.text.trim(),
-        password: _passwordCtrl.text,
-        confirmPassword: _confirmCtrl.text,
-      );
+      final result = await ref
+          .read(authRepositoryProvider)
+          .register(
+            fullName: _nameCtrl.text.trim(),
+            email: _emailCtrl.text.trim(),
+            password: _passwordCtrl.text,
+            confirmPassword: _confirmCtrl.text,
+          );
 
-      await ref.read(authProvider.notifier).setAuthenticated(
-        accessToken: result['access_token'] as String,
-        refreshToken: result['refresh_token'] as String,
-      );
+      if (!mounted) return;
+      if (result.isNotEmpty) {
+        context.go('/login');
+      }
     } on DioException catch (e) {
       final detail = e.response?.data;
       String message = 'Registration failed';
       if (detail is Map && detail['detail'] != null) {
         message = detail['detail'].toString();
       }
-      setState(() { _error = message; });
+      setState(() {
+        _error = message;
+      });
     } finally {
-      if (mounted) setState(() { _loading = false; });
+      if (mounted)
+        setState(() {
+          _loading = false;
+        });
     }
   }
 
@@ -78,17 +87,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.apartment_rounded, size: 64, color: AppTheme.accent),
+                  const Icon(
+                    Icons.apartment_rounded,
+                    size: 64,
+                    color: AppTheme.accent,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     l.register,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w700,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 6),
                   Text(
                     l.registerSubtitle,
-                    style: const TextStyle(color: AppTheme.textSubtle, fontSize: 14),
+                    style: const TextStyle(
+                      color: AppTheme.textSubtle,
+                      fontSize: 14,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
@@ -101,7 +120,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         borderRadius: BorderRadius.circular(AppTheme.radius),
                         border: Border.all(color: const Color(0xFFB80000)),
                       ),
-                      child: Text(_error!, style: const TextStyle(color: AppTheme.statusError, fontSize: 13)),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(
+                          color: AppTheme.statusError,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -110,7 +135,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     controller: _nameCtrl,
                     textInputAction: TextInputAction.next,
                     decoration: InputDecoration(labelText: l.fullName),
-                    validator: (v) => (v == null || v.trim().length < 2) ? l.fieldRequired : null,
+                    validator: (v) => (v == null || v.trim().length < 2)
+                        ? l.fieldRequired
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
@@ -152,14 +179,27 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ElevatedButton(
                     onPressed: _loading ? null : _submit,
                     child: _loading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : Text(l.register),
                   ),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(l.haveAccount, style: const TextStyle(color: AppTheme.textSubtle, fontSize: 14)),
+                      Text(
+                        l.haveAccount,
+                        style: const TextStyle(
+                          color: AppTheme.textSubtle,
+                          fontSize: 14,
+                        ),
+                      ),
                       TextButton(
                         onPressed: () => context.go('/login'),
                         child: Text(l.login),
